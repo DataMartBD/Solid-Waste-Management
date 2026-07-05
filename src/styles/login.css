@@ -6,10 +6,11 @@
 
 /* ---- Left brand panel ---- */
 .login-brand-panel {
+  /* same deep forest green as the app sidebar (--side-bg), in both themes */
   background:
-    radial-gradient(1200px 600px at 10% 10%, rgba(255,255,255,.08), transparent),
-    linear-gradient(150deg, var(--brand-700), var(--brand) 60%, #12925c);
-  color: #fff;
+    radial-gradient(1100px 600px at 12% 8%, rgba(52, 209, 126, 0.10), transparent),
+    linear-gradient(160deg, var(--side-bg), var(--side-bg-2) 70%);
+  color: var(--side-text-strong);
   display: flex;
   align-items: center;
   padding: 56px;
