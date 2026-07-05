@@ -201,6 +201,13 @@
 .ai-msg.ai { background: var(--surface-2); color: var(--text); border-bottom-left-radius: 4px; align-self: flex-start; }
 .ai-msg.me { background: var(--brand); color: #fff; border-bottom-right-radius: 4px; align-self: flex-end; }
 [data-theme='dark'] .ai-msg.me { color: #06251a; }
+.ai-go {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 8px;
+  padding: 6px 11px; border-radius: 8px; border: 1px solid var(--brand-100);
+  background: var(--surface); color: var(--brand); font-size: 12px; font-weight: 600; transition: .13s;
+}
+.ai-go:hover { background: var(--brand); color: #fff; border-color: var(--brand); }
+[data-theme='dark'] .ai-go:hover { color: #06251a; }
 .ai-chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 10px; }
 .ai-chips button {
   font-size: 11.5px; font-weight: 600; padding: 6px 10px; border-radius: 999px;
