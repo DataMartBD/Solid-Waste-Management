@@ -3,11 +3,13 @@
 // DataContext loads these into state; pages read/write via useData().
 // ============================================================
 
+// `key` is the i18n key for the display name; `name` stays as the English
+// fallback for any non-React caller (exports, tests).
 export const wards = [
-  { id: 'W-14', name: 'Ward 14 — Sonadanga', zone: 'Z-03' },
-  { id: 'W-15', name: 'Ward 15 — Nirala', zone: 'Z-03' },
-  { id: 'W-21', name: 'Ward 21 — Khalishpur', zone: 'Z-05' },
-  { id: 'W-09', name: 'Ward 09 — Daulatpur', zone: 'Z-02' },
+  { id: 'W-14', key: 'opt.ward.W-14', name: 'Ward 14 — Sonadanga', zone: 'Z-03' },
+  { id: 'W-15', key: 'opt.ward.W-15', name: 'Ward 15 — Nirala', zone: 'Z-03' },
+  { id: 'W-21', key: 'opt.ward.W-21', name: 'Ward 21 — Khalishpur', zone: 'Z-05' },
+  { id: 'W-09', key: 'opt.ward.W-09', name: 'Ward 09 — Daulatpur', zone: 'Z-02' },
 ]
 
 // roads per ward — used by the "by road" customer reports
@@ -20,13 +22,106 @@ export const roadsByWard = {
 export const allRoads = Object.values(roadsByWard).flat()
 
 export const tiers = [
-  { id: 'residential_standard', label: 'Residential — standard', charge: 100 },
-  { id: 'residential_premium', label: 'Residential — premium', charge: 300 },
-  { id: 'commercial_small', label: 'Commercial — small', charge: 250 },
-  { id: 'commercial_large', label: 'Commercial — large', charge: 600 },
+  { id: 'residential_standard', key: 'opt.tier.residential_standard', label: 'Residential — standard', charge: 100 },
+  { id: 'residential_premium', key: 'opt.tier.residential_premium', label: 'Residential — premium', charge: 300 },
+  { id: 'commercial_small', key: 'opt.tier.commercial_small', label: 'Commercial — small', charge: 250 },
+  { id: 'commercial_large', key: 'opt.tier.commercial_large', label: 'Commercial — large', charge: 600 },
 ]
 export const tierLabel = (id) => tiers.find((t) => t.id === id)?.label || id
 export const tierCharge = (id) => tiers.find((t) => t.id === id)?.charge || 0
+
+// ============================================================
+// Customer-information option lists
+// These mirror the field-office customer sheet: every row of that sheet has a
+// home in the household record, so a registration captured on paper can be
+// entered here without loss.
+// ============================================================
+
+export const customerTypes = [
+  { id: 'residential', key: 'opt.customerType.residential', label: 'Residential' },
+  { id: 'commercial', key: 'opt.customerType.commercial', label: 'Commercial' },
+  { id: 'institutional', key: 'opt.customerType.institutional', label: 'Institutional' },
+  { id: 'industrial', key: 'opt.customerType.industrial', label: 'Industrial' },
+]
+
+// "Type of holdings" — the structure the waste comes from.
+export const holdingTypes = [
+  { id: 'single_storey', key: 'opt.holdingType.single_storey', label: 'Single-storey house' },
+  { id: 'multi_storey', key: 'opt.holdingType.multi_storey', label: 'Multi-storey building' },
+  { id: 'apartment', key: 'opt.holdingType.apartment', label: 'Apartment / flat' },
+  { id: 'tin_shed', key: 'opt.holdingType.tin_shed', label: 'Tin-shed / semi-pucca' },
+  { id: 'shop', key: 'opt.holdingType.shop', label: 'Shop / market stall' },
+  { id: 'office', key: 'opt.holdingType.office', label: 'Office / institution' },
+]
+
+// "Storage in house" — how waste is held between collections.
+export const storageTypes = [
+  { id: 'covered_bin', key: 'opt.storage.covered_bin', label: 'Covered bin' },
+  { id: 'open_bin', key: 'opt.storage.open_bin', label: 'Open bin' },
+  { id: 'segregated', key: 'opt.storage.segregated', label: 'Segregated (wet / dry)' },
+  { id: 'sack', key: 'opt.storage.sack', label: 'Sack or bag' },
+  { id: 'none', key: 'opt.storage.none', label: 'No storage' },
+]
+
+// "Suitable time" — when the household wants the collector to call.
+export const suitableTimes = [
+  { id: 'morning', key: 'opt.suitableTime.morning', label: 'Morning (6–9 am)' },
+  { id: 'midday', key: 'opt.suitableTime.midday', label: 'Midday (9 am–12 pm)' },
+  { id: 'afternoon', key: 'opt.suitableTime.afternoon', label: 'Afternoon (12–4 pm)' },
+  { id: 'evening', key: 'opt.suitableTime.evening', label: 'Evening (4–8 pm)' },
+  { id: 'any', key: 'opt.suitableTime.any', label: 'Any time' },
+]
+
+export const paymentModes = [
+  { id: 'cash', key: 'opt.paymentMode.cash', label: 'Cash' },
+  { id: 'bkash', key: 'opt.paymentMode.bkash', label: 'bKash' },
+  { id: 'nagad', key: 'opt.paymentMode.nagad', label: 'Nagad' },
+  { id: 'rocket', key: 'opt.paymentMode.rocket', label: 'Rocket' },
+  { id: 'bank', key: 'opt.paymentMode.bank', label: 'Bank transfer' },
+]
+
+export const bloodGroups = ['A+', 'A−', 'B+', 'B−', 'O+', 'O−', 'AB+', 'AB−']
+
+// ---- "To be customer" survey answers (potential customers only) ----
+
+// Why the holding is not yet under service.
+export const potentialReasons = [
+  { id: 'never_approached', key: 'opt.reason.never_approached', label: 'Never approached' },
+  { id: 'refused_charge', key: 'opt.reason.refused_charge', label: 'Unwilling to pay the charge' },
+  { id: 'own_arrangement', key: 'opt.reason.own_arrangement', label: 'Has a private arrangement' },
+  { id: 'vacant', key: 'opt.reason.vacant', label: 'Vacant / under construction' },
+  { id: 'past_dispute', key: 'opt.reason.past_dispute', label: 'Past service dispute' },
+  { id: 'other', key: 'opt.reason.other', label: 'Other' },
+]
+
+// How long the holding has been without a municipal service.
+export const timeGaps = [
+  { id: 'never', key: 'opt.timeGap.never', label: 'Never served' },
+  { id: 'lt_3m', key: 'opt.timeGap.lt_3m', label: 'Under 3 months' },
+  { id: '3_6m', key: 'opt.timeGap.3_6m', label: '3–6 months' },
+  { id: '6_12m', key: 'opt.timeGap.6_12m', label: '6–12 months' },
+  { id: 'gt_1y', key: 'opt.timeGap.gt_1y', label: 'Over a year' },
+]
+
+// What they do with their waste today.
+export const currentPractices = [
+  { id: 'private_collector', key: 'opt.practice.private_collector', label: 'Private collector' },
+  { id: 'roadside_dump', key: 'opt.practice.roadside_dump', label: 'Dumps at roadside / drain' },
+  { id: 'community_bin', key: 'opt.practice.community_bin', label: 'Carries to community bin' },
+  { id: 'burns', key: 'opt.practice.burns', label: 'Burns the waste' },
+  { id: 'composts', key: 'opt.practice.composts', label: 'Buries / composts on site' },
+  { id: 'none', key: 'opt.practice.none', label: 'No fixed practice' },
+]
+
+// Label lookup for any of the option lists above.
+export const optLabel = (list, id) => list.find((o) => o.id === id)?.label || id || '—'
+
+// The charge actually agreed with a household — a negotiated amount overrides
+// the tier's standard charge. Works for households and potential customers.
+export const effectiveCharge = (h) => {
+  const agreed = Number(h?.charge)
+  return agreed > 0 ? agreed : tierCharge(h?.tier || h?.estTier)
+}
 
 export const collectors = [
   { id: 'C-042', name: 'Rafiqul Islam',  dspId: 'DSP-0042', zone: 'W-14', phone: '+8801711-000042', onTime: 96, coverage: 98, complaints: 1, status: 'on_route', license: 'DK-1145-A', licenseExp: '2027-03-14', joined: '2025-11-02', attendance: 'checked_in' },
@@ -89,6 +184,82 @@ function generateExtra() {
 }
 const EXTRA = generateExtra()
 
+// ---- Customer-information enrichment ----------------------------------------
+// The core records above stay readable; the full customer sheet (profession,
+// members, storage, payment terms, …) is layered on deterministically by index
+// so every seeded row demos the complete profile.
+const PROFESSIONS = [
+  'Shopkeeper', 'School teacher', 'Garment worker', 'Rickshaw puller', 'Govt. service',
+  'Homemaker', 'Small trader', 'Bank officer', 'Day labourer', 'Tailor', 'Van driver', 'Nurse',
+]
+const RELATIONS = ['Son', 'Spouse', 'Daughter', 'Brother', 'Caretaker', 'Manager']
+const FLOORS = ['Ground', '1st floor', '2nd floor', '3rd floor', '4th floor']
+
+function attachProfile(rec, i) {
+  const tier = rec.tier || rec.estTier || ''
+  const commercial = tier.startsWith('commercial')
+  const members = commercial ? 0 : 3 + (i % 5)
+  const slug = rec.head.toLowerCase().replace(/[^a-z]+/g, '.')
+  return {
+    customerType: commercial ? (i % 4 === 0 ? 'institutional' : 'commercial') : 'residential',
+    profession: PROFESSIONS[i % PROFESSIONS.length],
+    address: `Holding ${rec.holding}, ${rec.road}`,
+    email: i % 3 === 0 ? `${slug}@mail.com` : '',
+    altPhone: i % 2 === 0 ? `+8801912-${String(200000 + i * 37).slice(-6)}` : '',
+    contactPerson: i % 2 === 0 ? `${RELATIONS[i % RELATIONS.length]} — ${rec.head.split(' ')[0]} family` : '',
+    bloodGroup: bloodGroups[i % bloodGroups.length],
+    members,
+    membersUnder5: members ? (i % 3 === 0 ? 1 : 0) : 0,
+    membersFemale: members ? 1 + (i % 3) : 0,
+    storage: storageTypes[i % storageTypes.length].id,
+    holdingType: commercial ? holdingTypes[4 + (i % 2)].id : holdingTypes[i % 4].id,
+    floor: FLOORS[i % FLOORS.length],
+    suitableTime: suitableTimes[i % suitableTimes.length].id,
+    // a few holdings negotiated a charge away from the tier's standard rate
+    charge: i % 7 === 3 ? tierCharge(tier) + 50 : tierCharge(tier),
+    paymentMode: paymentModes[i % paymentModes.length].id,
+    paymentDay: 1 + (i % 10),
+    ...rec,
+  }
+}
+
+// Extra survey answers the "to be customer" column of the sheet asks for.
+// Payment terms are deliberately absent: nothing is billed until the holding is
+// brought under service, so they are only agreed at conversion time.
+// A surveyed home has no verified location yet — that happens at conversion.
+function attachSurvey(rec, i) {
+  const { charge, paymentMode, paymentDay, ...profile } = attachProfile(rec, i)
+  return {
+    ...profile,
+    reason: potentialReasons[i % potentialReasons.length].id,
+    timeGap: timeGaps[i % timeGaps.length].id,
+    currentPractice: currentPractices[i % currentPractices.length].id,
+    verified: false,
+    verifiedAt: null,
+    verifiedBy: null,
+    accuracy: null,
+  }
+}
+
+// Location verification. A household is only routable once someone has stood at
+// the gate and captured a GPS fix, so the seed keeps a handful unverified to
+// exercise the verification queue and the "not on any route" warning.
+const UNVERIFIED_SEED = new Set(['HH-KCC-0012841', 'HH-KCC-0021005', 'HH-KCC-0009051', 'HH-KCC-05009'])
+
+function attachVerification(rec, i) {
+  if (UNVERIFIED_SEED.has(rec.id)) {
+    // no confirmed coordinates until someone verifies on site
+    return { ...rec, lat: null, lng: null, verified: false, verifiedAt: null, verifiedBy: null, accuracy: null }
+  }
+  return {
+    ...rec,
+    verified: true,
+    verifiedAt: `2026-07-0${1 + (i % 4)}`,
+    verifiedBy: collectors[i % collectors.length].id,
+    accuracy: 4 + (i % 9),
+  }
+}
+
 export const households = [
   { id: 'HH-KCC-0012840', qr: 'SS-9F3A21', ward: 'W-14', road: 'KDA Avenue',           holding: '142/B', head: 'Abdul Karim',   phone: '+8801812-334455', tier: 'residential_standard', status: 'active',   lastVisit: '2026-07-05T06:14Z', dues: 0,   lat: 22.8456, lng: 89.5403 },
   { id: 'HH-KCC-0012841', qr: 'SS-9F3A22', ward: 'W-14', road: 'KDA Avenue',           holding: '143',   head: 'Rina Sultana',   phone: '+8801812-334456', tier: 'residential_standard', status: 'active',   lastVisit: '2026-07-05T06:19Z', dues: 100, lat: 22.8461, lng: 89.5411 },
@@ -104,7 +275,7 @@ export const households = [
   { id: 'HH-KCC-0009051', qr: 'SS-77AA12', ward: 'W-09', road: 'Mohsin Road',          holding: '16',    head: 'Tariqul Islam',  phone: '+8801812-990012', tier: 'residential_standard', status: 'active',   lastVisit: null,                dues: 200, lat: 22.8512, lng: 89.5190 },
   { id: 'HH-KCC-0009052', qr: 'SS-77AA13', ward: 'W-09', road: 'Deyana Main Road',     holding: '04/A',  head: 'Momena Khatun',  phone: '+8801812-990013', tier: 'residential_premium',  status: 'active',   lastVisit: '2026-07-04T06:30Z', dues: 0,   lat: 22.8523, lng: 89.5165 },
   ...EXTRA.homes,
-]
+].map(attachProfile).map(attachVerification)
 
 // "Ghost homes" — surveyed but not yet registered/charged (potential customers)
 export const potentialCustomers = [
@@ -114,7 +285,76 @@ export const potentialCustomers = [
   { id: 'POT-3004', ward: 'W-21', road: 'BIDC Road',           holding: '25',  head: 'Shirin Akter',  phone: '+8801713-100004', estTier: 'residential_standard', surveyedAt: '2026-07-01', surveyor: 'C-091' },
   { id: 'POT-3005', ward: 'W-21', road: 'BIDC Road',           holding: '26',  head: 'Fazlul Haque',  phone: '+8801713-100005', estTier: 'commercial_large',     surveyedAt: '2026-07-01', surveyor: 'C-091' },
   { id: 'POT-3006', ward: 'W-09', road: 'Deyana Main Road',    holding: '09',  head: 'Ayesha Siddika',phone: '+8801713-100006', estTier: 'residential_standard', surveyedAt: '2026-07-04', surveyor: 'C-104' },
-]
+].map(attachSurvey)
+
+// ---- Routes and collector assignments ---------------------------------------
+//
+// Two separate records, because they answer two different questions.
+//
+//   routes      — WHICH holdings make up a round, in walking order. A route is
+//                 a reusable thing tied to a place, not to a person, so it can
+//                 be handed to whoever is on shift.
+//   assignments — WHO walks which rounds. A collector may hold several routes,
+//                 for example a morning road and an afternoon one.
+//
+// A household belongs to exactly one route, and a collector's daily round is
+// their assigned routes' stops in walking order. Only verified households are
+// planned: an unverified holding has no confirmed location, so nobody can be
+// sent to it.
+const ROUTE_WINDOWS = ['06:00–09:30', '06:30–10:00', '07:00–10:30']
+
+const byHolding = (a, b) => String(a.holding).localeCompare(String(b.holding), undefined, { numeric: true })
+
+// One route per road — the way a round is actually described out loud
+// ("you take KDA Avenue this morning").
+function buildRoutes() {
+  const grouped = {}
+  households.filter((h) => h.verified).forEach((h) => {
+    const key = `${h.ward}|${h.road}`
+    ;(grouped[key] = grouped[key] || []).push(h)
+  })
+  return Object.entries(grouped).map(([key, homes], i) => {
+    const [ward, road] = key.split('|')
+    return {
+      id: `RT-${ward}-${String(i + 1).padStart(2, '0')}`,
+      name: road,
+      ward,
+      window: ROUTE_WINDOWS[i % ROUTE_WINDOWS.length],
+      stops: [...homes].sort(byHolding).map((h) => h.id),
+      active: true,
+    }
+  })
+}
+
+export const routes = buildRoutes()
+
+// Deal each ward's routes round-robin across that ward's collectors. Wards with
+// more roads than collectors leave someone holding two routes, which is exactly
+// the case the daily round has to cope with.
+function buildAssignments() {
+  const poolByWard = {}
+  collectors.filter((c) => c.status !== 'off_route')
+    .forEach((c) => { (poolByWard[c.zone] = poolByWard[c.zone] || []).push(c) })
+
+  const held = {}
+  const turn = {}
+  routes.forEach((r) => {
+    const pool = poolByWard[r.ward]
+    if (!pool || !pool.length) return
+    const c = pool[(turn[r.ward] || 0) % pool.length]
+    turn[r.ward] = (turn[r.ward] || 0) + 1
+    ;(held[c.id] = held[c.id] || []).push(r.id)
+  })
+
+  return Object.entries(held).map(([collector, routeIds]) => ({
+    id: `AS-${collector}`,
+    collector,
+    routes: routeIds,
+    active: true,
+  }))
+}
+
+export const assignments = buildAssignments()
 
 export const vans = [
   { id: 'VAN-KCC-017', plate: 'KHULNA-METRO-TA-11-4520', type: 'compactor',    capacity: 3000, fuel: 'diesel',   ownership: 'owned',  gps: 'GPS-7781', odometer: 48210, status: 'active',         driver: 'C-042', fitnessExp: '2026-11-30', taxExp: '2026-09-15', insuranceExp: '2026-12-01', permitExp: '2027-01-20', nextServiceKm: 53000, kmpl: 6.1 },
@@ -124,40 +364,252 @@ export const vans = [
   { id: 'VAN-KCC-031', plate: 'KHULNA-METRO-TA-11-5567', type: 'compactor',    capacity: 3000, fuel: 'diesel',   ownership: 'owned',  gps: 'GPS-4402', odometer: 60110, status: 'active',         driver: 'C-117', fitnessExp: '2026-10-18', taxExp: '2026-12-12', insuranceExp: '2026-07-28', permitExp: '2027-03-04', nextServiceKm: 63000, kmpl: 5.8 },
 ]
 
+// Complaints carry a priority (drives SLA target), a description, and a full
+// activity trail so the ticket drawer can show a lifecycle timeline.
 export const complaints = [
-  { id: 'CMP-20714', hh: 'HH-KCC-0012841', type: 'missed_collection', channel: 'sms',  status: 'open',        assigned: 'C-058', opened: '2026-07-05T08:12Z', sla: 24, ward: 'W-14' },
-  { id: 'CMP-20713', hh: 'HH-KCC-0021005', type: 'overflow',          channel: 'app',  status: 'in_progress', assigned: 'C-091', opened: '2026-07-05T07:40Z', sla: 24, ward: 'W-21' },
-  { id: 'CMP-20710', hh: 'HH-KCC-0009050', type: 'billing_dispute',   channel: 'app',  status: 'assigned',    assigned: 'C-104', opened: '2026-07-05T06:05Z', sla: 24, ward: 'W-09' },
-  { id: 'CMP-20705', hh: 'HH-KCC-0013111', type: 'staff_behaviour',   channel: 'sms',  status: 'resolved',    assigned: 'C-073', opened: '2026-07-04T14:22Z', sla: 24, ward: 'W-15' },
-  { id: 'CMP-20701', hh: 'HH-KCC-0012842', type: 'missed_collection', channel: 'app',  status: 'closed',      assigned: 'C-042', opened: '2026-07-03T09:10Z', sla: 24, ward: 'W-14' },
-  { id: 'CMP-20698', hh: 'HH-KCC-0013110', type: 'overflow',          channel: 'sms',  status: 'resolved',    assigned: 'C-117', opened: '2026-07-03T05:55Z', sla: 24, ward: 'W-15' },
+  {
+    id: 'CMP-20714', hh: 'HH-KCC-0012841', type: 'missed_collection', channel: 'sms',
+    status: 'open', assigned: 'C-058', opened: '2026-07-05T08:12Z', sla: 12, ward: 'W-14',
+    priority: 'high', description: 'Bin not collected on the scheduled morning round; waste piling up at the gate.',
+    activity: [
+      { at: '2026-07-05T08:12Z', action: 'created', by: 'Citizen · SMS', note: 'Logged via SMS short-code.' },
+    ],
+  },
+  {
+    id: 'CMP-20713', hh: 'HH-KCC-0021005', type: 'overflow', channel: 'app',
+    status: 'in_progress', assigned: 'C-091', opened: '2026-07-05T07:40Z', sla: 4, ward: 'W-21',
+    priority: 'urgent', description: 'Community bin overflowing onto Platinum Jubilee Rd — public health hazard.',
+    activity: [
+      { at: '2026-07-05T07:40Z', action: 'created', by: 'Citizen · App', note: 'Photo attached.' },
+      { at: '2026-07-05T07:52Z', action: 'assigned', by: 'Control Room', note: 'Routed to Nasir Uddin (zone W-21).' },
+      { at: '2026-07-05T08:30Z', action: 'in_progress', by: 'Nasir Uddin', note: 'On site; arranging an extra pickup.' },
+    ],
+  },
+  {
+    id: 'CMP-20710', hh: 'HH-KCC-0009050', type: 'billing_dispute', channel: 'app',
+    status: 'assigned', assigned: 'C-104', opened: '2026-07-05T06:05Z', sla: 24, ward: 'W-09',
+    priority: 'medium', description: 'Charged at residential-premium but the household is standard tier.',
+    activity: [
+      { at: '2026-07-05T06:05Z', action: 'created', by: 'Citizen · App', note: '' },
+      { at: '2026-07-05T06:40Z', action: 'assigned', by: 'Control Room', note: 'Assigned to Habibur Rahman for tier verification.' },
+    ],
+  },
+  {
+    id: 'CMP-20705', hh: 'HH-KCC-0013111', type: 'staff_behaviour', channel: 'sms',
+    status: 'resolved', assigned: 'C-073', opened: '2026-07-04T14:22Z', sla: 48, ward: 'W-15',
+    priority: 'low', description: 'Collector reportedly rude to the household during pickup.',
+    activity: [
+      { at: '2026-07-04T14:22Z', action: 'created', by: 'Citizen · SMS', note: '' },
+      { at: '2026-07-04T15:10Z', action: 'assigned', by: 'Control Room', note: '' },
+      { at: '2026-07-05T09:00Z', action: 'in_progress', by: 'Jamal Uddin', note: 'Spoke with the household.' },
+      { at: '2026-07-05T11:30Z', action: 'resolved', by: 'Tanvir Ahmed', note: 'Staff counselled; household satisfied.' },
+    ],
+  },
+  {
+    id: 'CMP-20701', hh: 'HH-KCC-0012842', type: 'missed_collection', channel: 'app',
+    status: 'closed', assigned: 'C-042', opened: '2026-07-03T09:10Z', sla: 24, ward: 'W-14',
+    priority: 'medium', description: 'Collection skipped on 3 July.',
+    activity: [
+      { at: '2026-07-03T09:10Z', action: 'created', by: 'Citizen · App', note: '' },
+      { at: '2026-07-03T09:30Z', action: 'assigned', by: 'Control Room', note: '' },
+      { at: '2026-07-03T12:00Z', action: 'in_progress', by: 'Rafiqul Islam', note: 'Return visit scheduled.' },
+      { at: '2026-07-03T15:20Z', action: 'resolved', by: 'Rafiqul Islam', note: 'Waste collected the same day.' },
+      { at: '2026-07-04T08:00Z', action: 'closed', by: 'Control Room', note: 'Confirmed with household.' },
+    ],
+  },
+  {
+    id: 'CMP-20698', hh: 'HH-KCC-0013110', type: 'overflow', channel: 'sms',
+    status: 'resolved', assigned: 'C-117', opened: '2026-07-03T05:55Z', sla: 12, ward: 'W-15',
+    priority: 'high', description: 'Overflowing bin near Nirala Residential Rd.',
+    activity: [
+      { at: '2026-07-03T05:55Z', action: 'created', by: 'Citizen · SMS', note: '' },
+      { at: '2026-07-03T07:10Z', action: 'in_progress', by: 'Moshiur Rahman', note: 'Cleared and sanitised the spot.' },
+      { at: '2026-07-03T08:30Z', action: 'resolved', by: 'Moshiur Rahman', note: '' },
+    ],
+  },
 ]
 
-export const bills = [
-  { id: 'B-2026-07-0012840', hh: 'HH-KCC-0012840', head: 'Abdul Karim',   period: '2026-07', amount: 100, status: 'paid',    method: 'cash',  ward: 'W-14' },
-  { id: 'B-2026-07-0012841', hh: 'HH-KCC-0012841', head: 'Rina Sultana',   period: '2026-07', amount: 100, status: 'unpaid',  method: null,    ward: 'W-14' },
-  { id: 'B-2026-07-0012842', hh: 'HH-KCC-0012842', head: 'Mizanur Rahman', period: '2026-07', amount: 250, status: 'partial', method: 'cash',  ward: 'W-14' },
-  { id: 'B-2026-07-0012843', hh: 'HH-KCC-0012843', head: 'Bilkis Ara',     period: '2026-07', amount: 100, status: 'paid',    method: 'bkash', ward: 'W-14' },
-  { id: 'B-2026-07-0013110', hh: 'HH-KCC-0013110', head: 'Farida Yasmin',  period: '2026-07', amount: 100, status: 'paid',    method: 'bkash', ward: 'W-15' },
-  { id: 'B-2026-07-0013111', hh: 'HH-KCC-0013111', head: 'Kamal Hossain',  period: '2026-07', amount: 300, status: 'unpaid',  method: null,    ward: 'W-15' },
-  { id: 'B-2026-07-0013112', hh: 'HH-KCC-0013112', head: 'Sultana Razia',  period: '2026-07', amount: 250, status: 'partial', method: 'cash',  ward: 'W-15' },
-  { id: 'B-2026-07-0021004', hh: 'HH-KCC-0021004', head: 'Selina Parvin',  period: '2026-07', amount: 100, status: 'paid',    method: 'cash',  ward: 'W-21' },
-  { id: 'B-2026-07-0021005', hh: 'HH-KCC-0021005', head: 'Anwar Hossain',  period: '2026-07', amount: 250, status: 'overdue', method: null,    ward: 'W-21' },
-  { id: 'B-2026-07-0021006', hh: 'HH-KCC-0021006', head: 'Jahangir Alam',  period: '2026-07', amount: 100, status: 'paid',    method: 'cash',  ward: 'W-21' },
-  { id: 'B-2026-07-0009050', hh: 'HH-KCC-0009050', head: 'Ruksana Begum',  period: '2026-07', amount: 100, status: 'unpaid',  method: null,    ward: 'W-09' },
-  { id: 'B-2026-07-0009052', hh: 'HH-KCC-0009052', head: 'Momena Khatun',  period: '2026-07', amount: 300, status: 'paid',    method: 'bkash', ward: 'W-09' },
-  ...EXTRA.moreBills,
-]
+// ============================================================
+// Operational history
+// ============================================================
+//
+// Reports need depth: a daily/weekly/monthly/yearly view of collection and
+// revenue is meaningless against two days of visits and one month of bills.
+// This generates a rolling window that ends today, so the demo is always
+// current rather than frozen on a date that recedes into the past.
+//
+// Everything is derived from the route plan, so a household's service history,
+// its bills and the collector credited with them all agree by construction.
 
-export const visits = [
-  { id: 'V-88213', hh: 'HH-KCC-0012840', collector: 'C-042', qr: 'SS-9F3A21', status: 'collected', at: '2026-07-05T06:14Z', accuracy: 6,  synced: true },
-  { id: 'V-88214', hh: 'HH-KCC-0012841', collector: 'C-058', qr: 'SS-9F3A22', status: 'collected', at: '2026-07-05T06:19Z', accuracy: 8,  synced: true },
-  { id: 'V-88215', hh: 'HH-KCC-0021004', collector: 'C-091', qr: 'SS-D4E5F6', status: 'collected', at: '2026-07-05T06:58Z', accuracy: 5,  synced: true },
-  { id: 'V-88216', hh: 'HH-KCC-0013110', collector: 'C-117', qr: 'SS-A1B2C3', status: 'collected', at: '2026-07-05T07:02Z', accuracy: 7,  synced: true },
-  { id: 'V-88217', hh: 'HH-KCC-0009050', collector: 'C-104', qr: 'SS-77AA11', status: 'collected', at: '2026-07-05T06:26Z', accuracy: 11, synced: false },
-  { id: 'V-88218', hh: 'HH-KCC-0012842', collector: 'C-042', qr: 'SS-9F3A23', status: 'skipped',   at: '2026-07-05T06:33Z', accuracy: 6,  synced: true },
-  ...EXTRA.vis,
-]
+const HISTORY_DAYS = 90     // rolling service history
+const BILL_MONTHS = 14      // spans two calendar years, so a yearly report has something to compare
+
+// Deterministic PRNG — the same day always produces the same history, so a
+// reload does not reshuffle every figure on screen.
+function seededRandom(seed) {
+  let state = seed >>> 0
+  return () => {
+    state = (state * 1103515245 + 12345) & 0x7fffffff
+    return state / 0x7fffffff
+  }
+}
+
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const isoMonth = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
+const addMonths = (d, n) => { const x = new Date(d.getFullYear(), d.getMonth() + n, 1); return x }
+
+function buildHistory() {
+  const rnd = seededRandom(20260706)
+  const pick = (arr) => arr[Math.floor(rnd() * arr.length)]
+  const pad = (v, n) => String(v).padStart(n, '0')
+  const TODAY = new Date()
+  TODAY.setHours(0, 0, 0, 0)
+
+  const byId = new Map(households.map((h) => [h.id, h]))
+  // Who walks each holding, and which holdings each collector walks.
+  const owner = {}
+  const round = {}
+  routes.forEach((r) => {
+    const holder = assignments.find((a) => (a.routes || []).includes(r.id))?.collector
+    if (!holder) return
+    r.stops.forEach((hh) => {
+      owner[hh] = holder
+      ;(round[holder] = round[holder] || []).push(hh)
+    })
+  })
+
+  // ---- service history: one round per collector per working day ----
+  const visits = []
+  let vn = 0
+  for (let back = HISTORY_DAYS; back >= 0; back--) {
+    const date = addDays(TODAY, -back)
+    const isToday = back === 0
+    // Fridays are a lighter day in Khulna; no round is planned.
+    if (date.getDay() === 5) continue
+
+    Object.entries(round).forEach(([collector, stops]) => {
+      stops.forEach((hh, i) => {
+        // Today is still in progress — roughly half the round is done so far.
+        if (isToday && rnd() > 0.55) return
+        const roll = rnd()
+        if (roll > 0.97) return                       // not reached at all
+        const skipped = roll > 0.9
+        vn += 1
+        const hour = 6 + (i % 4)
+        const minute = (i * 7 + Math.floor(rnd() * 6)) % 60
+        visits.push({
+          id: `V-${pad(vn, 6)}`,
+          hh,
+          collector,
+          qr: byId.get(hh)?.qr || null,
+          status: skipped ? 'skipped' : 'collected',
+          at: `${isoDay(date)}T${pad(hour, 2)}:${pad(minute, 2)}:00`,
+          accuracy: skipped ? null : 4 + Math.floor(rnd() * 9),
+          source: rnd() > 0.35 ? 'scan' : 'manual',
+          reason: skipped ? pick(['noOne', 'noWaste', 'locked', 'access']) : null,
+          // the newest day may not have reached the server yet
+          synced: !isToday || rnd() > 0.4,
+        })
+      })
+    })
+  }
+
+  // ---- billing history: one bill per serviced holding per month ----
+  const bills = []
+  const payments = []
+  let pn = 0
+  const monthStart = addMonths(TODAY, -(BILL_MONTHS - 1))
+
+  for (let m = 0; m < BILL_MONTHS; m++) {
+    const month = addMonths(monthStart, m)
+    const period = isoMonth(month)
+    const isCurrent = period === isoMonth(TODAY)
+
+    households.filter((h) => owner[h.id] && h.status === 'active').forEach((h) => {
+      const amount = effectiveCharge(h)
+      const issuedAt = `${period}-01`
+      const bill = {
+        id: `B-${period}-${h.id.slice(-7)}`,
+        hh: h.id,
+        head: h.head,
+        period,
+        issuedAt,
+        amount,
+        ward: h.ward,
+        status: 'unpaid',
+        method: null,
+      }
+
+      // Older months settle more completely than the current one.
+      const roll = rnd()
+      const settleRate = isCurrent ? 0.55 : 0.88
+      let received = 0
+      let method = null
+
+      if (roll < settleRate) {
+        method = h.paymentMode || pick(['cash', 'bkash', 'nagad'])
+        const partial = rnd() < 0.14
+        received = partial ? Math.round(amount * (0.3 + rnd() * 0.4)) : amount
+        const payDay = Math.min(28, (h.paymentDay || 5) + Math.floor(rnd() * 6))
+        pn += 1
+        payments.push({
+          id: `PAY-${period}-${pad(pn, 5)}`,
+          bill: bill.id,
+          hh: h.id,
+          collector: owner[h.id],
+          amount: received,
+          method,
+          at: `${period}-${pad(payDay, 2)}T${pad(10 + Math.floor(rnd() * 7), 2)}:00:00`,
+        })
+        bill.status = received >= amount ? 'paid' : 'partial'
+        bill.method = method
+      } else if (!isCurrent) {
+        // Unpaid and the month has closed — that is overdue.
+        bill.status = 'overdue'
+      }
+
+      bills.push(bill)
+    })
+  }
+
+  // ---- cash handling: what each collector handed in, per month ----
+  // Most deposits reconcile exactly; a few carry a shortfall or a late hand-in,
+  // which is the whole reason a reconciliation report exists.
+  const deposits = []
+  const takings = {}
+  payments.forEach((p) => {
+    const key = `${p.collector}|${p.at.slice(0, 7)}|${p.method}`
+    takings[key] = (takings[key] || 0) + p.amount
+  })
+  let dn = 0
+  Object.entries(takings).forEach(([key, amount]) => {
+    const [collector, period, method] = key.split('|')
+    const roll = rnd()
+    // 12% of hand-ins are short, 6% are still outstanding entirely.
+    if (roll < 0.06) return
+    const handed = roll < 0.18 ? Math.round(amount * (0.8 + rnd() * 0.15)) : amount
+    dn += 1
+    deposits.push({
+      id: `DEP-${period}-${pad(dn, 4)}`,
+      collector,
+      period,
+      method,
+      amount: handed,
+      at: `${period}-${pad(26 + Math.floor(rnd() * 3), 2)}T16:00:00`,
+      ref: `DR-${pad(dn, 5)}`,
+    })
+  })
+
+  return { visits, bills, payments, deposits }
+}
+
+const HISTORY = buildHistory()
+
+export const visits = HISTORY.visits
+export const bills = HISTORY.bills
+export const payments = HISTORY.payments
+export const deposits = HISTORY.deposits
 
 export const maintenance = [
   { id: 'MNT-3341', van: 'VAN-KCC-004', kind: 'unscheduled', reason: 'Hydraulic lift failure', odometer: 91240, opened: '2026-07-04T09:00Z', closed: null,               downtime: 30, cost: 8600, vendor: 'City Workshop Ltd.' },
@@ -236,6 +688,6 @@ export const operators = [
 
 // The seed bundle DataContext hydrates from.
 export const SEED = {
-  households, potentialCustomers, collectors, vans, complaints,
-  bills, visits, maintenance, fuelLogs,
+  households, potentialCustomers, collectors, routes, assignments, vans, complaints,
+  bills, payments, deposits, visits, maintenance, fuelLogs,
 }

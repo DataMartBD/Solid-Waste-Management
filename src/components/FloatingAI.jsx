@@ -1,61 +1,63 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { IconSpark, IconArrow } from './Icons.jsx'
-import { useData } from '../context/DataContext.jsx'
+import { ai } from '../api/endpoints.js'
+import { useLang } from '../i18n/index.jsx'
 
-// Lightweight rule-based "assistant" — answers from live store data and
-// offers a link to the relevant page. (Wire to a real LLM endpoint later.)
+// Thin client over POST /api/ai/ask. The server computes every figure from the
+// live database, scoped to the signed-in operator, and falls back to rule-based
+// answers when no model key is configured — so the panel answers either way and
+// the browser never recomputes an operational number of its own.
+//
+// `key` is the label shown on the chip; `q` is the English phrase actually sent,
+// so a translated chip still hits the server's rule matcher.
 const SUGGESTIONS = [
-  'How many households have dues?',
-  'Which vans need service?',
-  'Show open complaints',
-  'Collection rate this period',
+  { key: 'ai.sug.dues', q: 'How many households have dues?' },
+  { key: 'ai.sug.vans', q: 'Which vans need service?' },
+  { key: 'ai.sug.complaints', q: 'Show open complaints' },
+  { key: 'ai.sug.rate', q: 'Collection rate this period' },
 ]
 
 export default function FloatingAI() {
   const [open, setOpen] = useState(false)
-  const [log, setLog] = useState([{ from: 'ai', text: "Hi! I'm Sweep AI. Ask me about collection, dues, fleet or complaints — or tap a shortcut below." }])
+  // The greeting is stored as a key so it follows a language switch; replies
+  // keep the wording they were generated with, like a real chat transcript.
+  const [log, setLog] = useState([{ from: 'ai', key: 'ai.greeting' }])
   const [input, setInput] = useState('')
+  const [busy, setBusy] = useState(false)
   const navigate = useNavigate()
-  const data = useData()
+  const { t } = useLang()
   const bodyRef = useRef(null)
+  // Identifies the placeholder bubble a reply has to land in, so the transcript
+  // keeps its order even though the answer arrives asynchronously.
+  const seq = useRef(0)
 
   // keep the latest message in view
   useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight }, [log, open])
 
-  function answer(q) {
-    const s = q.toLowerCase()
-    const { households, vans, complaints, bills } = data
-    if (/due|outstanding|unpaid/.test(s)) {
-      const withDues = households.filter((h) => (h.dues || 0) > 0)
-      const total = withDues.reduce((a, h) => a + h.dues, 0)
-      return { text: `${withDues.length} households currently have outstanding dues, totalling ৳${total.toLocaleString()}.`, go: '/app/billing', goLabel: 'View billing' }
-    }
-    if (/van|fleet|service|maintenance/.test(s)) {
-      const due = vans.filter((v) => v.nextServiceKm - v.odometer <= 1000 || v.status === 'in_maintenance')
-      return { text: `${due.length} van(s) need attention (service due or in maintenance).`, go: '/app/fleet', goLabel: 'Open fleet' }
-    }
-    if (/complaint|ticket|sla/.test(s)) {
-      const openC = complaints.filter((c) => ['open', 'assigned', 'in_progress'].includes(c.status))
-      return { text: `There are ${openC.length} active complaint tickets.`, go: '/app/complaints', goLabel: 'View complaints' }
-    }
-    if (/collect|rate|charge|revenue|billing/.test(s)) {
-      const billed = bills.reduce((a, b) => a + b.amount, 0)
-      const paid = bills.filter((b) => b.status === 'paid').reduce((a, b) => a + b.amount, 0)
-      return { text: `Collected ৳${paid.toLocaleString()} of ৳${billed.toLocaleString()} billed (${billed ? Math.round((paid / billed) * 100) : 0}% charge rate).`, go: '/app/reports', goLabel: 'Open reports' }
-    }
-    if (/household|customer|register|report/.test(s)) {
-      return { text: `${households.length} households are registered. Customer reports break this down by ward and road.`, go: '/app/reports', goLabel: 'View reports' }
-    }
-    return { text: 'I can help with dues, fleet/maintenance, complaints, and collection rates — try one of the shortcuts below.' }
-  }
-
-  function send(q) {
+  // `askWith` lets a translated shortcut chip echo its own wording while the
+  // server still receives the English phrase.
+  async function send(q, askWith) {
     const text = (q ?? input).trim()
-    if (!text) return
-    const res = answer(text)
-    setLog((l) => [...l, { from: 'me', text }, { from: 'ai', text: res.text, go: res.go, goLabel: res.goLabel }])
+    // One question at a time: the input is disabled while busy, and this stops a
+    // double submit from an Enter key repeat.
+    if (!text || busy) return
+    const id = ++seq.current
     setInput('')
+    setBusy(true)
+    setLog((l) => [...l, { from: 'me', text }, { from: 'ai', id, pending: true }])
+
+    const replace = (message) => setLog((l) => l.map((m) => (m.id === id ? { ...message, from: 'ai', id } : m)))
+    try {
+      const res = await ai.ask(askWith ?? text)
+      replace({ text: res.answer, go: res.go || null, goLabel: res.goLabel || null })
+    } catch (error) {
+      // A failed request is a bubble, never a thrown exception — the panel has to
+      // stay usable when the backend is down mid-conversation.
+      replace({ text: t(error?.status === 0 ? 'ai.offline' : 'ai.error'), failed: true })
+    } finally {
+      setBusy(false)
+    }
   }
 
   // Navigate WITHOUT closing the panel, so the assistant stays available.
@@ -64,22 +66,29 @@ export default function FloatingAI() {
   return (
     <>
       {open && (
-        <div className="ai-panel fade-in">
+        <div className="ai-panel fade-in" id="sweep-ai-panel">
           <div className="ai-head">
             <div className="row gap-8">
               <span className="ai-badge-icon"><IconSpark size={16} /></span>
-              <div><div style={{ fontWeight: 700, fontSize: 14 }}>Sweep AI</div><div className="tiny" style={{ color: 'rgba(255,255,255,.7)' }}>Assistant · beta</div></div>
+              <div><div style={{ fontWeight: 700, fontSize: 14 }}>{t('ai.title')}</div><div className="tiny" style={{ color: 'var(--on-brand)', opacity: .78 }}>{t('ai.subtitle')}</div></div>
             </div>
-            <button className="ai-x" onClick={() => setOpen(false)} aria-label="Close">✕</button>
+            <button className="ai-x" onClick={() => setOpen(false)} aria-label={t('common.close')}>✕</button>
           </div>
 
           <div className="ai-body" ref={bodyRef}>
             {log.map((m, i) => (
               <div key={i} className={`ai-msg ${m.from}`}>
-                <div>{m.text}</div>
+                {m.pending
+                  ? (
+                    <span className="row gap-8">
+                      <span className="spinner spinner-dark" style={{ width: 13, height: 13, borderWidth: 2 }} />
+                      <span className="tiny muted">{t('ai.thinking')}</span>
+                    </span>
+                  )
+                  : <div style={m.failed ? { color: 'var(--danger-fg)' } : undefined}>{m.key ? t(m.key) : m.text}</div>}
                 {m.go && (
                   <button className="ai-go" onClick={() => goTo(m.go)}>
-                    {m.goLabel || 'Open'} <IconArrow size={13} />
+                    {m.goLabel || t('ai.go.default')} <IconArrow size={13} />
                   </button>
                 )}
               </div>
@@ -87,17 +96,20 @@ export default function FloatingAI() {
           </div>
 
           <div className="ai-chips">
-            {SUGGESTIONS.map((sug) => <button key={sug} onClick={() => send(sug)}>{sug}</button>)}
+            {SUGGESTIONS.map((sug) => (
+              <button key={sug.key} disabled={busy} onClick={() => send(t(sug.key), sug.q)}>{t(sug.key)}</button>
+            ))}
           </div>
 
           <form className="ai-input" onSubmit={(e) => { e.preventDefault(); send() }}>
-            <input placeholder="Ask Sweep AI…" value={input} onChange={(e) => setInput(e.target.value)} />
-            <button type="submit" className="btn btn-primary btn-sm">Send</button>
+            <input placeholder={t('ai.placeholder')} value={input} onChange={(e) => setInput(e.target.value)} disabled={busy} />
+            <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{busy ? t('ai.sending') : t('ai.send')}</button>
           </form>
         </div>
       )}
 
-      <button className={`ai-fab ${open ? 'active' : ''}`} onClick={() => setOpen((o) => !o)} aria-label="AI assistant">
+      <button className={`ai-fab ${open ? 'active' : ''}`} onClick={() => setOpen((o) => !o)}
+        aria-label={t('ai.title')} aria-expanded={open} aria-controls="sweep-ai-panel">
         <IconSpark size={24} />
         <span className="ai-fab-badge">AI</span>
       </button>

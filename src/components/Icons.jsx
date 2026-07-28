@@ -1,7 +1,13 @@
 // Minimal inline SVG icon set (stroke-based, inherits color via currentColor)
+// Every icon here is decorative — it always sits beside translated text or inside
+// an aria-labelled button — so hide them from assistive tech rather than letting
+// ~140 unnamed graphics into the tree. Spreading {...p} last lets a caller opt out
+// with role="img" aria-label={t(…)} aria-hidden={undefined} if an icon ever
+// becomes the sole carrier of meaning.
 const S = ({ children, size = 18, ...p }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" {...p}>{children}</svg>
+    strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"
+    aria-hidden="true" focusable="false" {...p}>{children}</svg>
 )
 
 export const IconDashboard = (p) => <S {...p}><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></S>
@@ -33,3 +39,8 @@ export const IconMoon = (p) => <S {...p}><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a
 export const IconSpark = (p) => <S {...p}><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/></S>
 export const IconExpand = (p) => <S {...p}><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></S>
 export const IconMinimize = (p) => <S {...p}><path d="M3 8h5V3M21 8h-5V3M3 16h5v5M21 16h-5v5"/></S>
+export const IconUser = (p) => <S {...p}><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></S>
+export const IconLock = (p) => <S {...p}><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 15v2"/></S>
+export const IconGlobe = (p) => <S {...p}><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18Z"/></S>
+export const IconShield = (p) => <S {...p}><path d="M12 3l7 3v6c0 4.5-3 7.9-7 9-4-1.1-7-4.5-7-9V6l7-3Z"/><path d="m9 12 2 2 4-4"/></S>
+export const IconRefresh = (p) => <S {...p}><path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 4v5h-5"/></S>

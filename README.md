@@ -1,97 +1,134 @@
-# Smart Sweep — SWMS Frontend
+# Smart Sweep — SWMS
 
-React frontend for the **Solid Waste Management System** described in the Smart Sweep spec
-(Khulna City Corporation pilot). Login is by **mobile number + OTP**. Runs entirely on a
-mock data layer — no backend required.
+Solid Waste Management System for the Khulna City Corporation pilot: a **React 18
+frontend** and a **Django 5.2 + DRF backend on PostgreSQL 18**. Login is by mobile
+number, with either an SMS code or a 4-digit PIN.
+
+The frontend was originally a mock-data prototype. It now runs entirely against
+the API — the mock dataset was ported to a database seed command, so the demo
+looks the same but every figure is real, computed from PostgreSQL.
 
 ## Quick start
+
+Two processes. Backend first:
+
+```bash
+cd server
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+copy .env.example .env
+```
+
+Edit `server/.env` with your PostgreSQL password — **quote it if it contains
+`#`** — then create the database and load the demo data:
+
+```bash
+.venv\Scripts\python.exe manage.py migrate
+.venv\Scripts\python.exe manage.py seed_demo --flush
+.venv\Scripts\python.exe manage.py runserver
+```
+
+Frontend, from the repository root:
 
 ```bash
 npm install
 npm run dev      # http://localhost:5173
-npm run build    # production build → dist/
 ```
+
+Vite proxies `/api`, `/media` and `/ws` to `127.0.0.1:8000`, so the browser sees a
+single origin in development. See [server/README.md](server/README.md) for backend
+detail and [`server/.env.example`](server/.env.example) for every setting.
 
 ## Logging in (demo)
 
-Enter any registered mobile number, or tap a **demo account** chip on the sign-in screen.
-Login is a **4-digit OTP**. Since there's no SMS gateway, the OTP screen shows the code
-(demo mode only). Demo accounts:
+Tap a **demo account** chip on the sign-in screen, or type a number. First sign-in
+uses a 4-digit SMS code — with no SMS gateway configured the login screen shows
+the code, which the server only reveals while `DEBUG` is on. After that you can
+set a PIN and use it instead, which is what field collectors do where coverage is
+unreliable.
 
-| Mobile        | Role         | Scope       |
-|---------------|--------------|-------------|
-| 01711000042   | Collector    | Ward 14     |
-| 01700112233   | Supervisor   | Zone 03     |
-| 01900445566   | Agency Admin | All zones   |
-| 01800778899   | KCC Viewer   | City-wide   |
+| Mobile | Role | Scope | Sees |
+|---|---|---|---|
+| 01711000042 | Collector | Ward 14 | Their own round, customers, complaints |
+| 01700112233 | Supervisor | Zone 03 | Full operational control of that zone's wards |
+| 01900445566 | Agency Admin | All zones | Everything, including staff, fleet and billing runs |
+| 01800778899 | KCC Viewer | City-wide | Read-only oversight and reports |
 
-The 6-digit code is deterministic per number, so the same number always yields the same code.
-The session persists in `localStorage`; use the sign-out button in the top bar to clear it.
+Roles are enforced server-side and the sidebar only offers pages the signed-in
+role can actually open. `seed_demo` prints the PINs and the `/admin` superuser it
+creates.
 
-## Modules (mapped to the spec)
+## Modules
 
-| Route              | Spec section | What it shows |
-|--------------------|--------------|----------------|
-| `/app/dashboard`   | §11 KPIs     | Efficiency, charge rate, coverage, fleet gauges; 7-day trend; live visit stream |
-| `/app/live`        | §4.6 / §3    | **Real interactive map** (Leaflet + OpenStreetMap/CARTO tiles) of Khulna with live collector pins and household markers; theme-aware tiles; click a collector to fly to them |
-| `/app/households`  | §4.1         | Household register, search/filter, QR detail drawer |
-| `/app/routes`      | §4.3         | **Progressive routes** — expand a route for a **Timeline** (stop-by-stop: collected / skipped / next / pending, from live scans) or a **Live map** view (real Leaflet streets) that draws the collection path between households — solid = collected, dashed = still to collect — with an animated collector marker moving along the route |
-| `/app/complaints`  | §4.4         | Ticket lifecycle (Open→…→Closed) with SLA timers |
-| `/app/billing`     | §4.5         | Billing, reconciliation (billed vs collected), mark-paid |
-| `/app/fleet`       | §4.8         | Van registry, docs w/ expiry, maintenance, fuel logs, alerts |
-| `/app/drivers`     | §4.8.2       | DSP database, licensing, van assignment, performance |
-| `/app/reports`     | §4.7 / §11   | KPI scorecard, trends, scheduled report exports |
+| Route | What it shows |
+|---|---|
+| `/app/dashboard` | KPI scorecard, 7-day trend, waste by zone, complaint counts — one server aggregate |
+| `/app/live` | Leaflet map of Khulna with real vehicle telemetry, pushed over a websocket |
+| `/app/households` | Customer register: search, filter, QR tags, GPS verification, survey conversion |
+| `/app/collection` | A collector's round for the day: QR scan, collect, skip with a reason, offline queue |
+| `/app/routes` | Progressive route view — stop-by-stop timeline and a live map of the walk |
+| `/app/route-plan` | Build routes, order stops, assign them to collectors |
+| `/app/complaints` | Ticket lifecycle with SLA timers, audit trail and photo evidence |
+| `/app/billing` | Monthly billing runs, payments (including partial), collection rate |
+| `/app/fleet` | Vans, document expiry, maintenance, fuel logs, availability |
+| `/app/collectors` | DSP staff, licensing, van assignment, performance |
+| `/app/reports` | Service delivery, revenue, bill status and reconciliation, with server-side CSV/Excel/PDF export |
+| `/app/reports-customer` | Per-household billing and "who has not paid" |
 
 ## Key features
 
-- **Two household types** — the Households module manages both:
-  - **Under service** — homes currently giving waste to a collector (billed, QR-tagged).
-  - **Potential** — surveyed "ghost homes" not yet under service (future customers).
-  Filter by type, and use **Bring under service** (the → action) to convert a potential
-  home into a serviced customer — it generates a household ID, QR tag and ledger.
-- **View + multi-format export** — every list has a **View / Export** menu:
-  **View report** (styled, printable preview), **Export PDF** (via browser print/Save-as-PDF),
-  **Export Excel** (`.xls`), and **Export CSV**.
-- **Editable database** — every module (households, drivers, vans, complaints, billing,
-  maintenance, fuel) supports **add / edit / delete** with **detail views**. All data lives
-  in `DataContext` and persists to `localStorage` (survives refresh). Delete the
-  `swms.db.v1` key to reset to seed data.
-- **Working buttons** — Register/Add forms open modals; Record payment, Log maintenance,
-  Add fuel, advance complaint, mark paid all mutate the store. **Export CSV** and
-  **Print / PDF** (via browser print) work on every list and report.
-- **Reports** (`/app/reports`), three tabs:
-  - **Service Collection** — Daily / Weekly / Monthly aggregated reports (households served,
-    efficiency, billed, collected, charge rate) with chart + CSV + printable PDF.
-  - **Customers** — **Existing customers** and **potential (ghost-home) customers**, each
-    grouped **by ward** or **by road**, with revenue/dues rollups and detail registers.
-  - **KPI Scorecard** — targets vs current, exportable.
-- **Dark mode** — toggle in the top bar (moon/sun); persists. The dark-green sidebar stays
-  branded in both themes.
-- **Floating AI assistant** — bottom-right button opens *Sweep AI*, which answers questions
-  about dues, fleet, complaints and collection from live store data and deep-links to the
-  right page. Wire `FloatingAI.answer()` to a real LLM endpoint to make it fully conversational.
+- **Two customer types.** Households *under service* (billed, QR-tagged) and
+  surveyed *potential* customers — "ghost homes" not yet paying. Converting a
+  survey creates the household and keeps the survey, so the conversion funnel has
+  history.
+- **Location verification gates routing.** Only a household with a confirmed GPS
+  pin can be put on a route; the server enforces it.
+- **Offline-tolerant collection.** A round recorded without connectivity queues
+  locally and uploads in bulk; a partial failure is reported per row rather than
+  silently dropping work.
+- **Realtime live map.** Vehicle positions arrive over a websocket, falling back
+  to polling where websockets are unavailable.
+- **Sweep AI.** The floating assistant answers from a live, ward-scoped snapshot
+  of the database via the Claude API, and falls back to rule-based answers when no
+  API key is configured.
+- **Bangla and English** throughout, Bangla by default, including Bangla numerals.
+- **Dark mode**, persisted.
 
 ## Tech
 
-- **React 18** + **React Router 6** (SPA routing, auth guards)
-- **Vite 5** build tooling · **Recharts** for charts/gauges
-- **Leaflet + react-leaflet** for the real Live Map (OpenStreetMap/CARTO tiles) · **qrcode.react** for scannable QR tags
-- Custom CSS design system with **light + dark themes** (`src/styles/`, `data-theme` attr)
-- Contexts: `AuthContext` (OTP + RBAC), `DataContext` (editable store), `ThemeContext` (dark mode)
+**Frontend** — React 18, React Router 6, Vite 5, Recharts, Leaflet, qrcode.react,
+a custom CSS design system with light and dark themes, and Vitest.
+
+**Backend** — Django 5.2, Django REST Framework, SimpleJWT, Channels (websockets),
+PostgreSQL 18 via psycopg 3, drf-spectacular (OpenAPI), openpyxl and ReportLab for
+exports, and the Anthropic SDK for the assistant.
 
 ## Structure
 
 ```
 src/
-  context/AuthContext.jsx   OTP request/verify, session, role→home mapping
-  data/mockData.js          simulated SWMS API data (households, vans, bills…)
-  components/                Layout, Icons, reusable UI (StatCard, Status, Section…)
-  pages/                     one file per module (Login, Dashboard, Fleet, …)
-  styles/                    index.css (design system), login.css, app.css
+  api/          client.js (fetch, JWT refresh, error envelope) · endpoints.js
+  context/      AuthContext (OTP/PIN/JWT) · DataContext (server mirror) · ThemeContext
+  access.js     which roles may reach which screen
+  data/         reference.js — pure helpers over the server's catalog
+  components/   Layout, Icons, reusable UI, QR scanner, Sweep AI panel
+  pages/        one file per module
+  i18n/         bn + en dictionaries, formatters
+  styles/       design system
+
+server/
+  config/       settings, urls, ASGI/WSGI
+  swms/         one app per domain — see server/README.md
 ```
 
-## Wiring to a real backend
+## API
 
-`AuthContext.requestOtp` / `verifyOtp` are the SMS-gateway seams — replace their bodies with
-calls to `POST /auth/otp` and `POST /auth/verify`. Each page imports from `src/data/mockData.js`;
-swap those imports for `fetch` calls against the API surface in §6 of the spec (the shapes match).
+Interactive docs at `http://127.0.0.1:8000/api/docs/` once the backend is running;
+the OpenAPI schema is at `/api/schema/`.
+
+## Tests
+
+```bash
+npm test                                   # frontend (Vitest)
+cd server && .venv\Scripts\python.exe manage.py test   # backend
+```

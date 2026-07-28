@@ -21,3 +21,23 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+
+# --- backend (server/) ---
+
+# virtualenv
+.venv/
+venv/
+
+# python bytecode & caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# collected static files and user uploads — regenerated / not source
+server/staticfiles/
+server/media/
+
+# sqlite scratch databases, if one is ever used locally
+*.sqlite3

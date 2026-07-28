@@ -1,4 +1,16 @@
 // Small reusable presentational components used across pages.
+import { useLang } from '../i18n/index.jsx'
+
+// Shared recharts <Tooltip contentStyle>. Recharts' built-in default is an
+// inline white background with dark text, so omitting background/color here
+// leaves a white tooltip card on every chart in dark mode.
+export const CHART_TOOLTIP = {
+  borderRadius: 10,
+  border: '1px solid var(--border)',
+  fontSize: 13,
+  background: 'var(--surface)',
+  color: 'var(--text)',
+}
 
 export function PageHeader({ title, subtitle, actions }) {
   return (
@@ -39,13 +51,17 @@ const BADGE_MAP = {
   active: 'ok', paid: 'ok', collected: 'ok', resolved: 'ok', checked_in: 'ok', on_route: 'ok',
   closed: 'muted', inactive: 'muted', idle: 'muted', retired: 'muted',
   in_progress: 'info', assigned: 'info', partial: 'info',
-  open: 'warn', unpaid: 'warn', in_maintenance: 'warn', skipped: 'warn',
+  open: 'warn', unpaid: 'warn', in_maintenance: 'warn', skipped: 'warn', pending: 'warn',
   overdue: 'danger', off_route: 'danger', absent: 'danger', unsynced: 'danger',
 }
 
 export function Status({ value }) {
+  const { t } = useLang()
   const tone = BADGE_MAP[value] || 'muted'
-  const label = String(value).replace(/_/g, ' ')
+  // translate() falls back to the key, so an unmapped status still reads as the
+  // old underscore-stripped text rather than "status.foo".
+  const key = `status.${value}`
+  const label = t(key) === key ? String(value).replace(/_/g, ' ') : t(key)
   return <span className={`badge badge-${tone}`}><span className="dot" />{label}</span>
 }
 

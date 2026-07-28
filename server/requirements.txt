@@ -1,0 +1,30 @@
+# Smart Sweep SWMS — backend requirements (Python 3.10+, PostgreSQL 18)
+
+# --- core ---
+Django==5.2.6
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.3.1
+psycopg[binary]==3.2.3
+
+# --- api plumbing ---
+django-cors-headers==4.6.0
+django-filter==24.3
+drf-spectacular==0.27.2
+django-environ==0.11.2
+
+# --- realtime (live map) ---
+channels==4.2.0
+daphne==4.1.2
+
+# --- uploads ---
+Pillow==11.0.0
+
+# --- server-side report export ---
+openpyxl==3.1.5
+reportlab==4.2.5
+
+# --- Sweep AI ---
+anthropic==0.40.0
+
+# --- static files ---
+whitenoise==6.8.2

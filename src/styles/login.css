@@ -61,15 +61,18 @@
   border: 1px solid var(--border); border-radius: var(--radius-sm);
   background: var(--surface); transition: .15s; overflow: hidden;
 }
-.phone-input:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-050); }
+.phone-input:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--focus-ring); }
 .phone-input .cc {
   padding: 0 10px 0 12px; font-weight: 600; color: var(--text-2);
   border-right: 1px solid var(--border); align-self: stretch; display: flex; align-items: center; white-space: nowrap;
 }
 
+/* Was #fdeaea/#f6cccc with color: var(--danger) — the literals never switched,
+   so dark mode showed a pale pink block on a dark card, and --danger on that
+   pink was only 4.16:1. --danger-fg/--danger-bg are the theme-aware pair. */
 .login-error {
-  margin-top: 12px; font-size: 13px; color: var(--danger);
-  background: #fdeaea; border: 1px solid #f6cccc; padding: 8px 12px; border-radius: 8px;
+  margin-top: 12px; font-size: 13px; color: var(--danger-fg);
+  background: var(--danger-bg); border: 1px solid var(--danger-bg); padding: 8px 12px; border-radius: 8px;
 }
 
 .link-btn { background: none; border: none; color: var(--brand); font-weight: 600; font-size: 13px; padding: 4px; }
@@ -86,7 +89,7 @@
   border: 1.5px solid var(--border); border-radius: 12px; background: var(--surface);
   color: var(--text); transition: .15s; font-variant-numeric: tabular-nums; padding: 0;
 }
-.otp-cell:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-050); }
+.otp-cell:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--focus-ring); }
 .otp-cell:not(:placeholder-shown), .otp-cell[value]:not([value=""]) { border-color: var(--brand-100); }
 
 /* ---- Demo box ---- */
