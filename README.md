@@ -126,6 +126,19 @@ server/
 Interactive docs at `http://127.0.0.1:8000/api/docs/` once the backend is running;
 the OpenAPI schema is at `/api/schema/`.
 
+## Documentation
+
+| Document | Covers |
+|---|---|
+| [API reference](docs/API-REFERENCE.md) | Every endpoint, error codes, auth, ward scoping |
+| [Workflows](docs/WORKFLOWS.md) | How work moves through the system, and the rules the server enforces |
+| [User manual](docs/USER-MANUAL.md) | Every screen, by role, in plain language |
+| [User manual (Word)](docs/Smart-Sweep-User-Manual.docx) | The same manual as a formatted 24-page `.docx`, for printing and circulation |
+
+A ready-to-run **Postman collection** (148 requests, with JWT capture built in)
+is in [docs/api/](docs/api/) alongside the generated OpenAPI schema. See
+[docs/README.md](docs/README.md) to get started.
+
 ## Tests
 
 ```bash

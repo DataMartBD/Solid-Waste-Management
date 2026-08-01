@@ -23,7 +23,7 @@ function Note({ tone, children }) {
 }
 
 export default function Profile() {
-  const { user, updateProfile, uploadAvatar, changePin, removePin, logout, canWrite } = useAuth()
+  const { user, updateProfile, uploadAvatar, setPin, changePin, removePin, logout, canWrite } = useAuth()
   const { theme, toggle: toggleTheme } = useTheme()
   const { refresh, loading } = useData()
   const { t, lang, setLang, date, dateTime, digits } = useLang()
@@ -75,6 +75,7 @@ export default function Profile() {
           <SecurityCard
             phone={user?.phone}
             pinSet={Boolean(user?.hasPin)}
+            onCreate={setPin}
             onChange={changePin}
             onRemove={removePin}
           />
@@ -267,7 +268,7 @@ function PreferencesCard({ lang, setLang, theme, toggleTheme }) {
 // PIN change. The current PIN is required whenever one is already set, so an
 // unlocked device left on a desk cannot be locked away from its owner. Both calls
 // act on the signed-in user server-side — the phone is never sent.
-function SecurityCard({ phone, pinSet, onChange, onRemove }) {
+function SecurityCard({ phone, pinSet, onCreate, onChange, onRemove }) {
   const { t, n } = useLang()
   const [form, setForm] = useState({ current: '', next: '', confirm: '' })
   const [show, setShow] = useState(false)
@@ -282,11 +283,18 @@ function SecurityCard({ phone, pinSet, onChange, onRemove }) {
     const problem = validatePin(form.next)
     if (problem === 'tooShort') { setNote({ tone: 'bad', text: t('auth.pinTooShort', { length: n(PIN_LENGTH) }) }); return }
     if (problem === 'tooSimple') { setNote({ tone: 'bad', text: t('auth.pinTooSimple') }); return }
+    // Changing a PIN means proving you know the old one. Caught here so a blank
+    // field reads as "enter your current PIN" rather than the server's generic
+    // field error.
+    if (pinSet && !form.current) { setNote({ tone: 'bad', text: t('profile.currentPinRequired') }); return }
 
     // Remember whether this was a first PIN before the call flips `pinSet`.
     const creating = !pinSet
     setBusy(true)
-    const result = await onChange(form.current, form.next)
+    // Setting a first PIN and changing an existing one are different endpoints:
+    // there is no current PIN to verify, and PUT rejects a blank `currentPin`
+    // before it ever reaches the "no PIN yet" branch.
+    const result = creating ? await onCreate(form.next) : await onChange(form.current, form.next)
     setBusy(false)
     if (!result.ok) { setNote({ tone: 'bad', text: t(result.error) }); return }
     setForm({ current: '', next: '', confirm: '' })

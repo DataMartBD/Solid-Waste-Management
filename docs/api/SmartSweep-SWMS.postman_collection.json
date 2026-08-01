@@ -1,0 +1,5678 @@
+{
+  "info": {
+    "name": "Smart Sweep SWMS API",
+    "_postman_id": "5a9d4c10-7e2b-4f66-9a31-swms0000001",
+    "description": "Smart Sweep — Solid Waste Management System for the Khulna City Corporation pilot.\n\nDjango 5.2 + DRF on PostgreSQL 18. Every endpoint under `/api/`.\n\n## Getting started\n\n1. Start the backend: `cd server && .venv\\Scripts\\python.exe manage.py runserver`\n2. Select the **Smart Sweep — Local** environment.\n3. Run **00 · Auth → 1 · Request login code**, then **2 · Verify code**. The test scripts capture the JWT pair, the role and the collector id into collection variables, so every other request is authorised automatically.\n4. Run **01 · Catalog → Catalog bundle** to see the real ids for wards, tiers and the option lists, then point the `wardId` / `tierId` variables at them.\n\n## Conventions\n\n- **Auth** — collection-level Bearer `{{accessToken}}`. Access tokens are short-lived; re-run **Refresh access token** when a request answers 401 with `code: \"token_invalid\"`.\n- **Errors** — every failure has one shape: `{\"detail\": \"…\", \"code\": \"stable_key\", \"fields\": {\"road\": [\"…\"]}}`. `code` is a stable key the UI maps to a translated string.\n- **Pagination** — list endpoints return `{count, page, pages, next, previous, results}`. Pass `?page_size=all` for a bare array (capped at 5000).\n- **Ward scoping** — applied on the server from the caller's role. It cannot be widened by a query parameter.\n- **Ids are text and meaningful** — `HH-KCC-0012840`, `RT-W-14-01`, `C-042` — because field staff read them off bin stickers.\n\nInteractive schema: `http://127.0.0.1:8000/api/docs/`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Keep the date-ish variables current so example bodies stay runnable.",
+          "const now = new Date();",
+          "const pad = (n) => String(n).padStart(2, '0');",
+          "pm.collectionVariables.set('today', `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`);",
+          "pm.collectionVariables.set('period', `${now.getFullYear()}-${pad(now.getMonth() + 1)}`);",
+          "pm.collectionVariables.set('nowIso', now.toISOString());"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Surface the app's error envelope in the Postman console rather",
+          "// than making you open the body every time.",
+          "if (pm.response.code >= 400) {",
+          "  try {",
+          "    const body = pm.response.json();",
+          "    console.error(`${pm.response.code} ${body.code}: ${body.detail}`,",
+          "                  Object.keys(body.fields || {}).length ? body.fields : '');",
+          "  } catch (e) { /* not JSON — a file export or a 500 page */ }",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "roleKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "phone",
+      "value": "01900445566",
+      "type": "string"
+    },
+    {
+      "key": "otpCode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pin",
+      "value": "1470",
+      "type": "string"
+    },
+    {
+      "key": "zoneId",
+      "value": "Z-03",
+      "type": "string"
+    },
+    {
+      "key": "wardId",
+      "value": "W-14",
+      "type": "string"
+    },
+    {
+      "key": "tierId",
+      "value": "residential_standard",
+      "type": "string"
+    },
+    {
+      "key": "householdId",
+      "value": "HH-KCC-0012840",
+      "type": "string"
+    },
+    {
+      "key": "potentialId",
+      "value": "POT-3006",
+      "type": "string"
+    },
+    {
+      "key": "collectorId",
+      "value": "C-042",
+      "type": "string"
+    },
+    {
+      "key": "routeId",
+      "value": "RT-W-14-01",
+      "type": "string"
+    },
+    {
+      "key": "assignmentId",
+      "value": "AS-C-042",
+      "type": "string"
+    },
+    {
+      "key": "visitId",
+      "value": "V-000001",
+      "type": "string"
+    },
+    {
+      "key": "complaintId",
+      "value": "CMP-20698",
+      "type": "string"
+    },
+    {
+      "key": "billId",
+      "value": "B-2026-07-0009050",
+      "type": "string"
+    },
+    {
+      "key": "paymentId",
+      "value": "PAY-2026-07-00015",
+      "type": "string"
+    },
+    {
+      "key": "depositId",
+      "value": "DEP-2026-07-0002",
+      "type": "string"
+    },
+    {
+      "key": "vanId",
+      "value": "VAN-KCC-017",
+      "type": "string"
+    },
+    {
+      "key": "qrTag",
+      "value": "SS-05003",
+      "type": "string"
+    },
+    {
+      "key": "roadId",
+      "value": "170",
+      "type": "string"
+    },
+    {
+      "key": "maintenanceId",
+      "value": "MNT-3341",
+      "type": "string"
+    },
+    {
+      "key": "fuelLogId",
+      "value": "FUEL-5521",
+      "type": "string"
+    },
+    {
+      "key": "billingRunId",
+      "value": "266",
+      "type": "string"
+    },
+    {
+      "key": "period",
+      "value": "2026-07",
+      "type": "string"
+    },
+    {
+      "key": "today",
+      "value": "2026-07-29",
+      "type": "string"
+    },
+    {
+      "key": "nowIso",
+      "value": "2026-07-29T09:14:02Z",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 · Auth & session",
+      "description": "Mobile-number login by SMS code or 4-digit PIN, JWT rotation, and the operator's own profile. Run the two numbered OTP requests in order — their test scripts populate every other request's token.",
+      "item": [
+        {
+          "name": "Demo operators (DEBUG only)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/demo-operators/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "demo-operators",
+                ""
+              ]
+            },
+            "description": "The four demo personas the login screen offers as shortcuts. Returns an empty list when `DJANGO_DEBUG=False` — it would otherwise be an account-enumeration endpoint.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PIN status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/pin/status/?phone={{phone}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "pin",
+                "status",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "phone",
+                  "value": "{{phone}}",
+                  "description": "Mobile number in any accepted local format."
+                }
+              ]
+            },
+            "description": "Does this number have a PIN, and is it locked out? The login screen calls this first to decide whether to offer the PIN fast path or go straight to SMS.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "1 · Request login code (OTP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/otp/request/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "otp",
+                "request",
+                ""
+              ]
+            },
+            "description": "Issues a 4-digit code. The response also carries `known`, `hasPin` and `pinLocked` so the login screen can branch without a second round trip. In DEBUG with `OTP_EXPOSE_CODE=True`, `devCode` holds the code and this request's test script captures it into `{{otpCode}}`.\n\nThrottled under the `otp` scope.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// With OTP_EXPOSE_CODE=True and DEBUG=True the server returns the code so",
+                  "// the demo can sign in without an SMS gateway. It is absent in production.",
+                  "const body = pm.response.json();",
+                  "if (body.devCode) {",
+                  "  pm.collectionVariables.set('otpCode', body.devCode);",
+                  "  console.log('Login code:', body.devCode);",
+                  "} else {",
+                  "  console.warn('No devCode in the response — read the code from the SMS.');",
+                  "}",
+                  "pm.test('code issued', () => pm.expect(pm.response.code).to.eql(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2 · Verify code → JWT pair",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/otp/verify/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "otp",
+                "verify",
+                ""
+              ]
+            },
+            "description": "Exchanges a valid code for `{access, refresh, user}`. An unknown number is provisioned as a Collector-role 'Field Operator', which is how field staff are onboarded without a registration screen. A successful OTP also clears any PIN lockout — OTP is the recovery path.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"code\": \"{{otpCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Store the JWT pair and the signed-in operator for every later request.",
+                  "const ok = pm.response.code === 200;",
+                  "pm.test('signed in', () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('accessToken', body.access);",
+                  "  pm.collectionVariables.set('refreshToken', body.refresh);",
+                  "  pm.collectionVariables.set('roleKey', body.user.roleKey);",
+                  "  if (body.user.collector) pm.collectionVariables.set('collectorId', body.user.collector);",
+                  "  console.log('Signed in as', body.user.name, '(' + body.user.role + ')');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sign in with PIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/pin/login/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "pin",
+                "login",
+                ""
+              ]
+            },
+            "description": "The fast path field collectors use where mobile coverage is unreliable. Returns the same `{access, refresh, user}` body as OTP verification.\n\nAn unknown number and a wrong PIN fail identically (`wrong_pin`), so this cannot be used to enumerate accounts. After `PIN_MAX_ATTEMPTS` misses the account locks for `PIN_LOCKOUT_SECONDS` and answers `pin_locked`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"pin\": \"{{pin}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Store the JWT pair and the signed-in operator for every later request.",
+                  "const ok = pm.response.code === 200;",
+                  "pm.test('signed in', () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('accessToken', body.access);",
+                  "  pm.collectionVariables.set('refreshToken', body.refresh);",
+                  "  pm.collectionVariables.set('roleKey', body.user.roleKey);",
+                  "  if (body.user.collector) pm.collectionVariables.set('collectorId', body.user.collector);",
+                  "  console.log('Signed in as', body.user.name, '(' + body.user.role + ')');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Set a PIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/pin/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "pin",
+                ""
+              ]
+            },
+            "description": "Sets the signed-in operator's PIN. Requires a live access token — a PIN is set *after* an OTP sign-in, never instead of one.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pin\": \"{{pin}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change PIN",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/pin/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "pin",
+                ""
+              ]
+            },
+            "description": "Fails with `no_pin` if none is set, `wrong_pin` if `currentPin` is wrong.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPin\": \"{{pin}}\",\n  \"pin\": \"2468\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove PIN",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/pin/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "pin",
+                ""
+              ]
+            },
+            "description": "Clears the PIN; the account falls back to OTP-only sign-in."
+          },
+          "response": []
+        },
+        {
+          "name": "Who am I",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me",
+                ""
+              ]
+            },
+            "description": "The session user: role, ward scope, `home` landing route, `readOnly` flag, and the linked `collector` id when the operator is one."
+          },
+          "response": []
+        },
+        {
+          "name": "Update my profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me",
+                ""
+              ]
+            },
+            "description": "Self-service profile edit. Role and ward scope are **not** writable here — those are set by an agency admin. Returns the full user.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rahim Uddin\",\n  \"email\": \"rahim@example.com\",\n  \"altPhone\": \"01711000043\",\n  \"nid\": \"1990123456789\",\n  \"bloodGroup\": \"B+\",\n  \"emergencyContact\": \"01700000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh access token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh",
+                ""
+              ]
+            },
+            "description": "Rotates the refresh token. A dead token answers 401 with `{detail, code: 'token_invalid', fields}` rather than SimpleJWT's own shape, so the frontend interceptor has one envelope to branch on.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('accessToken', body.access);",
+                  "  if (body.refresh) pm.collectionVariables.set('refreshToken', body.refresh);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sign out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout",
+                ""
+              ]
+            },
+            "description": "Blacklists the refresh token. Always answers `{ok: true}` — revoking an already-dead token is not an error.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "01 · Catalog & reference data",
+      "description": "Zones, wards, roads, tiers and the eight option lists. `GET /api/catalog/` returns all of it in one call; the CRUD endpoints exist so an agency admin can maintain the lists.",
+      "item": [
+        {
+          "name": "Catalog bundle",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/catalog/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "catalog",
+                ""
+              ]
+            },
+            "description": "**Call this once after signing in.** Every dropdown the app needs in one round trip: zones, wards, `roadsByWard`, tiers, blood groups, and the eight option lists (customer types, holding types, storage types, suitable times, payment modes, potential reasons, time gaps, current practices).\n\nEvery option row carries both `key` (the i18n key the Bangla dictionary resolves) and `label` (the English fallback)."
+          },
+          "response": []
+        },
+        {
+          "name": "List zones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/zones/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "zones",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create zone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/zones/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "zones",
+                ""
+              ]
+            },
+            "description": "Agency admin only. Ids are supplied, not generated — they appear on printed material.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"Z-07\",\n  \"key\": \"opt.zone.Z-07\",\n  \"name\": \"Boyra\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get zone",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/zones/{{zoneId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "zones",
+                "{{zoneId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update zone",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/zones/{{zoneId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "zones",
+                "{{zoneId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sonadanga\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete zone",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/zones/{{zoneId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "zones",
+                "{{zoneId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "List wards",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wards/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wards",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "zone",
+                  "value": "{{zoneId}}",
+                  "description": "Filter to one zone.",
+                  "disabled": true
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create ward",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/wards/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wards",
+                ""
+              ]
+            },
+            "description": "Agency admin only. `lat`/`lng` is the ward centre the live map centres on and generated households scatter around.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"W-22\",\n  \"key\": \"opt.ward.W-22\",\n  \"name\": \"Ward 22 — Boyra\",\n  \"zone\": \"{{zoneId}}\",\n  \"lat\": 22.834,\n  \"lng\": 89.5002\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get ward",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wards/{{wardId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wards",
+                "{{wardId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update ward",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/wards/{{wardId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wards",
+                "{{wardId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ward 14 — Sonadanga\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete ward",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wards/{{wardId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wards",
+                "{{wardId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "List roads",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/roads/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "roads",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "ward",
+                  "value": "{{wardId}}",
+                  "description": "Filter to one ward.",
+                  "disabled": true
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create road",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/roads/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "roads",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ward\": \"{{wardId}}\",\n  \"name\": \"KDA Avenue\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get road",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/roads/{{roadId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "roads",
+                "{{roadId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update road",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/roads/{{roadId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "roads",
+                "{{roadId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"KDA Avenue (South)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete road",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/roads/{{roadId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "roads",
+                "{{roadId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "List tiers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tiers/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tiers",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Service tiers and the monthly charge each one carries. A household's `charge` defaults from its tier."
+          },
+          "response": []
+        },
+        {
+          "name": "Create tier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tiers/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tiers",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"commercial_medium\",\n  \"key\": \"opt.tier.commercial_medium\",\n  \"label\": \"Commercial — medium\",\n  \"charge\": 400\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get tier",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tiers/{{tierId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tiers",
+                "{{tierId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update tier",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tiers/{{tierId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tiers",
+                "{{tierId}}",
+                ""
+              ]
+            },
+            "description": "Changing a tier's charge does **not** restate bills already issued — a bill records the amount at the moment it was raised.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"charge\": 120\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete tier",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tiers/{{tierId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tiers",
+                "{{tierId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 · Customers",
+      "description": "Households under service, and surveyed potential customers — the 'ghost homes' not yet paying. Converting a survey creates the household and keeps the survey, so the funnel has history.",
+      "item": [
+        {
+          "name": "List households",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/households/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "households",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "ward",
+                  "value": "{{wardId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "zone",
+                  "value": "{{zoneId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "road",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "tier",
+                  "value": "{{tierId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "active",
+                  "description": "`active` | `inactive`.",
+                  "disabled": true
+                },
+                {
+                  "key": "customer_type",
+                  "value": "residential",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "verified",
+                  "value": "true",
+                  "description": "GPS pin confirmed.",
+                  "disabled": true
+                },
+                {
+                  "key": "located",
+                  "value": "true",
+                  "description": "Has coordinates at all.",
+                  "disabled": true
+                },
+                {
+                  "key": "hasDues",
+                  "value": "true",
+                  "description": "Outstanding money on record.",
+                  "disabled": true
+                },
+                {
+                  "key": "unplanned",
+                  "value": "true",
+                  "description": "Not on any route.",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "The customer register. Results are **ward-scoped server-side** to the caller: a supervisor's `?ward=` cannot widen past their own wards."
+          },
+          "response": []
+        },
+        {
+          "name": "Create household",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/households/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "households",
+                ""
+              ]
+            },
+            "description": "`ward`, `road`, `holding`, `head`, `tier`, `paymentMode`, `customerType`, `storage`, `holdingType` and `suitableTime` are required. The id (`HH-KCC-…`) is allocated by the server.\n\n`charge` defaults from the tier when omitted.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ward\": \"{{wardId}}\",\n  \"road\": \"KDA Avenue\",\n  \"holding\": \"42/A\",\n  \"head\": \"Rahim Uddin\",\n  \"phone\": \"01711223344\",\n  \"tier\": \"{{tierId}}\",\n  \"charge\": 100,\n  \"paymentMode\": \"cash\",\n  \"paymentDay\": 5,\n  \"status\": \"active\",\n  \"customerType\": \"residential\",\n  \"holdingType\": \"single_storey\",\n  \"storage\": \"covered_bin\",\n  \"suitableTime\": \"morning\",\n  \"floor\": \"Ground\",\n  \"members\": 5,\n  \"membersUnder5\": 1,\n  \"membersFemale\": 3,\n  \"profession\": \"Teacher\",\n  \"address\": \"42/A KDA Avenue, Sonadanga\",\n  \"lat\": 22.8452,\n  \"lng\": 89.5405,\n  \"accuracy\": 8,\n  \"qr\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get household",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/households/{{householdId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "households",
+                "{{householdId}}",
+                ""
+              ]
+            },
+            "description": "Also carries derived fields: `lastVisit` (computed from the visit log, never stored), `effectiveCharge`, `routable` and `routeId`."
+          },
+          "response": []
+        },
+        {
+          "name": "Update household",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/households/{{householdId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "households",
+                "{{householdId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"01711223355\",\n  \"suitableTime\": \"evening\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete household",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/households/{{householdId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "households",
+                "{{householdId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Verify GPS location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/households/{{householdId}}/verify/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "households",
+                "{{householdId}}",
+                "verify",
+                ""
+              ]
+            },
+            "description": "Confirms the holding's pin. **This is the gate for routing** — the server refuses to put an unverified holding on a route.\n\n`placedByHand: true` records that an office user dropped the pin on a map rather than a collector standing at the door with GPS.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 22.8452,\n  \"lng\": 89.5405,\n  \"accuracy\": 8,\n  \"placedByHand\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Resolve a QR tag",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/households/by-qr/{{qrTag}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "households",
+                "by-qr",
+                "{{qrTag}}",
+                ""
+              ]
+            },
+            "description": "Look up the household behind a scanned bin sticker. Use `/api/collection/scan/` instead when the scan happens during a round — that one also answers *whether the stop belongs to this collector today*."
+          },
+          "response": []
+        },
+        {
+          "name": "Unplanned holdings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/households/unplanned/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "households",
+                "unplanned",
+                ""
+              ]
+            },
+            "description": "The route planner's to-do list, split the way the planner presents it: holdings that could be routed now, and holdings blocked because their location is unverified."
+          },
+          "response": []
+        },
+        {
+          "name": "List potential customers (surveys)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/potential-customers/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "potential-customers",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "ward",
+                  "value": "{{wardId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "zone",
+                  "value": "{{zoneId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "converted",
+                  "value": "false",
+                  "description": "Exclude surveys already signed up.",
+                  "disabled": true
+                },
+                {
+                  "key": "reason",
+                  "value": "refused_charge",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "time_gap",
+                  "value": "never",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "current_practice",
+                  "value": "roadside_dump",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "verified",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Surveyed 'ghost homes' — holdings not yet paying for service. Kept separate from households so the conversion funnel has history."
+          },
+          "response": []
+        },
+        {
+          "name": "Create survey",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/potential-customers/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "potential-customers",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ward\": \"{{wardId}}\",\n  \"road\": \"KDA Avenue\",\n  \"holding\": \"77/B\",\n  \"head\": \"Salma Begum\",\n  \"phone\": \"01911223344\",\n  \"estTier\": \"{{tierId}}\",\n  \"surveyedAt\": \"{{today}}\",\n  \"surveyor\": \"{{collectorId}}\",\n  \"reason\": \"never_approached\",\n  \"timeGap\": \"never\",\n  \"currentPractice\": \"roadside_dump\",\n  \"customerType\": \"residential\",\n  \"holdingType\": \"single_storey\",\n  \"storage\": \"open_bin\",\n  \"suitableTime\": \"morning\",\n  \"lat\": 22.8455,\n  \"lng\": 89.541,\n  \"accuracy\": 10,\n  \"notes\": \"Interested if the charge can be paid weekly.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get survey",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/potential-customers/{{potentialId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "potential-customers",
+                "{{potentialId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update survey",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/potential-customers/{{potentialId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "potential-customers",
+                "{{potentialId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Follow up after Eid.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete survey",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/potential-customers/{{potentialId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "potential-customers",
+                "{{potentialId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Verify survey location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/potential-customers/{{potentialId}}/verify/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "potential-customers",
+                "{{potentialId}}",
+                "verify",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 22.8455,\n  \"lng\": 89.541,\n  \"accuracy\": 10,\n  \"placedByHand\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Convert survey → household",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/potential-customers/{{potentialId}}/convert/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "potential-customers",
+                "{{potentialId}}",
+                "convert",
+                ""
+              ]
+            },
+            "description": "Signs the holding up for service. Returns `{household, potential}`: the new customer **and** the survey, which is closed rather than deleted so the conversion funnel keeps its history.\n\nEvery field is optional — omitted ones fall back to the survey's estimates (`estTier` becomes `tier`). Converting twice fails with `already_converted`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier\": \"{{tierId}}\",\n  \"charge\": 100,\n  \"paymentMode\": \"cash\",\n  \"paymentDay\": 5,\n  \"qr\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 · Collectors",
+      "description": "DSP field staff: licensing, attendance, van assignment and performance.",
+      "item": [
+        {
+          "name": "List collectors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/collectors/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "collectors",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "ward",
+                  "value": "{{wardId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "zone",
+                  "value": "{{zoneId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "on_route",
+                  "description": "`on_route` | `idle` | `off_route`.",
+                  "disabled": true
+                },
+                {
+                  "key": "attendance",
+                  "value": "checked_in",
+                  "description": "`checked_in` | `absent`.",
+                  "disabled": true
+                },
+                {
+                  "key": "hasVan",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "DSP field staff. Rows carry live `complaints`, `vanId` and `assignmentId` alongside the licensing and performance fields."
+          },
+          "response": []
+        },
+        {
+          "name": "Create collector",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/collectors/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "collectors",
+                ""
+              ]
+            },
+            "description": "Agency admin only. Note that `zone` on a collector holds a **ward** id — the field keeps its JavaScript-era name so the frontend contract did not have to change.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Karim Sheikh\",\n  \"dspId\": \"DSP-2291\",\n  \"zone\": \"{{wardId}}\",\n  \"phone\": \"01712345678\",\n  \"license\": \"DK-114522\",\n  \"licenseExp\": \"2027-03-31\",\n  \"joined\": \"2025-01-15\",\n  \"status\": \"idle\",\n  \"attendance\": \"absent\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get collector",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/collectors/{{collectorId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "collectors",
+                "{{collectorId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update collector",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/collectors/{{collectorId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "collectors",
+                "{{collectorId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"01712345679\",\n  \"licenseExp\": \"2028-03-31\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete collector",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/collectors/{{collectorId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "collectors",
+                "{{collectorId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Mark attendance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/collectors/{{collectorId}}/attendance/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "collectors",
+                "{{collectorId}}",
+                "attendance",
+                ""
+              ]
+            },
+            "description": "Depot check-in or absence for today. `checked_in` | `absent`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attendance\": \"checked_in\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Recalculate performance metrics",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/collectors/refresh-metrics/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "collectors",
+                "refresh-metrics",
+                ""
+              ]
+            },
+            "description": "Recomputes `coverage` and `onTime` for every collector from the visit log.\n\n**Agency admin only** — the figures feed staff reviews, so a supervisor cannot recalculate their own team's numbers on demand.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"days\": 30\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 · Routes & assignments",
+      "description": "Building the walk, ordering its stops, and deciding who walks it. Only a household with a verified GPS pin can be put on a route.",
+      "item": [
+        {
+          "name": "List routes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/routes/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "routes",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "ward",
+                  "value": "{{wardId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "zone",
+                  "value": "{{zoneId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "collector",
+                  "value": "{{collectorId}}",
+                  "description": "Routes this collector is assigned.",
+                  "disabled": true
+                },
+                {
+                  "key": "unassigned",
+                  "value": "true",
+                  "description": "Routes nobody is walking.",
+                  "disabled": true
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create route",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/routes/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "routes",
+                ""
+              ]
+            },
+            "description": "`stops` is the ordered walk. Every household in it must have a **verified** location or the request fails.\n\nThe id (`RT-W-14-01`) is allocated per ward.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"KDA Avenue morning\",\n  \"ward\": \"{{wardId}}\",\n  \"windowStart\": \"06:30\",\n  \"windowEnd\": \"09:30\",\n  \"stops\": [\n    \"{{householdId}}\"\n  ],\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get route",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/routes/{{routeId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "routes",
+                "{{routeId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update route",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/routes/{{routeId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "routes",
+                "{{routeId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"windowStart\": \"06:00\",\n  \"windowEnd\": \"09:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete route",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/routes/{{routeId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "routes",
+                "{{routeId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Replace the whole stop list",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/routes/{{routeId}}/stops/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "routes",
+                "{{routeId}}",
+                "stops",
+                ""
+              ]
+            },
+            "description": "Sets the ordered walk in one call, so a drag-reorder on the planner is **atomic** — the route is never briefly half-ordered. Prefer this over a sequence of add/remove calls when the user reorders.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stops\": [\n    \"HH-KCC-0012840\",\n    \"HH-KCC-0012841\",\n    \"HH-KCC-0012842\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Append one stop",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/routes/{{routeId}}/add-stop/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "routes",
+                "{{routeId}}",
+                "add-stop",
+                ""
+              ]
+            },
+            "description": "Adds the holding to the end of the walk. A holding already on another route **moves** here rather than being refused — that is what dragging it across routes on the planner means.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hh\": \"{{householdId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove one stop",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/routes/{{routeId}}/remove-stop/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "routes",
+                "{{routeId}}",
+                "remove-stop",
+                ""
+              ]
+            },
+            "description": "Takes the holding off the walk and closes the gap in the numbering.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hh\": \"{{householdId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List assignments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assignments",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "collector",
+                  "value": "{{collectorId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "ward",
+                  "value": "{{wardId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Which collector walks which routes."
+          },
+          "response": []
+        },
+        {
+          "name": "Create assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assignments",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collector\": \"{{collectorId}}\",\n  \"routes\": [\n    \"{{routeId}}\"\n  ],\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get assignment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assignments",
+                "{{assignmentId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update assignment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assignments",
+                "{{assignmentId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete assignment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assignments",
+                "{{assignmentId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Set the routes this assignment covers",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/routes/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assignments",
+                "{{assignmentId}}",
+                "routes",
+                ""
+              ]
+            },
+            "description": "A route already held by somebody else is **taken over** — the planner allows reassigning, and the conflicting link is dropped.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"routes\": [\n    \"{{routeId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05 · Collection round & visits",
+      "description": "What a collector's device talks to: the day's round, QR scanning, recording collections and skips, and flushing the offline queue.",
+      "item": [
+        {
+          "name": "My round today",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/collection/round/?collector={{collectorId}}&day={{today}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "collection",
+                "round",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "collector",
+                  "value": "{{collectorId}}",
+                  "description": "Collector id, e.g. C-042."
+                },
+                {
+                  "key": "day",
+                  "value": "{{today}}",
+                  "description": "YYYY-MM-DD. Defaults to today."
+                }
+              ]
+            },
+            "description": "Everything the round screen renders in one call: `stops` in walking order, the three `counts` its tabs show, and the `routes` behind them for the headings.\n\nA **collector-role** caller is pinned to their own round whatever they pass — a round names households and phone numbers. Supervisors and admins may look in on anyone, which is how a round gets reviewed from a desk."
+          },
+          "response": []
+        },
+        {
+          "name": "Resolve a scan against the round",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/collection/scan/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "collection",
+                "scan",
+                ""
+              ]
+            },
+            "description": "Answers **200 in every case** — a wrong-round or worn-label scan is something the collector acts on, not a failed request.\n\n`{ok: true, stop}` — scan is a stop on this round.\n`{ok: false, reason: 'alreadyCollected', stop}` — stops a double entry.\n`{ok: false, reason: 'otherRoute', ...}` — a wrong-round mistake the collector can fix on the spot.\n`{ok: false, reason: 'unknown'}` — unregistered or damaged tag; needs the office.\n`{ok: false, reason: 'unreadable'}` — the camera got nothing.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"raw\": \"{{qrTag}}\",\n  \"collector\": \"{{collectorId}}\",\n  \"day\": \"{{today}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List visits",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/visits/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "visits",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "collector",
+                  "value": "{{collectorId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "hh",
+                  "value": "{{householdId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "route",
+                  "value": "{{routeId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "ward",
+                  "value": "{{wardId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "day",
+                  "value": "{{today}}",
+                  "description": "One date.",
+                  "disabled": true
+                },
+                {
+                  "key": "dateFrom",
+                  "value": "",
+                  "description": "YYYY-MM-DD.",
+                  "disabled": true
+                },
+                {
+                  "key": "dateTo",
+                  "value": "",
+                  "description": "YYYY-MM-DD.",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "collected",
+                  "description": "`collected` | `skipped`.",
+                  "disabled": true
+                },
+                {
+                  "key": "source",
+                  "value": "scan",
+                  "description": "`scan` | `manual`.",
+                  "disabled": true
+                },
+                {
+                  "key": "synced",
+                  "value": "false",
+                  "description": "Still queued on a device.",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Record a collection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/visits/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "visits",
+                ""
+              ]
+            },
+            "description": "**One visit per household per day**, enforced by a unique constraint on `(household, served_on)`. Re-posting for the same day updates that row rather than inserting a second one — which is exactly what correcting a skip to a collection, and the offline queue, rely on.\n\nThe tag and route are taken from the plan, not the request, and the live map is notified.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hh\": \"{{householdId}}\",\n  \"collector\": \"{{collectorId}}\",\n  \"status\": \"collected\",\n  \"at\": \"{{nowIso}}\",\n  \"source\": \"scan\",\n  \"lat\": 22.8452,\n  \"lng\": 89.5405,\n  \"accuracy\": 6,\n  \"note\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Record a skip",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/visits/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "visits",
+                ""
+              ]
+            },
+            "description": "A skip needs a `reason`: `noOne` | `noWaste` | `locked` | `access` | `refused`. Correcting it later to `collected` updates the same row.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hh\": \"{{householdId}}\",\n  \"collector\": \"{{collectorId}}\",\n  \"status\": \"skipped\",\n  \"at\": \"{{nowIso}}\",\n  \"source\": \"manual\",\n  \"reason\": \"locked\",\n  \"note\": \"Nobody home; gate padlocked.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get visit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/visits/{{visitId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "visits",
+                "{{visitId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update visit",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/visits/{{visitId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "visits",
+                "{{visitId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Corrected on review.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete visit",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/visits/{{visitId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "visits",
+                "{{visitId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Upload the offline queue",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/visits/bulk/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "visits",
+                "bulk",
+                ""
+              ]
+            },
+            "description": "What a device flushes when it regains connectivity.\n\n**Answers with per-row outcomes rather than one status code** — the device has to know which rows it may drop and which to keep retrying. A single bad row never rejects the batch.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rows\": [\n    {\n      \"hh\": \"HH-KCC-0012840\",\n      \"collector\": \"{{collectorId}}\",\n      \"status\": \"collected\",\n      \"at\": \"{{nowIso}}\",\n      \"source\": \"scan\",\n      \"lat\": 22.8452,\n      \"lng\": 89.5405,\n      \"accuracy\": 6\n    },\n    {\n      \"hh\": \"HH-KCC-0012841\",\n      \"collector\": \"{{collectorId}}\",\n      \"status\": \"skipped\",\n      \"at\": \"{{nowIso}}\",\n      \"source\": \"manual\",\n      \"reason\": \"locked\",\n      \"note\": \"Gate locked\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Acknowledge a synced row",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/visits/{{visitId}}/sync/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "visits",
+                "{{visitId}}",
+                "sync",
+                ""
+              ]
+            },
+            "description": "Marks a queued record as having reached the server. No body."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "06 · Complaints",
+      "description": "Ticket lifecycle with SLA timers, an immutable audit trail and photo evidence. Status is never a plain field write — each move is its own action endpoint.",
+      "item": [
+        {
+          "name": "List complaints",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "open",
+                  "description": "`open` | `assigned` | `in_progress` | `resolved` | `closed`.",
+                  "disabled": true
+                },
+                {
+                  "key": "priority",
+                  "value": "urgent",
+                  "description": "`urgent` | `high` | `medium` | `low`.",
+                  "disabled": true
+                },
+                {
+                  "key": "type",
+                  "value": "missed_collection",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "channel",
+                  "value": "phone",
+                  "description": "`sms` | `app` | `phone` | `counter`.",
+                  "disabled": true
+                },
+                {
+                  "key": "assigned",
+                  "value": "{{collectorId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "hh",
+                  "value": "{{householdId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "ward",
+                  "value": "{{wardId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "zone",
+                  "value": "{{zoneId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "Not yet resolved or closed.",
+                  "disabled": true
+                },
+                {
+                  "key": "breached",
+                  "value": "true",
+                  "description": "Past its SLA budget.",
+                  "disabled": true
+                },
+                {
+                  "key": "opened_after",
+                  "value": "",
+                  "description": "YYYY-MM-DD.",
+                  "disabled": true
+                },
+                {
+                  "key": "opened_before",
+                  "value": "",
+                  "description": "YYYY-MM-DD.",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Rows carry the derived `slaState`, `priorityRank` and `nextStatus`, plus the household's `head`, `holding`, `road` and `phone` so the list needs no second lookup."
+          },
+          "response": []
+        },
+        {
+          "name": "Open a complaint",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                ""
+              ]
+            },
+            "description": "`type`: `missed_collection` | `overflow` | `billing_dispute` | `staff_behaviour` | `other`.\n\n`note` is write-only — it becomes the first entry in the audit trail. `sla` defaults from the priority.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hh\": \"{{householdId}}\",\n  \"type\": \"missed_collection\",\n  \"channel\": \"phone\",\n  \"priority\": \"high\",\n  \"description\": \"Bin not emptied for three days.\",\n  \"assigned\": \"{{collectorId}}\",\n  \"note\": \"Caller says this is the second time this month.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get complaint",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/{{complaintId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "{{complaintId}}",
+                ""
+              ]
+            },
+            "description": "Includes the full `activity` trail and any attached `photos`."
+          },
+          "response": []
+        },
+        {
+          "name": "Edit complaint details",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/{{complaintId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "{{complaintId}}",
+                ""
+              ]
+            },
+            "description": "**`status` is not writable here.** Each lifecycle move is its own action endpoint, so a ticket cannot change hands without a trail.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Bin not emptied since Sunday.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete complaint",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/{{complaintId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "{{complaintId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Assign to a collector",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/{{complaintId}}/assign/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "{{complaintId}}",
+                "assign",
+                ""
+              ]
+            },
+            "description": "Hands the ticket over — or back to the unassigned pool with `\"assigned\": null`. Appends an audit entry.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assigned\": \"{{collectorId}}\",\n  \"note\": \"Nearest collector on shift.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Advance one step",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/{{complaintId}}/advance/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "{{complaintId}}",
+                "advance",
+                ""
+              ]
+            },
+            "description": "Moves along the lifecycle: open → assigned → in_progress → resolved → closed. Read `nextStatus` on the ticket to know where this lands.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Collector en route.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Re-grade priority",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/{{complaintId}}/priority/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "{{complaintId}}",
+                "priority",
+                ""
+              ]
+            },
+            "description": "**The SLA budget follows the priority** — re-grading changes the clock.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priority\": \"urgent\",\n  \"note\": \"Overflow onto the road.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Resolve",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/{{complaintId}}/resolve/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "{{complaintId}}",
+                "resolve",
+                ""
+              ]
+            },
+            "description": "Records how it was resolved and stops the SLA clock.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Bin emptied and collector briefed.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reopen",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/{{complaintId}}/reopen/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "{{complaintId}}",
+                "reopen",
+                ""
+              ]
+            },
+            "description": "Restarts the clock.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Citizen says it is not fixed.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add a note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/{{complaintId}}/note/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "{{complaintId}}",
+                "note",
+                ""
+              ]
+            },
+            "description": "Appends to the trail without changing the ticket.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Left a voicemail for the head of household.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Attach photos",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/{{complaintId}}/photos/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "{{complaintId}}",
+                "photos",
+                ""
+              ]
+            },
+            "description": "`multipart/form-data`. The collector app posts several at once from the camera roll, so any number of `images` parts is accepted.\n\n**Every file is validated before the first one is stored**, so a rejected batch leaves nothing behind.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": [],
+                  "description": "One or many image files — pick them in Postman."
+                },
+                {
+                  "key": "caption",
+                  "value": "Overflow at the corner bin",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Complaint KPI summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/summary/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "summary",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "ward",
+                  "value": "{{wardId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "open",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "breached",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Honours the same filters as the list, so *'breached tickets in Ward 14 this month'* is one request rather than downloading the rows and counting them in the browser."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "07 · Billing, payments & cash",
+      "description": "Monthly billing runs, payments including partials, collector cash hand-ins and the reconciliation they feed. Recording a payment is the only way a bill's status changes.",
+      "item": [
+        {
+          "name": "List bills",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bills/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "Billing month, YYYY-MM.",
+                  "disabled": true
+                },
+                {
+                  "key": "hh",
+                  "value": "{{householdId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "ward",
+                  "value": "{{wardId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "zone",
+                  "value": "{{zoneId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "run",
+                  "value": "",
+                  "description": "Billing-run id.",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "unpaid",
+                  "description": "The cached column.",
+                  "disabled": true
+                },
+                {
+                  "key": "settlement",
+                  "value": "unpaid",
+                  "description": "Derived in SQL from the payments that exist — prefer this over `status`.",
+                  "disabled": true
+                },
+                {
+                  "key": "hasOutstanding",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Each row carries `received`, `outstanding` and `settlement`, computed from the payments that actually exist.\n\nFilter on **`settlement`**, not `status`: `status` is only ever as fresh as the last `recalculate()`, while `settlement` is derived in SQL and can never disagree with the figures shown."
+          },
+          "response": []
+        },
+        {
+          "name": "Preview a billing run (dry run)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/bills/generate/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "generate",
+                ""
+              ]
+            },
+            "description": "**Agency admin only.** Returns the same summary as a real run — how many bills, for how much — without writing anything. Answers 200.\n\nAlways dry-run first: a run is the only way bills come into existence, and there is no bulk undo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"period\": \"{{period}}\",\n  \"issuedOn\": \"{{today}}\",\n  \"dueDays\": 10,\n  \"dryRun\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Run the month's billing",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/bills/generate/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "generate",
+                ""
+              ]
+            },
+            "description": "**Agency admin only.** Issues one bill per active household for the period and writes a `BillingRun` audit row. Answers 201.\n\nRe-running the same period does not double-charge — existing bills for the month are respected.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"period\": \"{{period}}\",\n  \"issuedOn\": \"{{today}}\",\n  \"dueDays\": 10,\n  \"dryRun\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Billing stat cards",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bills/summary/?period={{period}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "summary",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "Billing month, YYYY-MM."
+                },
+                {
+                  "key": "ward",
+                  "value": "{{wardId}}",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Honours the same query parameters as the list, so the cards always describe exactly the rows shown beneath them."
+          },
+          "response": []
+        },
+        {
+          "name": "Get bill",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bills/{{billId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "{{billId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Record a payment against a bill",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/bills/{{billId}}/pay/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "{{billId}}",
+                "pay",
+                ""
+              ]
+            },
+            "description": "**The only way a bill's status changes.** `Bill.status` is a cache that `recalculate()` derives from the payments that exist, and `Household.dues` follows from that.\n\nPartial payments are normal — post several and the bill moves unpaid → partial → paid on its own.\n\nOpen to **collectors** as well as office roles: the collector at the door is the person the cash is handed to. `collector` defaults to the signed-in collector; leave it out at the office counter, and that difference is what makes the cash reconciliation meaningful.\n\nReturns the restated bill.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 100,\n  \"method\": \"cash\",\n  \"collector\": \"{{collectorId}}\",\n  \"at\": \"{{nowIso}}\",\n  \"reference\": \"\",\n  \"note\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create bill directly (blocked)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/bills/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                ""
+              ]
+            },
+            "description": "**Fails with `use_billing_run` for everyone but a superuser.** A hand-made bill would have no `run`, so the month's totals would stop describing the month and a household could quietly be charged twice. Use `POST /api/bills/generate/`.\n\nKept in the collection to document the refusal.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hh\": \"{{householdId}}\",\n  \"period\": \"{{period}}\",\n  \"issuedAt\": \"{{today}}\",\n  \"amount\": 100,\n  \"ward\": \"{{wardId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "The month the money was **taken** in, not the month its bill covers.",
+                  "disabled": true
+                },
+                {
+                  "key": "collector",
+                  "value": "{{collectorId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "hh",
+                  "value": "{{householdId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "bill",
+                  "value": "{{billId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "method",
+                  "value": "cash",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "undeposited",
+                  "value": "true",
+                  "description": "Cash taken but not yet handed in.",
+                  "disabled": true
+                },
+                {
+                  "key": "at_after",
+                  "value": "",
+                  "description": "ISO datetime.",
+                  "disabled": true
+                },
+                {
+                  "key": "at_before",
+                  "value": "",
+                  "description": "ISO datetime.",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "A July bill settled in August is money received in **August** — keeping the two apart is what makes a collection lag visible."
+          },
+          "response": []
+        },
+        {
+          "name": "Record a payment directly",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                ""
+              ]
+            },
+            "description": "Equivalent to `POST /bills/{id}/pay/`; prefer that one, which returns the restated bill.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bill\": \"{{billId}}\",\n  \"collector\": \"{{collectorId}}\",\n  \"amount\": 100,\n  \"method\": \"cash\",\n  \"at\": \"{{nowIso}}\",\n  \"reference\": \"\",\n  \"note\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get payment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/{{paymentId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "{{paymentId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Void a payment",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/{{paymentId}}/void/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "{{paymentId}}",
+                "void",
+                ""
+              ]
+            },
+            "description": "**Agency admin only.** Removes a mis-keyed payment and restates the bill from what remains — returning the restated bill.\n\nThis is the one operation that can make money on record disappear, so it deliberately does not belong to the person who keyed it in. Payments are otherwise immutable: correct one by voiding it and re-recording."
+          },
+          "response": []
+        },
+        {
+          "name": "List deposits",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/deposits/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "deposits",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "collector",
+                  "value": "{{collectorId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "method",
+                  "value": "cash",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Collector cash hand-ins. **Not ward-scoped** — a hand-in is a fact about a collector and a month, and scoping it by ward would hide hand-ins from the very supervisor reconciling them."
+          },
+          "response": []
+        },
+        {
+          "name": "Record a hand-in",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/deposits/record/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "deposits",
+                "record",
+                ""
+              ]
+            },
+            "description": "Upserts this collector's hand-in for the month and links the payments it covers. Posting again for the same collector and month updates the existing row rather than adding a second one.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collector\": \"{{collectorId}}\",\n  \"period\": \"{{period}}\",\n  \"method\": \"cash\",\n  \"amount\": 4500,\n  \"at\": \"{{nowIso}}\",\n  \"ref\": \"Depot slip 2291\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get deposit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/deposits/{{depositId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "deposits",
+                "{{depositId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update deposit",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/deposits/{{depositId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "deposits",
+                "{{depositId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ref\": \"Depot slip 2292\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete deposit",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/deposits/{{depositId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "deposits",
+                "{{depositId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Cash position",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/deposits/cash-position/?period={{period}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "deposits",
+                "cash-position",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "Required. YYYY-MM."
+                }
+              ]
+            },
+            "description": "Collected vs deposited vs variance, per collector, for one month. Omitting `period` fails with `period_required`."
+          },
+          "response": []
+        },
+        {
+          "name": "List billing runs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/billing-runs/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "billing-runs",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "The audit list. Written by `POST /bills/generate/` — creating one directly fails with `use_billing_run`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get billing run",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/billing-runs/{{billingRunId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "billing-runs",
+                "{{billingRunId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "08 · Fleet",
+      "description": "Vans, document expiry, workshop jobs, fuel logs and GPS telemetry.",
+      "item": [
+        {
+          "name": "List vans",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/vans/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vans",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "active",
+                  "description": "`active` | `in_maintenance` | `idle` | `retired`.",
+                  "disabled": true
+                },
+                {
+                  "key": "type",
+                  "value": "compactor",
+                  "description": "`compactor` | `pickup` | `rickshaw-van` | `tricycle`.",
+                  "disabled": true
+                },
+                {
+                  "key": "fuel",
+                  "value": "diesel",
+                  "description": "`diesel` | `petrol` | `cng` | `electric`.",
+                  "disabled": true
+                },
+                {
+                  "key": "ownership",
+                  "value": "owned",
+                  "description": "`owned` | `leased`.",
+                  "disabled": true
+                },
+                {
+                  "key": "driver",
+                  "value": "{{collectorId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "unassigned",
+                  "value": "true",
+                  "description": "Vans with no driver.",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Rows carry derived `expiringDocuments` and `serviceDueInKm`."
+          },
+          "response": []
+        },
+        {
+          "name": "Add a van",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vans/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vans",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate\": \"KHULNA-METRO-TA-11-4520\",\n  \"type\": \"compactor\",\n  \"capacity\": 3000,\n  \"fuel\": \"diesel\",\n  \"ownership\": \"owned\",\n  \"gps\": \"GPS-7781\",\n  \"odometer\": 48210,\n  \"status\": \"active\",\n  \"driver\": \"{{collectorId}}\",\n  \"fitnessExp\": \"2026-11-30\",\n  \"taxExp\": \"2026-09-15\",\n  \"insuranceExp\": \"2026-12-01\",\n  \"permitExp\": \"2027-01-20\",\n  \"nextServiceKm\": 53000,\n  \"kmpl\": 6.1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get van",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/vans/{{vanId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vans",
+                "{{vanId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update van",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vans/{{vanId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vans",
+                "{{vanId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"odometer\": 48900\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete van",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/vans/{{vanId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vans",
+                "{{vanId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Assign a driver",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vans/{{vanId}}/assign-driver/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vans",
+                "{{vanId}}",
+                "assign-driver",
+                ""
+              ]
+            },
+            "description": "Sets — or with `null`, clears — the driver, **releasing them from any other van** so one person never appears to drive two.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"driver\": \"{{collectorId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Post one GPS ping",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vans/{{vanId}}/position/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vans",
+                "{{vanId}}",
+                "position",
+                ""
+              ]
+            },
+            "description": "The van comes from the URL, so the body does not repeat it. The ping fans out to every live-map client over the websocket.\n\nPosting an array here fails with `single_ping_only` — use `/api/positions/ingest/` for a batch.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 22.8452,\n  \"lng\": 89.5405,\n  \"speed\": 14.2,\n  \"heading\": 271,\n  \"accuracy\": 5,\n  \"ignition\": true,\n  \"at\": \"{{nowIso}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Ingest telemetry (gateway)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/positions/ingest/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "positions",
+                "ingest",
+                ""
+              ]
+            },
+            "description": "Where a tracker gateway posts telemetry. Accepts **either one ping or an array** — a device coming back from a dead spot flushes its whole queue in a single request, which is far cheaper than one HTTP round trip per stored point.",
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"van\": \"{{vanId}}\",\n    \"collector\": \"{{collectorId}}\",\n    \"lat\": 22.8452,\n    \"lng\": 89.5405,\n    \"speed\": 14.2,\n    \"heading\": 271,\n    \"accuracy\": 5,\n    \"ignition\": true,\n    \"at\": \"{{nowIso}}\"\n  },\n  {\n    \"van\": \"{{vanId}}\",\n    \"lat\": 22.8461,\n    \"lng\": 89.5399,\n    \"speed\": 11.0,\n    \"heading\": 268,\n    \"ignition\": true,\n    \"at\": \"{{nowIso}}\"\n  }\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Fleet alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/vans/alerts/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vans",
+                "alerts",
+                ""
+              ]
+            },
+            "description": "Expiring paperwork and service-due warnings, computed against **today** rather than a fixed date."
+          },
+          "response": []
+        },
+        {
+          "name": "Fleet KPIs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/vans/kpis/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vans",
+                "kpis",
+                ""
+              ]
+            },
+            "description": "Availability, downtime, efficiency and spend — the Fleet page's stat cards."
+          },
+          "response": []
+        },
+        {
+          "name": "List maintenance jobs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/maintenance/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "maintenance",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "van",
+                  "value": "{{vanId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "kind",
+                  "value": "scheduled",
+                  "description": "`scheduled` | `unscheduled`.",
+                  "disabled": true
+                },
+                {
+                  "key": "isOpen",
+                  "value": "true",
+                  "description": "Still in the workshop.",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Open a maintenance job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/maintenance/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "maintenance",
+                ""
+              ]
+            },
+            "description": "**Opening a job may take the van off the road** — its status moves to `in_maintenance`, and it stops being available to assign.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"van\": \"{{vanId}}\",\n  \"kind\": \"unscheduled\",\n  \"reason\": \"Hydraulic leak\",\n  \"odometer\": 48900,\n  \"vendor\": \"KDA Motors\",\n  \"cost\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get maintenance job",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/maintenance/{{maintenanceId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "maintenance",
+                "{{maintenanceId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update maintenance job",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/maintenance/{{maintenanceId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "maintenance",
+                "{{maintenanceId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vendor\": \"KDA Motors Ltd\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete maintenance job",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/maintenance/{{maintenanceId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "maintenance",
+                "{{maintenanceId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Close a maintenance job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/maintenance/{{maintenanceId}}/close/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "maintenance",
+                "{{maintenanceId}}",
+                "close",
+                ""
+              ]
+            },
+            "description": "Signs the job off, computing downtime and **freeing the van** back to `active`. Omit `downtime` to have it computed from the open and close timestamps.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"closed\": \"{{nowIso}}\",\n  \"cost\": 7800,\n  \"downtime\": 6.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List fuel logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/fuel-logs/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "fuel-logs",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "van",
+                  "value": "{{vanId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "by",
+                  "value": "{{collectorId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "at_after",
+                  "value": "",
+                  "description": "ISO datetime.",
+                  "disabled": true
+                },
+                {
+                  "key": "at_before",
+                  "value": "",
+                  "description": "ISO datetime.",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Log a refuelling",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/fuel-logs/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "fuel-logs",
+                ""
+              ]
+            },
+            "description": "`kmpl` is computed from the odometer gap when omitted.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"van\": \"{{vanId}}\",\n  \"litres\": 42.5,\n  \"cost\": 4900,\n  \"odometer\": 48950,\n  \"by\": \"{{collectorId}}\",\n  \"at\": \"{{nowIso}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get fuel log",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/fuel-logs/{{fuelLogId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "fuel-logs",
+                "{{fuelLogId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update fuel log",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/fuel-logs/{{fuelLogId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "fuel-logs",
+                "{{fuelLogId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cost\": 5000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete fuel log",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/fuel-logs/{{fuelLogId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "fuel-logs",
+                "{{fuelLogId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "09 · Live map",
+      "description": "The first-paint snapshot behind the live map. Incremental frames arrive over the websocket at `/ws/live/`.",
+      "item": [
+        {
+          "name": "Live snapshot",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/live/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "live",
+                ""
+              ]
+            },
+            "description": "Everything the map draws on first paint: current vehicle positions, collector states and today's progress.\n\nAfter this, open the websocket at `ws://127.0.0.1:8000/ws/live/` for incremental frames. Postman can connect to it as a WebSocket request — see the **Realtime** section of the API reference. Clients that cannot use websockets fall back to polling this endpoint."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "10 · Reports & exports",
+      "description": "Service delivery, revenue, bill status and reconciliation. Each returns JSON, or a CSV/XLSX/PDF file when `?format=` is set.",
+      "item": [
+        {
+          "name": "Dashboard bundle",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/dashboard/?period={{period}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "dashboard",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "YYYY-MM. Defaults to the current month."
+                },
+                {
+                  "key": "trendDays",
+                  "value": "7",
+                  "description": "Length of the trend series, 1–90.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Everything the Dashboard renders in one round trip: `kpis`, `collectionTrend`, `wasteByZone`, `wardCollection`, `complaints` and `funnel`.\n\nBundled deliberately — the panels are all computed from the same ward scope at the same instant, so they cannot drift apart."
+          },
+          "response": []
+        },
+        {
+          "name": "KPI scorecard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/kpis/?period={{period}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "kpis",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "YYYY-MM."
+                }
+              ]
+            },
+            "description": "The six-figure scorecard, every number derived rather than stored."
+          },
+          "response": []
+        },
+        {
+          "name": "Waste collection",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/waste-collection/?mode=daily",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "waste-collection",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "mode",
+                  "value": "daily",
+                  "description": "`daily` | `weekly` | `monthly` | `yearly`."
+                },
+                {
+                  "key": "from",
+                  "value": "",
+                  "description": "YYYY-MM-DD.",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "",
+                  "description": "YYYY-MM-DD.",
+                  "disabled": true
+                },
+                {
+                  "key": "collector",
+                  "value": "{{collectorId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "overall",
+                  "value": "true",
+                  "description": "Collapse to one row per period.",
+                  "disabled": true
+                },
+                {
+                  "key": "format",
+                  "value": "",
+                  "description": "Omit for JSON; `csv`, `xlsx` or `pdf` returns a file.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Rounds walked per period and collector, with cover work called out.\n\nEvery report is ward-scoped **to the caller**, applied on the server rather than trusted from a query parameter: a ward supervisor gets their wards, an agency admin or KCC viewer gets the city. Add `?format=csv|xlsx|pdf` to download the same rows as a file — an exported sheet can never disagree with the screen it came from."
+          },
+          "response": []
+        },
+        {
+          "name": "Service series",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/service-series/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "service-series",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30",
+                  "description": "Length of the series, 1–730.",
+                  "disabled": true
+                },
+                {
+                  "key": "end",
+                  "value": "",
+                  "description": "End date, YYYY-MM-DD. Defaults to today.",
+                  "disabled": true
+                },
+                {
+                  "key": "format",
+                  "value": "",
+                  "description": "Omit for JSON; `csv`, `xlsx` or `pdf` returns a file.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Day-by-day scheduled / served / skipped / billed / collected.\n\nEvery report is ward-scoped **to the caller**, applied on the server rather than trusted from a query parameter: a ward supervisor gets their wards, an agency admin or KCC viewer gets the city. Add `?format=csv|xlsx|pdf` to download the same rows as a file — an exported sheet can never disagree with the screen it came from."
+          },
+          "response": []
+        },
+        {
+          "name": "Ward collection",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/ward-collection/?period={{period}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "ward-collection",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "YYYY-MM."
+                },
+                {
+                  "key": "format",
+                  "value": "",
+                  "description": "Omit for JSON; `csv`, `xlsx` or `pdf` returns a file.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Per-ward service and revenue for a month.\n\nEvery report is ward-scoped **to the caller**, applied on the server rather than trusted from a query parameter: a ward supervisor gets their wards, an agency admin or KCC viewer gets the city. Add `?format=csv|xlsx|pdf` to download the same rows as a file — an exported sheet can never disagree with the screen it came from."
+          },
+          "response": []
+        },
+        {
+          "name": "Bill collection",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/bill-collection/?mode=monthly",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "bill-collection",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "mode",
+                  "value": "monthly",
+                  "description": "`daily` | `weekly` | `monthly` | `yearly`."
+                },
+                {
+                  "key": "from",
+                  "value": "",
+                  "description": "Start period.",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "",
+                  "description": "End period.",
+                  "disabled": true
+                },
+                {
+                  "key": "overall",
+                  "value": "true",
+                  "description": "Collapse to one row per period.",
+                  "disabled": true
+                },
+                {
+                  "key": "format",
+                  "value": "",
+                  "description": "Omit for JSON; `csv`, `xlsx` or `pdf` returns a file.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Money billed against money received, per period and collector.\n\nEvery report is ward-scoped **to the caller**, applied on the server rather than trusted from a query parameter: a ward supervisor gets their wards, an agency admin or KCC viewer gets the city. Add `?format=csv|xlsx|pdf` to download the same rows as a file — an exported sheet can never disagree with the screen it came from."
+          },
+          "response": []
+        },
+        {
+          "name": "Bill status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/bill-status/?period={{period}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "bill-status",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "YYYY-MM."
+                },
+                {
+                  "key": "format",
+                  "value": "",
+                  "description": "Omit for JSON; `csv`, `xlsx` or `pdf` returns a file.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Paid / partial / unpaid / overdue counts for a billing month, per collector.\n\nEvery report is ward-scoped **to the caller**, applied on the server rather than trusted from a query parameter: a ward supervisor gets their wards, an agency admin or KCC viewer gets the city. Add `?format=csv|xlsx|pdf` to download the same rows as a file — an exported sheet can never disagree with the screen it came from."
+          },
+          "response": []
+        },
+        {
+          "name": "Customer collection",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/customer-collection/?mode=monthly",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "customer-collection",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "mode",
+                  "value": "monthly",
+                  "description": ""
+                },
+                {
+                  "key": "from",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "hh",
+                  "value": "{{householdId}}",
+                  "description": "One household.",
+                  "disabled": true
+                },
+                {
+                  "key": "format",
+                  "value": "",
+                  "description": "Omit for JSON; `csv`, `xlsx` or `pdf` returns a file.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Billed and received per household — the *'who has not paid'* list.\n\nEvery report is ward-scoped **to the caller**, applied on the server rather than trusted from a query parameter: a ward supervisor gets their wards, an agency admin or KCC viewer gets the city. Add `?format=csv|xlsx|pdf` to download the same rows as a file — an exported sheet can never disagree with the screen it came from."
+          },
+          "response": []
+        },
+        {
+          "name": "Customer bill status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/customer-bill-status/?period={{period}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "customer-bill-status",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "YYYY-MM."
+                },
+                {
+                  "key": "format",
+                  "value": "",
+                  "description": "Omit for JSON; `csv`, `xlsx` or `pdf` returns a file.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "One row per bill, with `state` derived from the payments that exist and the instalments behind it.\n\nEvery report is ward-scoped **to the caller**, applied on the server rather than trusted from a query parameter: a ward supervisor gets their wards, an agency admin or KCC viewer gets the city. Add `?format=csv|xlsx|pdf` to download the same rows as a file — an exported sheet can never disagree with the screen it came from."
+          },
+          "response": []
+        },
+        {
+          "name": "Reconciliation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/reconciliation/?period={{period}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "reconciliation",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "YYYY-MM."
+                },
+                {
+                  "key": "format",
+                  "value": "",
+                  "description": "Omit for JSON; `csv`, `xlsx` or `pdf` returns a file.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Service versus revenue, and cash taken versus cash handed in.\n\n**The exception lists are the point of this report** — an export flattens the cash rows into the sheet and returns the exceptions alongside in the JSON body.\n\nEvery report is ward-scoped **to the caller**, applied on the server rather than trusted from a query parameter: a ward supervisor gets their wards, an agency admin or KCC viewer gets the city. Add `?format=csv|xlsx|pdf` to download the same rows as a file — an exported sheet can never disagree with the screen it came from."
+          },
+          "response": []
+        },
+        {
+          "name": "Waste by zone",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/waste-by-zone/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "waste-by-zone",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "YYYY-MM.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Estimated tonnage per zone.\n\n**Every row carries `estimated: true`** — nothing weighs the waste. The figure multiplies collected stops by per-customer-type averages, and is labelled as an estimate wherever it is shown."
+          },
+          "response": []
+        },
+        {
+          "name": "Complaint summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/complaint-summary/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "complaint-summary",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "YYYY-MM.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Customer funnel",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/customer-funnel/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "customer-funnel",
+                ""
+              ]
+            },
+            "description": "Survey-to-customer conversion, and the monthly revenue still on the table from unconverted surveys."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "11 · Sweep AI",
+      "description": "The floating assistant: answers from a live ward-scoped snapshot of the database, and the snapshot itself.",
+      "item": [
+        {
+          "name": "Ask Sweep AI",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/ask/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "ask",
+                ""
+              ]
+            },
+            "description": "Answers an operational question from a live, **ward-scoped** snapshot of the database.\n\nWith `ANTHROPIC_API_KEY` set it reasons over that snapshot with the Claude API; without one it falls back to rule-based answers, so the panel works either way.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"Which households in my ward have not been collected this week?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Assistant fact snapshot",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/facts/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "facts",
+                ""
+              ]
+            },
+            "description": "The exact snapshot the assistant reasons over. Exposed so the UI can show the same numbers the assistant quotes — and so its answers are auditable."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
