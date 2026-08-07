@@ -127,14 +127,14 @@ export default {
     'opt.timeGap.6_12m': '৬–১২ মাস',
     'opt.timeGap.gt_1y': 'এক বছরের বেশি',
 
-    'opt.practice.private_collector': 'ব্যক্তিগত সংগ্রাহক',
+    'opt.practice.private_collector': 'ব্যক্তিগত কালেক্টর',
     'opt.practice.roadside_dump': 'রাস্তা বা ড্রেনে ফেলে',
     'opt.practice.community_bin': 'সমষ্টিগত বিনে নিয়ে যায়',
     'opt.practice.burns': 'বর্জ্য পুড়িয়ে ফেলে',
     'opt.practice.composts': 'মাটিতে পুঁতে / কম্পোস্ট করে',
     'opt.practice.none': 'নির্দিষ্ট কোনো অভ্যাস নেই',
 
-    'opt.role.Collector': 'সংগ্রাহক',
+    'opt.role.Collector': 'কালেক্টর',
     'opt.role.Supervisor': 'সুপারভাইজার',
     'opt.role.Agency Admin': 'সংস্থা প্রশাসক',
     'opt.role.KCC Viewer': 'কেসিসি পর্যবেক্ষক',

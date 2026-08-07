@@ -182,6 +182,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "otp": "10/hour",
         "pin": "20/hour",
+        "password": "30/hour",
         "ai": "30/hour",
     },
 }

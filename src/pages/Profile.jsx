@@ -2,16 +2,16 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader, Section } from '../components/ui.jsx'
 import { Field, FormRow } from '../components/Modal.jsx'
-import { useAuth, PIN_LENGTH, validatePin } from '../context/AuthContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 import { useTheme } from '../context/ThemeContext.jsx'
 import { useData } from '../context/DataContext.jsx'
-import { useLang, LANGUAGES, digitsOnly } from '../i18n/index.jsx'
+import { useLang, LANGUAGES } from '../i18n/index.jsx'
 import {
   IconUser, IconLock, IconGlobe, IconShield, IconRefresh,
   IconLogout, IconCheck, IconSun, IconMoon, IconEye,
 } from '../components/Icons.jsx'
 
-// A dismissible inline result line — used for "saved", "PIN updated", errors.
+// A dismissible inline result line — used for "saved", "password updated", errors.
 function Note({ tone, children }) {
   if (!children) return null
   return (
@@ -23,7 +23,7 @@ function Note({ tone, children }) {
 }
 
 export default function Profile() {
-  const { user, updateProfile, uploadAvatar, setPin, changePin, removePin, logout, canWrite } = useAuth()
+  const { user, updateProfile, uploadAvatar, changePassword, logout, canWrite } = useAuth()
   const { theme, toggle: toggleTheme } = useTheme()
   const { refresh, loading } = useData()
   const { t, lang, setLang, date, dateTime, digits } = useLang()
@@ -70,15 +70,7 @@ export default function Profile() {
         </div>
 
         <div className="col" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* `user.hasPin` is the single source of truth now — the server owns it,
-              so there is no local mirror to keep in step. */}
-          <SecurityCard
-            phone={user?.phone}
-            pinSet={Boolean(user?.hasPin)}
-            onCreate={setPin}
-            onChange={changePin}
-            onRemove={removePin}
-          />
+          <SecurityCard onChange={changePassword} />
 
           <Section title={t('profile.session')}>
             <dl className="kv">
@@ -265,82 +257,55 @@ function PreferencesCard({ lang, setLang, theme, toggleTheme }) {
   )
 }
 
-// PIN change. The current PIN is required whenever one is already set, so an
-// unlocked device left on a desk cannot be locked away from its owner. Both calls
-// act on the signed-in user server-side — the phone is never sent.
-function SecurityCard({ phone, pinSet, onCreate, onChange, onRemove }) {
-  const { t, n } = useLang()
+// Password change. Proving you know the current password is what stops an
+// unattended, already-signed-in browser from being taken over. The call acts on
+// the signed-in user server-side — the phone is never sent.
+function SecurityCard({ onChange }) {
+  const { t } = useLang()
   const [form, setForm] = useState({ current: '', next: '', confirm: '' })
   const [show, setShow] = useState(false)
   const [note, setNote] = useState(null)
   const [busy, setBusy] = useState(false)
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: digitsOnly(e.target.value).slice(0, PIN_LENGTH) }))
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   async function submit(e) {
     e.preventDefault()
     if (busy) return
-    if (form.next !== form.confirm) { setNote({ tone: 'bad', text: t('auth.pinMismatch') }); return }
-    const problem = validatePin(form.next)
-    if (problem === 'tooShort') { setNote({ tone: 'bad', text: t('auth.pinTooShort', { length: n(PIN_LENGTH) }) }); return }
-    if (problem === 'tooSimple') { setNote({ tone: 'bad', text: t('auth.pinTooSimple') }); return }
-    // Changing a PIN means proving you know the old one. Caught here so a blank
-    // field reads as "enter your current PIN" rather than the server's generic
-    // field error.
-    if (pinSet && !form.current) { setNote({ tone: 'bad', text: t('profile.currentPinRequired') }); return }
+    // Checked here so a blank field reads as its own instruction rather than as
+    // the server's generic "this field is required".
+    if (!form.current) { setNote({ tone: 'bad', text: t('profile.currentPasswordRequired') }); return }
+    if (!form.next) { setNote({ tone: 'bad', text: t('auth.passwordRequired') }); return }
+    if (form.next !== form.confirm) { setNote({ tone: 'bad', text: t('profile.passwordMismatch') }); return }
 
-    // Remember whether this was a first PIN before the call flips `pinSet`.
-    const creating = !pinSet
     setBusy(true)
-    // Setting a first PIN and changing an existing one are different endpoints:
-    // there is no current PIN to verify, and PUT rejects a blank `currentPin`
-    // before it ever reaches the "no PIN yet" branch.
-    const result = creating ? await onCreate(form.next) : await onChange(form.current, form.next)
+    // Strength rules are the server's AUTH_PASSWORD_VALIDATORS, not a second
+    // copy here: a browser-side rule can be skipped, and two lists drift apart.
+    const result = await onChange(form.current, form.next)
     setBusy(false)
     if (!result.ok) { setNote({ tone: 'bad', text: t(result.error) }); return }
     setForm({ current: '', next: '', confirm: '' })
-    setNote({ tone: 'ok', text: creating ? t('profile.pinCreated') : t('profile.pinUpdated') })
-  }
-
-  async function remove() {
-    if (!confirm(t('profile.removePinConfirm', { phone: `+88${phone}` }))) return
-    setBusy(true)
-    const result = await onRemove()
-    setBusy(false)
-    setNote(result.ok
-      ? { tone: 'ok', text: t('profile.pinRemoved') }
-      : { tone: 'bad', text: t(result.error) })
-    if (result.ok) setForm({ current: '', next: '', confirm: '' })
+    setNote({ tone: 'ok', text: t('profile.passwordUpdated') })
   }
 
   return (
     <Section title={<span className="row gap-8"><IconLock size={16} /> {t('profile.security')}</span>}>
-      <div className="row between gap-8 wrap" style={{ marginBottom: 14 }}>
-        <div>
-          <div className="small" style={{ fontWeight: 600 }}>{t('profile.pinStatus')}</div>
-          <div className="tiny muted-3">{pinSet ? t('profile.pinSet') : t('profile.pinNotSet')}</div>
-        </div>
-        <span className={`badge ${pinSet ? 'badge-ok' : 'badge-warn'}`}>
-          <span className="dot" />{pinSet ? t('common.yes') : t('common.no')}
-        </span>
-      </div>
+      <div className="tiny muted-3" style={{ marginBottom: 14 }}>{t('profile.passwordIntro')}</div>
 
       <form onSubmit={submit}>
-        {pinSet && (
-          <Field
-            label={t('profile.currentPin')} className="input pin-input"
-            type={show ? 'text' : 'password'} inputMode="numeric" autoComplete="current-password"
-            value={form.current} onChange={set('current')} disabled={busy}
-          />
-        )}
+        <Field
+          label={t('profile.currentPassword')} className="input"
+          type={show ? 'text' : 'password'} autoComplete="current-password"
+          value={form.current} onChange={set('current')} disabled={busy}
+        />
         <FormRow>
           <Field
-            half label={pinSet ? t('profile.newPin') : t('auth.newPin')} className="input pin-input"
-            type={show ? 'text' : 'password'} inputMode="numeric" autoComplete="new-password"
+            half label={t('profile.newPassword')} className="input"
+            type={show ? 'text' : 'password'} autoComplete="new-password"
             value={form.next} onChange={set('next')} disabled={busy}
           />
           <Field
-            half label={t('profile.confirmPin')} className="input pin-input"
-            type={show ? 'text' : 'password'} inputMode="numeric" autoComplete="new-password"
+            half label={t('profile.confirmPassword')} className="input"
+            type={show ? 'text' : 'password'} autoComplete="new-password"
             value={form.confirm} onChange={set('confirm')} disabled={busy}
           />
         </FormRow>
@@ -348,20 +313,15 @@ function SecurityCard({ phone, pinSet, onCreate, onChange, onRemove }) {
           type="button" className="btn btn-ghost btn-sm mt-8"
           onClick={() => setShow((s) => !s)}
         >
-          <IconEye size={14} /> {show ? t('profile.hidePin') : t('profile.showPin')}
+          <IconEye size={14} /> {show ? t('profile.hidePassword') : t('profile.showPassword')}
         </button>
-        <div className="tiny muted-3 mt-8">{t('profile.pinRules', { length: n(PIN_LENGTH) })}</div>
+        <div className="tiny muted-3 mt-8">{t('profile.passwordRules')}</div>
         <Note tone={note?.tone}>{note?.text}</Note>
         <div className="row gap-8 mt-16" style={{ justifyContent: 'flex-end' }}>
-          {pinSet && (
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={remove}>
-              {t('profile.removePin')}
-            </button>
-          )}
           <button type="submit" className="btn btn-primary" disabled={busy}>
             {busy
               ? <><span className="spinner" /> {t('profile.saving')}</>
-              : pinSet ? t('profile.updatePin') : t('profile.createPin')}
+              : t('profile.updatePassword')}
           </button>
         </div>
       </form>

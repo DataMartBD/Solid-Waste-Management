@@ -47,7 +47,7 @@ function ask(text) {
 
 // A resolved answer with a deep-link, as /api/ai/ask returns it.
 const ANSWER = {
-  answer: '৩টি গৃহস্থালির বকেয়া আছে, সব মিলিয়ে ৳৩০০।',
+  answer: '৩টি হাউসহোল্ডের বকেয়া আছে, সব মিলিয়ে ৳৩০০।',
   go: '/app/billing',
   goLabel: 'বিলিং দেখুন',
   source: 'rules',

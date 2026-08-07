@@ -1,7 +1,16 @@
 import { useEffect, useId } from 'react'
+import { createPortal } from 'react-dom'
 import { useLang } from '../i18n/index.jsx'
 
 // Generic centered modal dialog.
+//
+// Rendered into <body> rather than where it is written in the tree. Every page
+// wraps itself in `.fade-in`, whose animation touches `transform`; a filling
+// transform animation makes that wrapper the containing block for any
+// `position: fixed` descendant. The scrim's `inset: 0` then resolves to the
+// page's own box instead of the viewport, so on a short page — an empty table,
+// say — the dialog is cut off at the end of the content. A portal escapes that,
+// and any future ancestor overflow or stacking context along with it.
 export function Modal({ title, subtitle, onClose, children, width = 520 }) {
   const { t } = useLang()
 
@@ -11,7 +20,7 @@ export function Modal({ title, subtitle, onClose, children, width = 520 }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  return (
+  return createPortal(
     <div className="modal-scrim" onClick={onClose}>
       <div className="modal" style={{ maxWidth: width }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
@@ -23,7 +32,8 @@ export function Modal({ title, subtitle, onClose, children, width = 520 }) {
         </div>
         <div className="modal-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

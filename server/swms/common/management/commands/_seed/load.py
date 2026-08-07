@@ -579,8 +579,9 @@ def _settlement(amount: int, received: int, due_on: dt.date | None, today: dt.da
 def load_users() -> list[User]:
     """The four demo operators plus an admin-site superuser.
 
-    Each operator gets the same PIN so a demo can sign in either way — request an
-    OTP, or go straight to the PIN pad.
+    Every operator gets the same password, which is what the login screen asks
+    for. The PIN is still set so the (unused by the UI) PIN endpoints remain
+    demonstrable.
     """
     created = []
     for row in mock.OPERATORS:
@@ -588,6 +589,7 @@ def load_users() -> list[User]:
             phone=row["phone"],
             name=row["name"],
             role=row["role"],
+            password=mock.DEMO_PASSWORD,
             scope_kind=row["scope_kind"],
             scope_zone=row.get("scope_zone", ""),
             collector_id=row.get("collector"),

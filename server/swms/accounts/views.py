@@ -19,6 +19,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -29,6 +30,8 @@ from .models import OtpCode, ScopeKind
 from .serializers import (
     OtpRequestSerializer,
     OtpVerifySerializer,
+    PasswordChangeSerializer,
+    PasswordLoginSerializer,
     PinChangeSerializer,
     PinLoginSerializer,
     PinSetSerializer,
@@ -82,6 +85,69 @@ def _provision(phone: str):
         ),
         False,
     )
+
+
+class PasswordLoginView(APIView):
+    """Sign in with phone + password.
+
+    This is the only path the login screen offers. The OTP and PIN endpoints
+    below still work and are left in place, but nothing in the UI calls them.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_scope = "password"
+    serializer_class = PasswordLoginSerializer
+
+    @extend_schema(request=PasswordLoginSerializer, responses={200: None})
+    def post(self, request):
+        serializer = PasswordLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        phone = serializer.validated_data["phone"]
+        password = serializer.validated_data["password"]
+
+        user = User.objects.filter(phone=phone).first()
+        if user is None or not user.has_usable_password():
+            # Hash the supplied password anyway before failing. Returning early
+            # would answer for an unknown number measurably faster than for a
+            # wrong password, making this endpoint an enumeration oracle.
+            User().set_password(password)
+            raise DomainError("auth.wrongPassword", code="wrong_password")
+        if not user.check_password(password):
+            raise DomainError("auth.wrongPassword", code="wrong_password")
+        # Checked only after the password matches, so a disabled account cannot
+        # be told apart from an active one without knowing the password.
+        if not user.is_active:
+            raise DomainError("auth.accountDisabled", code="account_disabled")
+        return _session_response(user, request)
+
+
+class PasswordChangeView(APIView):
+    """Change the signed-in operator's password, from the Profile page."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = PasswordChangeSerializer
+
+    @extend_schema(request=PasswordChangeSerializer, responses=OpenApiTypes.OBJECT)
+    def put(self, request):
+        user = request.user
+        serializer = PasswordChangeSerializer(data=request.data, context={"user": user})
+        serializer.is_valid(raise_exception=True)
+
+        # Knowing the current password is what makes this a change rather than a
+        # takeover of an unattended, already-signed-in session.
+        if not user.check_password(serializer.validated_data["currentPassword"]):
+            raise DomainError("profile.wrongCurrentPassword", code="wrong_password")
+
+        user.set_password(serializer.validated_data["password"])
+        user.save(update_fields=["password", "updated_at"])
+
+        # A password change should end sessions on every other device, which JWTs
+        # do not do on their own — an already-issued token stays valid until it
+        # expires. Blacklisting every outstanding refresh token closes them, and
+        # a fresh pair is handed back so the tab doing the change stays signed in.
+        for token in OutstandingToken.objects.filter(user=user):
+            BlacklistedToken.objects.get_or_create(token=token)
+        return Response({"ok": True, **_tokens_for(user)})
 
 
 class OtpRequestView(APIView):

@@ -65,7 +65,7 @@ export default {
   },
   bn: {
     'reportsCustomer.title': 'গ্রাহকভিত্তিক রিপোর্ট',
-    'reportsCustomer.subtitle': 'গৃহস্থালি ধরে ধরে বিল আদায় ও বিলের অবস্থা',
+    'reportsCustomer.subtitle': 'হাউসহোল্ডস ধরে ধরে বিল আদায় ও বিলের অবস্থা',
 
     'reportsCustomer.tab.collection': 'বিল আদায়',
     'reportsCustomer.tab.status': 'বিলের অবস্থা',
@@ -81,15 +81,15 @@ export default {
     'reportsCustomer.chip': '{label} ({count})',
     'reportsCustomer.rows': '{count}টি সারি',
     'reportsCustomer.empty': 'এই নির্বাচনে কোনো গ্রাহক সারি নেই।',
-    'reportsCustomer.searchPlaceholder': 'গৃহকর্তা, হোল্ডিং, সড়ক বা গৃহস্থালি আইডি খুঁজুন…',
+    'reportsCustomer.searchPlaceholder': 'গৃহকর্তা, হোল্ডিং, সড়ক বা হাউসহোল্ডস আইডি খুঁজুন…',
 
     'reportsCustomer.collection.title': 'বিল আদায়, গ্রাহকভিত্তিক',
-    'reportsCustomer.collection.subtitle': 'প্রতিটি গৃহস্থালির বিলকৃত, আদায়কৃত ও বকেয়া — {mode} ভিত্তিতে।',
+    'reportsCustomer.collection.subtitle': 'প্রতিটি হাউসহোল্ডের বিলকৃত, আদায়কৃত ও বকেয়া — {mode} ভিত্তিতে।',
     'reportsCustomer.status.title': 'বিলের অবস্থা, গ্রাহকভিত্তিক',
     'reportsCustomer.status.subtitle': '{period} মাসের প্রতিটি বিল, প্রকৃত আদায়ের ভিত্তিতে নির্ধারিত।',
 
     'reportsCustomer.col.period': 'সময়কাল',
-    'reportsCustomer.col.household': 'গৃহস্থালি',
+    'reportsCustomer.col.household': 'হাউসহোল্ডস',
     'reportsCustomer.col.ward': 'ওয়ার্ড',
     'reportsCustomer.col.holding': 'হোল্ডিং',
     'reportsCustomer.col.billed': 'বিলকৃত',
@@ -97,7 +97,7 @@ export default {
     'reportsCustomer.col.outstanding': 'বকেয়া',
     'reportsCustomer.col.rate': 'আদায়ের হার',
     'reportsCustomer.col.billId': 'বিল আইডি',
-    'reportsCustomer.col.collector': 'সংগ্রাহক',
+    'reportsCustomer.col.collector': 'কালেক্টর',
     'reportsCustomer.col.state': 'অবস্থা',
     'reportsCustomer.col.method': 'মাধ্যম',
 
@@ -106,7 +106,7 @@ export default {
     'reportsCustomer.stat.billed': 'বিলকৃত',
     'reportsCustomer.stat.billedSub': '{count}টি বিল',
     'reportsCustomer.stat.received': 'আদায়কৃত',
-    'reportsCustomer.stat.receivedSub': '{count}টি পরিশোধ',
+    'reportsCustomer.stat.receivedSub': '{count}টি পেমেন্ট',
     'reportsCustomer.stat.outstanding': 'বকেয়া',
     'reportsCustomer.stat.outstandingSub': 'এখনও আদায় বাকি',
     'reportsCustomer.stat.rate': 'আদায়ের হার',

@@ -39,6 +39,7 @@ const ERROR_KEYS = {
   wrong_pin: 'auth.wrongPin',
   pin_locked: 'auth.pinLocked',
   no_pin: 'auth.noPin',
+  wrong_password: 'auth.wrongPassword',
   account_disabled: 'auth.accountDisabled',
   network: 'auth.offline',
 }
@@ -121,6 +122,23 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  // The login screen's only sign-in call. Unlike verifyOtp this publishes the
+  // session immediately — there is no PIN offer to hold the router back for.
+  const signInWithPassword = useCallback(async (phone, password) => {
+    try {
+      const data = await post(
+        '/auth/login/',
+        { phone: normalizePhone(phone), password },
+        { auth: false },
+      )
+      writeTokens({ access: data.access, refresh: data.refresh })
+      setUser(data.user)
+      return { ok: true, session: data.user }
+    } catch (error) {
+      return { ok: false, error: errorKey(error) }
+    }
+  }, [])
+
   const signInWithPin = useCallback(async (phone, pin) => {
     try {
       const data = await post(
@@ -141,6 +159,31 @@ export function AuthProvider({ children }) {
   const activate = useCallback((session) => {
     setUser(session)
     return session
+  }, [])
+
+  // --- password management (requires a token) ------------------------------
+
+  const changePassword = useCallback(async (currentPassword, password) => {
+    try {
+      const data = await request('/auth/password/', {
+        method: 'PUT',
+        body: { currentPassword, password },
+      })
+      // The server revokes every refresh token on a password change, including
+      // this tab's. It returns a replacement pair — store it or the next silent
+      // refresh signs the user out of the session that just changed it.
+      if (data?.access && data?.refresh) writeTokens({ access: data.access, refresh: data.refresh })
+      return { ok: true }
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'wrong_password') {
+        return { ok: false, error: 'profile.wrongCurrentPassword' }
+      }
+      // Django's password validators return prose, not keys. `t()` falls back to
+      // its argument, so the message renders as written rather than as a blank.
+      const fieldMessage = error instanceof ApiError ? error.fieldError('password') : null
+      if (fieldMessage) return { ok: false, error: fieldMessage }
+      return { ok: false, error: errorKey(error) }
+    }
   }, [])
 
   // --- PIN management (requires a token) ----------------------------------
@@ -222,6 +265,7 @@ export function AuthProvider({ children }) {
 
   const value = useMemo(() => ({
     user, ready,
+    signInWithPassword, changePassword,
     requestOtp, verifyOtp, pinStatus, signInWithPin, activate,
     setPin, changePin, removePin,
     updateProfile, uploadAvatar, logout,
@@ -231,7 +275,8 @@ export function AuthProvider({ children }) {
     isCollector: user?.roleKey === 'collector',
     canWrite: Boolean(user) && !user.readOnly,
   }), [
-    user, ready, requestOtp, verifyOtp, pinStatus, signInWithPin, activate,
+    user, ready, signInWithPassword, changePassword,
+    requestOtp, verifyOtp, pinStatus, signInWithPin, activate,
     setPin, changePin, removePin, updateProfile, uploadAvatar, logout,
   ])
 

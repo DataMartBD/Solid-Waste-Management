@@ -1,6 +1,6 @@
 // Collectors page — the DSP staff register.
-// "Collector" here is a waste collector (সংগ্রাহক) attached to a ward who may also
-// drive the van, so the Bangla side says সংগ্রাহক rather than a literal সংগ্রাহক.
+// "Collector" here is a waste collector (কালেক্টর) attached to a ward who may also
+// drive the van, so the Bangla side says কালেক্টর rather than a literal কালেক্টর.
 // Status / attendance words are NOT redefined here — they come from
 // common.js ('status.*') so a filter, a dropdown and a badge never disagree.
 
@@ -76,14 +76,14 @@ export default {
     'collectors.vanType.tricycle': 'tricycle',
   },
   bn: {
-    'collectors.title': 'সংগ্রাহক',
+    'collectors.title': 'কালেক্টর',
     'collectors.subtitle': 'ডিএসপি তালিকা — প্রোফাইল, লাইসেন্স, ভ্যান বরাদ্দ ও কর্মদক্ষতা',
-    'collectors.export': 'রপ্তানি',
-    'collectors.addCollector': 'সংগ্রাহক যোগ করুন',
+    'collectors.export': 'ডাউনলোড',
+    'collectors.addCollector': 'কালেক্টর যোগ করুন',
     'collectors.saving': 'সংরক্ষণ হচ্ছে…',
     'collectors.saveFailed': 'পরিবর্তনটি সংরক্ষণ করা যায়নি।',
     'collectors.refreshMetrics': 'হিসাব হালনাগাদ',
-    'collectors.metricsRefreshed': 'শেষ {days} দিনের তথ্য থেকে {count} জন সংগ্রাহকের কভারেজ ও সময়মতো হিসাব নতুন করে করা হয়েছে।',
+    'collectors.metricsRefreshed': 'শেষ {days} দিনের তথ্য থেকে {count} জন কালেক্টরের কভারেজ ও সময়মতো হিসাব নতুন করে করা হয়েছে।',
     'collectors.metricsReadOnly': 'কভারেজ, সময়মতো ও অভিযোগের সংখ্যা সার্ভার সংগ্রহ ও অভিযোগের রেকর্ড থেকে হিসাব করে।',
 
     'collectors.stat.totalDsps': 'মোট ডিএসপি',
@@ -95,7 +95,7 @@ export default {
     'collectors.stat.avgCoverage': 'গড় কভারেজ',
     'collectors.stat.avgCoverageSub': 'সব ডিএসপি মিলিয়ে',
 
-    'collectors.th.collector': 'সংগ্রাহক',
+    'collectors.th.collector': 'কালেক্টর',
     'collectors.th.dspId': 'ডিএসপি আইডি',
     'collectors.th.zone': 'এলাকা',
     'collectors.th.van': 'ভ্যান',
@@ -107,8 +107,8 @@ export default {
     'collectors.remove': 'সরান',
     'collectors.removeConfirm': '{name}-কে তালিকা থেকে সরাবেন?',
 
-    'collectors.editTitle': 'সংগ্রাহকের তথ্য সম্পাদনা',
-    'collectors.addTitle': 'নতুন সংগ্রাহক যোগ',
+    'collectors.editTitle': 'কালেক্টরের তথ্য সম্পাদনা',
+    'collectors.addTitle': 'নতুন কালেক্টর যোগ',
     'collectors.newProfile': 'নতুন ডিএসপি প্রোফাইল',
     'collectors.nameRequired': 'নাম লেখা আবশ্যক।',
 

@@ -58,7 +58,7 @@ export default {
     'routes.stat.schoolsHospitals': 'স্কুল ও হাসপাতাল',
 
     'routes.unassigned': 'বরাদ্দ হয়নি',
-    'routes.noCollector': 'কোনো সংগ্রাহক বরাদ্দ নেই',
+    'routes.noCollector': 'কোনো কালেক্টর বরাদ্দ নেই',
 
     'routes.nextStop': 'পরবর্তী স্টপ',
     'routes.routeComplete': 'রুট সম্পন্ন',
@@ -84,6 +84,6 @@ export default {
     'routes.fullscreen': 'পূর্ণ পর্দা',
     'routes.exitFullscreen': 'পূর্ণ পর্দা বন্ধ',
     'routes.mapCaption': '{name}-এর সংগ্রহের পথ · একটানা রেখা = সংগ্রহ হয়েছে, বিন্দু রেখা = এখনও বাকি',
-    'routes.mapCaptionUnassigned': '{route} · কোনো সংগ্রাহক বরাদ্দ নেই · একটানা রেখা = সংগ্রহ হয়েছে, বিন্দু রেখা = এখনও বাকি',
+    'routes.mapCaptionUnassigned': '{route} · কোনো কালেক্টর বরাদ্দ নেই · একটানা রেখা = সংগ্রহ হয়েছে, বিন্দু রেখা = এখনও বাকি',
   },
 }

@@ -80,7 +80,7 @@ export default {
   bn: {
     'dashboard.greeting': 'শুভ সকাল, {name} 👋',
     'dashboard.greetingFallback': 'মহোদয়',
-    'dashboard.subtitle': 'আপনার জোনের সংগ্রহ, চার্জ ও যানবহরের সরাসরি চিত্র · {weekday}, {date}',
+    'dashboard.subtitle': 'আপনার জোনের সংগ্রহ, চার্জ ও গাড়ির সরাসরি চিত্র · {weekday}, {date}',
 
     'dashboard.kpi.efficiency': 'সংগ্রহ দক্ষতা',
     'dashboard.kpi.efficiencySub': 'লক্ষ্যমাত্রা ≥ {target} · আজ {done} / {total}',
@@ -90,8 +90,8 @@ export default {
     'dashboard.kpi.coverage': 'সেবার আওতা',
     'dashboard.kpi.coverageSub': 'যাচাইকৃত পরিদর্শন ÷ নিবন্ধিত',
     'dashboard.kpi.coverageOf': '{total}টি খানার মধ্যে {covered}টি রাউন্ডে অন্তর্ভুক্ত',
-    'dashboard.kpi.fleet': 'যানবহরের প্রস্তুতি',
-    'dashboard.kpi.fleetSub': '{total}টির মধ্যে {active}টি ভ্যান সক্রিয়',
+    'dashboard.kpi.fleet': 'গাড়ির প্রস্তুতি',
+    'dashboard.kpi.fleetSub': '{total}টির মধ্যে {active}টি ভ্যান একটিভ',
 
     'dashboard.trend.title': 'সংগ্রহের ধারা — গত {days} দিন',
     'dashboard.trend.onTrack': 'পরিকল্পনামাফিক',
@@ -105,16 +105,16 @@ export default {
     'dashboard.hours': '{h} ঘণ্টা',
 
     'dashboard.households.title': '🏆 সেরা {n} পরিবার — {year}',
-    'dashboard.households.sub': 'পরিশোধে সময়ানুবর্তিতা · বকেয়া · সেবা',
+    'dashboard.households.sub': 'পেমেন্টে সময়ানুবর্তিতা · বকেয়া · সেবা',
     'dashboard.households.rank': 'ক্রম',
     'dashboard.households.household': 'পরিবার',
     'dashboard.households.ward': 'ওয়ার্ড',
-    'dashboard.households.onTimePay': 'সময়মতো পরিশোধ',
+    'dashboard.households.onTimePay': 'সময়মতো পেমেন্ট',
     'dashboard.households.dues': 'বকেয়া',
     'dashboard.households.score': 'স্কোর',
     'dashboard.households.onTimeOf': '{total}-এ {paid}',
 
-    'dashboard.collectors.title': '🏅 সেরা সংগ্রাহক তালিকা — {year}',
+    'dashboard.collectors.title': '🏅 সেরা কালেক্টর তালিকা — {year}',
     'dashboard.collectors.sub': 'আওতা · সময়ানুবর্তিতা · অভিযোগ',
     'dashboard.collectors.meta': '{zone} · আওতা {coverage} · সময়মতো {onTime} · অভিযোগ {complaints}',
     'dashboard.collectors.score': 'স্কোর',
@@ -122,7 +122,7 @@ export default {
     'dashboard.visits.title': 'সাম্প্রতিক যাচাইকৃত পরিদর্শন',
     'dashboard.visits.sub': 'সরাসরি ইভেন্ট প্রবাহ',
     'dashboard.visits.household': 'পরিবার',
-    'dashboard.visits.collector': 'সংগ্রাহক',
+    'dashboard.visits.collector': 'কালেক্টর',
     'dashboard.visits.status': 'অবস্থা',
     'dashboard.visits.gps': 'জিপিএস নির্ভুলতা',
     'dashboard.visits.sync': 'সিঙ্ক',

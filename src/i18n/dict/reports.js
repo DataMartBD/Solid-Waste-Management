@@ -231,11 +231,11 @@ export default {
     'reports.kpi.fleet.def': 'Active vans ÷ total fleet',
   },
   bn: {
-    'reports.title': 'প্রতিবেদন ও নথিপত্র',
-    'reports.subtitle': 'সেবা ও চার্জ আদায়, গ্রাহক নিবন্ধন ও কেপিআই স্কোরকার্ড · কেসিসির জন্য রপ্তানিযোগ্য',
+    'reports.title': 'প্রতিবেদন ও রেকর্ড',
+    'reports.subtitle': 'সেবা ও চার্জ আদায়, গ্রাহক নিবন্ধন ও কেপিআই স্কোরকার্ড · কেসিসির জন্য ডাউনলোডযোগ্য',
 
     'reports.tab.service': 'সেবা ও আদায়',
-    'reports.tab.waste': 'সংগ্রাহকভিত্তিক বর্জ্য',
+    'reports.tab.waste': 'কালেক্টরভিত্তিক বর্জ্য',
     'reports.tab.bills': 'বিল আদায়',
     'reports.tab.recon': 'মিলকরণ',
     'reports.tab.customers': 'গ্রাহক',
@@ -249,11 +249,11 @@ export default {
     'reports.rows': '{count}টি সারি',
 
     // ---- shared chrome for the collector-wise reports ----
-    'reports.scope.byCollector': 'সংগ্রাহকভিত্তিক',
+    'reports.scope.byCollector': 'কালেক্টরভিত্তিক',
     'reports.scope.overall': 'সমষ্টিগত',
-    'reports.filter.allCollectors': 'সব সংগ্রাহক',
+    'reports.filter.allCollectors': 'সব কালেক্টর',
     'reports.col.period': 'সময়কাল',
-    'reports.col.collector': 'সংগ্রাহক',
+    'reports.col.collector': 'কালেক্টর',
     'reports.unassigned': 'রাউট বরাদ্দ নেই',
     'reports.empty': 'এই নির্বাচনের জন্য কোনো রেকর্ড নেই।',
 
@@ -288,10 +288,10 @@ export default {
     'reports.service.note': 'বিলকৃত মানে সেদিন যত টাকার বিল হয়েছে, আর আদায়কৃত মানে সেদিন যত টাকা হাতে এসেছে। তাই দৈনিক হিসাবে মাসের শুরুর দিকে বিল তৈরির দিনটিতেই একবারে বড় অঙ্ক দেখা যায়।',
 
     // ---- waste collection by collector ----
-    'reports.waste.title.daily': 'দৈনিক সংগ্রাহকভিত্তিক বর্জ্য সংগ্রহ প্রতিবেদন',
-    'reports.waste.title.weekly': 'সাপ্তাহিক সংগ্রাহকভিত্তিক বর্জ্য সংগ্রহ প্রতিবেদন',
-    'reports.waste.title.monthly': 'মাসিক সংগ্রাহকভিত্তিক বর্জ্য সংগ্রহ প্রতিবেদন',
-    'reports.waste.title.yearly': 'বার্ষিক সংগ্রাহকভিত্তিক বর্জ্য সংগ্রহ প্রতিবেদন',
+    'reports.waste.title.daily': 'দৈনিক কালেক্টরভিত্তিক বর্জ্য সংগ্রহ প্রতিবেদন',
+    'reports.waste.title.weekly': 'সাপ্তাহিক কালেক্টরভিত্তিক বর্জ্য সংগ্রহ প্রতিবেদন',
+    'reports.waste.title.monthly': 'মাসিক কালেক্টরভিত্তিক বর্জ্য সংগ্রহ প্রতিবেদন',
+    'reports.waste.title.yearly': 'বার্ষিক কালেক্টরভিত্তিক বর্জ্য সংগ্রহ প্রতিবেদন',
     'reports.waste.exportSubtitle': 'নির্ধারিত রাউন্ড বনাম প্রকৃত স্টপ · {count}টি সারি · স্মার্ট সুইপ SWMS',
 
     'reports.waste.col.planned': 'নির্ধারিত স্টপ',
@@ -306,26 +306,26 @@ export default {
     'reports.waste.stat.coverage': 'সেবার আওতা',
     'reports.waste.stat.coverageSub': 'সেবা দেওয়া ÷ নির্ধারিত',
     'reports.waste.stat.covered': 'অন্যের হয়ে কাজ',
-    'reports.waste.stat.coveredSub': 'অন্য সংগ্রাহকের রাউন্ডে করা স্টপ',
-    'reports.waste.note': 'রুট বরাদ্দ অনুযায়ী একজন সংগ্রাহকের হাতে যত স্টপ থাকে তা-ই নির্ধারিত; সেবা দেওয়া ও বাদ পড়া আসে তাঁর নিজের নথিভুক্তি থেকে। অন্যের হয়ে কাজ বলতে অন্য সংগ্রাহকের রাউন্ডে করা স্টপ বোঝায় — পরিকল্পনা ও বাস্তবতার ফারাক এখানেই ধরা পড়ে।',
+    'reports.waste.stat.coveredSub': 'অন্য কালেক্টরের রাউন্ডে করা স্টপ',
+    'reports.waste.note': 'রুট বরাদ্দ অনুযায়ী একজন কালেক্টরের হাতে যত স্টপ থাকে তা-ই নির্ধারিত; সেবা দেওয়া ও বাদ পড়া আসে তাঁর নিজের নথিভুক্তি থেকে। অন্যের হয়ে কাজ বলতে অন্য কালেক্টরের রাউন্ডে করা স্টপ বোঝায় — পরিকল্পনা ও বাস্তবতার ফারাক এখানেই ধরা পড়ে।',
 
     // ---- bill collection by collector ----
-    'reports.bills.title.daily': 'দৈনিক সংগ্রাহকভিত্তিক বিল আদায় প্রতিবেদন',
-    'reports.bills.title.weekly': 'সাপ্তাহিক সংগ্রাহকভিত্তিক বিল আদায় প্রতিবেদন',
-    'reports.bills.title.monthly': 'মাসিক সংগ্রাহকভিত্তিক বিল আদায় প্রতিবেদন',
-    'reports.bills.title.yearly': 'বার্ষিক সংগ্রাহকভিত্তিক বিল আদায় প্রতিবেদন',
+    'reports.bills.title.daily': 'দৈনিক কালেক্টরভিত্তিক বিল আদায় প্রতিবেদন',
+    'reports.bills.title.weekly': 'সাপ্তাহিক কালেক্টরভিত্তিক বিল আদায় প্রতিবেদন',
+    'reports.bills.title.monthly': 'মাসিক কালেক্টরভিত্তিক বিল আদায় প্রতিবেদন',
+    'reports.bills.title.yearly': 'বার্ষিক কালেক্টরভিত্তিক বিল আদায় প্রতিবেদন',
     'reports.bills.exportSubtitle': 'বিলকৃত বনাম আদায়কৃত · {count}টি সারি · স্মার্ট সুইপ SWMS',
 
     'reports.bills.col.bills': 'বিল সংখ্যা',
     'reports.bills.col.received': 'আদায় (৳)',
 
-    'reports.bills.stat.receivedSub': 'সব পরিশোধ মাধ্যম মিলিয়ে গৃহীত',
+    'reports.bills.stat.receivedSub': 'সব পেমেন্ট মাধ্যম মিলিয়ে গৃহীত',
     'reports.bills.stat.billedSub': 'দৃশ্যমান {count}টি বিল',
     'reports.bills.stat.outstanding': 'বকেয়া',
     'reports.bills.stat.outstandingSub': 'বিল হয়েছে, আদায় হয়নি',
     'reports.bills.stat.rate': 'আদায়ের হার',
     'reports.bills.stat.rateSub': 'আদায় ÷ বিলকৃত',
-    'reports.bills.note': 'বিল যে মাসের জন্য, সেই মাসেই তা গণ্য হয়; আর পরিশোধ গণ্য হয় যে মাসে টাকা নেওয়া হয়েছে — জুলাইয়ের বিল আগস্টে আদায় হলে সেই বিলম্বই এই প্রতিবেদনে ধরা পড়ে। কোনো হোল্ডিং সচল রুটে না থাকলে তার নির্ধারিত সংগ্রাহক থাকে না।',
+    'reports.bills.note': 'বিল যে মাসের জন্য, সেই মাসেই তা গণ্য হয়; আর পেমেন্ট গণ্য হয় যে মাসে টাকা নেওয়া হয়েছে — জুলাইয়ের বিল আগস্টে আদায় হলে সেই বিলম্বই এই প্রতিবেদনে ধরা পড়ে। কোনো হোল্ডিং একটিভ রুটে না থাকলে তার নির্ধারিত কালেক্টর থাকে না।',
 
     // ---- service reconciliation ----
     'reports.recon.title': 'সেবা ও রাজস্ব মিলকরণ — {period}',
@@ -355,7 +355,7 @@ export default {
     'reports.recon.exc.servedNotBilled': 'সেবা হয়েছে, বিল হয়নি',
     'reports.recon.exc.servedNotBilledWhy': 'এই হোল্ডিংগুলো থেকে মাসজুড়ে বর্জ্য নেওয়া হয়েছে, অথচ কোনো বিল করা হয়নি — অর্থাৎ যে রাজস্ব চাওয়াই হয়নি।',
     'reports.recon.exc.billedNotServed': 'বিল হয়েছে, সেবা হয়নি',
-    'reports.recon.exc.billedNotServedWhy': 'হোল্ডিংয়ের বিপরীতে কোনো সংগ্রহ নথিভুক্ত না থাকলেও বিল করা হয়েছে — গৃহস্থালির আপত্তি জানানোর যুক্তিসংগত কারণ রয়েছে।',
+    'reports.recon.exc.billedNotServedWhy': 'হোল্ডিংয়ের বিপরীতে কোনো সংগ্রহ নথিভুক্ত না থাকলেও বিল করা হয়েছে — হাউসহোল্ডসের আপত্তি জানানোর যুক্তিসংগত কারণ রয়েছে।',
     'reports.recon.exc.paidNotServed': 'টাকা নেওয়া হয়েছে, সেবা হয়নি',
     'reports.recon.exc.paidNotServedWhy': 'সেবার কোনো নথি ছাড়াই টাকা আদায় হয়েছে — মাস বন্ধ করার আগে আরেকবার যাচাই করা দরকার।',
     'reports.recon.clean': 'কিছুই অমীমাংসিত নেই — এই তালিকার সব রেকর্ড মিলে গেছে।',
@@ -364,10 +364,10 @@ export default {
     'reports.recon.cash.col.deposited': 'জমা (৳)',
     'reports.recon.cash.col.variance': 'ঘাটতি (৳)',
     'reports.recon.cash.col.byMethod': 'মাধ্যম অনুযায়ী',
-    'reports.recon.cash.totals': 'সব সংগ্রাহক মিলিয়ে',
+    'reports.recon.cash.totals': 'সব কালেক্টর মিলিয়ে',
     'reports.recon.cash.shortfall': 'ঘাটতি',
     'reports.recon.cash.settled': 'নিষ্পন্ন',
-    'reports.recon.cash.note': 'গৃহস্থালি থেকে আদায়কৃত নগদ থেকে ওয়ার্ড অফিসে জমা দেওয়া নগদ বাদ দিলে যা থাকে তা-ই ঘাটতি। এটি অপরিশোধিত বিল নয়, নগদ ব্যবস্থাপনার বিষয়।',
+    'reports.recon.cash.note': 'হাউসহোল্ডস থেকে আদায়কৃত নগদ থেকে ওয়ার্ড অফিসে জমা দেওয়া নগদ বাদ দিলে যা থাকে তা-ই ঘাটতি। এটি পেমেন্ট না হওয়া বিল নয়, নগদ ব্যবস্থাপনার বিষয়।',
 
     // ---- customer reports ----
     'reports.customers.existing': 'বিদ্যমান গ্রাহক',
@@ -385,7 +385,7 @@ export default {
     'reports.group.roads': 'রাস্তা',
 
     'reports.customers.col.households': 'খানা',
-    'reports.customers.col.active': 'সক্রিয়',
+    'reports.customers.col.active': 'একটিভ',
     'reports.customers.col.serviced': 'সেবাপ্রাপ্ত',
     'reports.customers.col.coverage': 'আওতা %',
     'reports.customers.col.dues': 'বকেয়া (৳)',
@@ -426,7 +426,7 @@ export default {
 
     // ---- KPI scorecard ----
     'reports.kpi.title': 'কেপিআই স্কোরকার্ড — সময়কাল {period}',
-    'reports.kpi.export': 'রপ্তানি',
+    'reports.kpi.export': 'ডাউনলোড',
     'reports.kpi.col.kpi': 'কেপিআই',
     'reports.kpi.col.definition': 'সংজ্ঞা',
     'reports.kpi.col.target': 'লক্ষ্যমাত্রা',
@@ -451,6 +451,6 @@ export default {
     'reports.kpi.onTime.name': 'সময়মতো রুট সম্পন্ন',
     'reports.kpi.onTime.def': 'নির্ধারিত সময়ের মধ্যে শেষ হওয়া রুট',
     'reports.kpi.fleet.name': 'যানবাহন প্রস্তুতি',
-    'reports.kpi.fleet.def': 'সচল ভ্যান ÷ মোট বহর',
+    'reports.kpi.fleet.def': 'একটিভ ভ্যান ÷ মোট গাড়ি',
   },
 }

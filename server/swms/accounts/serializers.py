@@ -9,6 +9,8 @@ loginAt }` — plus a few additions the mock could not provide (`roleKey`,
 from __future__ import annotations
 
 from django.conf import settings
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from swms.common.roles import ROLE_HOME, Role
@@ -99,6 +101,44 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         model = User
         fields = ["name", "email", "altPhone", "nid", "bloodGroup", "emergencyContact", "avatar"]
         extra_kwargs = {"name": {"required": False}}
+
+
+# --------------------------------------------------------------------------- #
+# Password
+# --------------------------------------------------------------------------- #
+
+
+class PasswordLoginSerializer(serializers.Serializer):
+    """Phone + password — the only sign-in path the login screen offers."""
+
+    phone = PhoneField()
+    # `trim_whitespace=False`: a trailing space is part of the password, and
+    # silently stripping it would reject a password that was set with one.
+    password = serializers.CharField(
+        trim_whitespace=False, style={"input_type": "password"}, write_only=True
+    )
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    """Change the signed-in user's own password."""
+
+    currentPassword = serializers.CharField(trim_whitespace=False, write_only=True)
+    password = serializers.CharField(trim_whitespace=False, write_only=True)
+
+    def validate_password(self, value):
+        # Runs the AUTH_PASSWORD_VALIDATORS already configured in settings —
+        # minimum length, too-common, and all-numeric. Passing `user` lets the
+        # similarity validator reject a password that echoes the name or phone.
+        try:
+            validate_password(value, user=self.context.get("user"))
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages)) from exc
+        return value
+
+    def validate(self, attrs):
+        if attrs["currentPassword"] == attrs["password"]:
+            raise serializers.ValidationError({"password": "profile.passwordUnchanged"})
+        return attrs
 
 
 # --------------------------------------------------------------------------- #

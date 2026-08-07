@@ -40,6 +40,12 @@ export default {
     // Failures the server can report that the browser cannot tell apart on its own.
     'auth.noPin': 'No PIN is set for this account yet.',
     'auth.pinUnchanged': 'Choose a PIN different from your current one.',
+    'auth.password': 'Password',
+    'auth.passwordIntro': 'Sign in with your mobile number and password.',
+    'auth.passwordRequired': 'Enter your password.',
+    'auth.wrongPassword': 'Wrong number or password.',
+    'auth.show': 'Show',
+    'auth.hide': 'Hide',
     'auth.accountDisabled': 'This account has been disabled. Contact your ward office.',
     'auth.offline': 'Cannot reach the server. Check your connection and try again.',
     'auth.unexpected': 'Something went wrong. Please try again.',
@@ -64,10 +70,10 @@ export default {
   },
   bn: {
     'auth.brandTitle': 'পরিচ্ছন্ন শহরের জন্য যাচাইযোগ্য বর্জ্য সংগ্রহ।',
-    'auth.brandBody': 'প্রতিটি সংগ্রহ কিউআর-স্ক্যান, জিপিএস ও সময় দিয়ে যাচাই করা — গৃহস্থালি, সংস্থা ও সিটি কর্পোরেশনের জন্য সেবার প্রকৃত প্রমাণ।',
+    'auth.brandBody': 'প্রতিটি সংগ্রহ কিউআর-স্ক্যান, জিপিএস ও সময় দিয়ে যাচাই করা — হাউসহোল্ডস, সংস্থা ও সিটি কর্পোরেশনের জন্য সেবার প্রকৃত প্রমাণ।',
     'auth.brandPoint1': 'কিউআর ও জিপিএস যাচাইকৃত সংগ্রহের রেকর্ড',
     'auth.brandPoint2': 'অফলাইনেও মাঠপর্যায়ের তথ্য সংগ্রহ ও সিঙ্ক',
-    'auth.brandPoint3': 'সরাসরি বহর, বিলিং ও অভিযোগ পর্যবেক্ষণ',
+    'auth.brandPoint3': 'সরাসরি গাড়ি, বিলিং ও অভিযোগ পর্যবেক্ষণ',
     'auth.brandFooter': 'খুলনা সিটি কর্পোরেশন · পাইলট বাস্তবায়ন',
     'auth.legal': 'এগিয়ে গেলে আপনি কেসিসি ও সেবা পরিচালকের মধ্যকার তথ্য-নিরাপত্তা নীতিমালায় সম্মতি দিচ্ছেন।',
 
@@ -96,6 +102,12 @@ export default {
     'auth.otpExpired': 'কোডের সময় শেষ হয়ে গেছে। নতুন কোড নিন।',
     'auth.noPin': 'এই অ্যাকাউন্টে এখনো কোনো পিন সেট করা হয়নি।',
     'auth.pinUnchanged': 'বর্তমান পিন থেকে আলাদা একটি পিন দিন।',
+    'auth.password': 'পাসওয়ার্ড',
+    'auth.passwordIntro': 'আপনার মোবাইল নম্বর ও পাসওয়ার্ড দিয়ে সাইন ইন করুন।',
+    'auth.passwordRequired': 'পাসওয়ার্ড দিন।',
+    'auth.wrongPassword': 'নম্বর বা পাসওয়ার্ড ভুল।',
+    'auth.show': 'দেখুন',
+    'auth.hide': 'লুকান',
     'auth.accountDisabled': 'এই অ্যাকাউন্ট বন্ধ করা হয়েছে। ওয়ার্ড অফিসে যোগাযোগ করুন।',
     'auth.offline': 'সার্ভারে সংযোগ করা যাচ্ছে না। ইন্টারনেট দেখে আবার চেষ্টা করুন।',
     'auth.unexpected': 'কিছু একটা সমস্যা হয়েছে। আবার চেষ্টা করুন।',
@@ -116,7 +128,7 @@ export default {
     'auth.skipPin': 'এখন থাক',
 
     'auth.defaultName': 'মাঠকর্মী',
-    'auth.defaultRole': 'সংগ্রাহক',
+    'auth.defaultRole': 'কালেক্টর',
     'auth.defaultScope': 'নির্ধারিত এলাকা',
   },
 }

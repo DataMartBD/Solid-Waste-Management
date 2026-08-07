@@ -1,6 +1,6 @@
 // Live Map page — real-time collector positions, household pins and legend.
-// Terminology follows the rest of the app: collector → সংগ্রাহক,
-// coverage → আওতা, household → গৃহস্থালি.
+// Terminology follows the rest of the app: collector → কালেক্টর,
+// coverage → আওতা, household → হাউসহোল্ডস.
 
 export default {
   en: {
@@ -45,18 +45,18 @@ export default {
   },
   bn: {
     'liveMap.title': 'লাইভ ম্যাপ',
-    'liveMap.subtitle': 'সংগ্রাহকদের সরাসরি অবস্থান ও আওতা · খুলনা মহানগর · প্রতি {seconds} সেকেন্ড পরপর হালনাগাদ',
+    'liveMap.subtitle': 'কালেক্টরদের সরাসরি অবস্থান ও আওতা · খুলনা মহানগর · প্রতি {seconds} সেকেন্ড পরপর হালনাগাদ',
     'liveMap.liveBadge': 'সরাসরি · {count} জন রুটে',
 
     'liveMap.section.positions': 'মাঠপর্যায়ের অবস্থান',
-    'liveMap.section.collectors': 'দায়িত্বরত সংগ্রাহক',
+    'liveMap.section.collectors': 'দায়িত্বরত কালেক্টর',
 
     'liveMap.fullscreen': 'পূর্ণপর্দা',
     'liveMap.exitFullscreen': 'পূর্ণপর্দা বন্ধ করুন',
 
     'liveMap.legend.onRoute': 'রুটে আছে / সেবা দেওয়া হয়েছে',
     'liveMap.legend.offRoute': 'রুটের বাইরে',
-    'liveMap.legend.dues': 'বকেয়াসহ গৃহস্থালি',
+    'liveMap.legend.dues': 'বকেয়াসহ হাউসহোল্ডস',
     'liveMap.legend.stale': 'সর্বশেষ জানা অবস্থান',
 
     'liveMap.realtime.live': 'সরাসরি',

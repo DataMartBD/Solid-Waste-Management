@@ -441,6 +441,9 @@ OPERATORS = [
 ]
 
 DEMO_PIN = "1470"
+# Login is phone + password, so every seeded operator needs one or the demo
+# accounts cannot sign in at all.
+DEMO_PASSWORD = "swms1234"
 SUPERUSER_PHONE = "01900000000"
 SUPERUSER_PASSWORD = "admin1234"
 

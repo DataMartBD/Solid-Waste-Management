@@ -122,7 +122,7 @@ export default {
     'complaints.subtitle': 'একক মাধ্যম — অ্যাপ ও এসএমএস · অগ্রাধিকার অনুযায়ী এসএলএ লক্ষ্যমাত্রা',
     'complaints.export.title': 'অভিযোগ',
     'complaints.export.subtitle': '{count}টি টিকিট · স্মার্ট সুইপ SWMS',
-    'complaints.logComplaint': 'অভিযোগ নথিভুক্ত করুন',
+    'complaints.logComplaint': 'অভিযোগ দাখিল করুন',
 
     'complaints.stat.active': 'চলমান টিকিট',
     'complaints.stat.breached': 'এসএলএ লঙ্ঘিত',
@@ -132,14 +132,14 @@ export default {
     'complaints.stat.median': 'সমাধানের মধ্যক সময়',
     'complaints.stat.medianSub': 'নিষ্পত্তি হওয়া {count}টি টিকিট',
 
-    'complaints.searchPlaceholder': 'টিকিট, গৃহস্থালি বা বিবরণ খুঁজুন…',
+    'complaints.searchPlaceholder': 'টিকিট, হাউসহোল্ডস বা বিবরণ খুঁজুন…',
     'complaints.allTypes': 'সব ধরন',
     'complaints.allPriorities': 'সব অগ্রাধিকার',
     'complaints.ticketCount': '{count}টি টিকিট',
 
     'complaints.col.ticket': 'টিকিট',
     'complaints.col.type': 'ধরন',
-    'complaints.col.household': 'গৃহস্থালি',
+    'complaints.col.household': 'হাউসহোল্ডস',
     'complaints.col.priority': 'অগ্রাধিকার',
     'complaints.col.channel': 'মাধ্যম',
     'complaints.col.assigned': 'দায়িত্বপ্রাপ্ত',
@@ -216,8 +216,8 @@ export default {
     'complaints.note.reopened': 'টিকিটটি পুনরায় চালু করা হয়েছে।',
     'complaints.note.logged': 'অপারেটর কর্তৃক নথিভুক্ত।',
 
-    'complaints.form.title': 'অভিযোগ নথিভুক্ত করুন',
-    'complaints.form.subtitle': 'এলাকা অনুযায়ী দায়িত্বপ্রাপ্ত সংগ্রাহকের কাছে স্বয়ংক্রিয়ভাবে পাঠানো হবে',
+    'complaints.form.title': 'অভিযোগ দাখিল করুন',
+    'complaints.form.subtitle': 'এলাকা অনুযায়ী দায়িত্বপ্রাপ্ত কালেক্টরের কাছে স্বয়ংক্রিয়ভাবে পাঠানো হবে',
     'complaints.form.priorityOption': '{priority} · এসএলএ {hours} ঘণ্টা',
     'complaints.form.assignTo': 'দায়িত্ব দিন',
     'complaints.form.descriptionPlaceholder': 'কী সমস্যা হয়েছে?',

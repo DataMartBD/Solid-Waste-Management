@@ -68,13 +68,13 @@ export default {
     'billing.generateConfirm': 'Issue {count} bills',
   },
   bn: {
-    'billing.title': 'সেবা চার্জ আদায়',
+    'billing.title': 'সার্ভিস চার্জ আদায়',
     'billing.subtitle': 'স্বয়ংক্রিয় বিল ও হিসাব মিলকরণ · সময়কাল {period}',
-    'billing.exportCsv': 'সিএসভি রপ্তানি',
-    'billing.recordPayment': 'পরিশোধ লিপিবদ্ধ করুন',
+    'billing.exportCsv': 'সিএসভি ডাউনলোড',
+    'billing.recordPayment': 'পেমেন্ট দাখিল করুন',
 
     'billing.totalBilled': 'মোট বিলকৃত',
-    'billing.totalBilledSub': '{count}টি গৃহস্থালি · এই সময়কালে',
+    'billing.totalBilledSub': '{count}টি হাউসহোল্ড · এই সময়কালে',
     'billing.collected': 'আদায়কৃত',
     'billing.collectedSub': 'আদায়ের হার {rate}',
     'billing.outstanding': 'বকেয়া',
@@ -88,7 +88,7 @@ export default {
     'billing.billCount': '{count}টি বিল',
 
     'billing.col.billId': 'বিল আইডি',
-    'billing.col.household': 'গৃহস্থালি',
+    'billing.col.household': 'হাউসহোল্ডস',
     'billing.col.ward': 'ওয়ার্ড',
     'billing.col.period': 'সময়কাল',
     'billing.col.amount': 'পরিমাণ',
@@ -102,10 +102,10 @@ export default {
     'billing.empty': 'এই তালিকায় কোনো বিল নেই।',
     'billing.error.generic': 'অনুরোধটি সম্পন্ন করা যায়নি।',
 
-    'billing.amountDue': 'পরিশোধযোগ্য পরিমাণ',
-    'billing.paymentMethod': 'পরিশোধের মাধ্যম',
+    'billing.amountDue': 'পেমেন্টের পরিমাণ',
+    'billing.paymentMethod': 'পেমেন্টের মাধ্যম',
     'billing.receiptNo': 'রসিদ নম্বর',
-    'billing.confirmPaid': '{amount} পরিশোধ নিশ্চিত করুন',
+    'billing.confirmPaid': '{amount} পেমেন্ট নিশ্চিত করুন',
 
     'billing.received': 'আদায়কৃত',
     'billing.receivedOf': '{received} আদায় · {due} বকেয়া',
@@ -118,14 +118,14 @@ export default {
 
     'billing.generate': 'বিল তৈরি করুন',
     'billing.generateTitle': '{period}-এর বিল তৈরি করুন',
-    'billing.generateSubtitle': 'রুটে থাকা প্রতিটি সক্রিয় গৃহস্থালির জন্য একটি চার্জ। দুইবার চালালেও সমস্যা নেই।',
+    'billing.generateSubtitle': 'রুটে থাকা প্রতিটি একটিভ হাউসহোল্ডের জন্য একটি চার্জ। দুইবার চালালেও সমস্যা নেই।',
     'billing.generateNew': 'নতুন বিল',
     'billing.generateAmount': 'নতুন চার্জ',
     'billing.generateSkipped': 'আগেই তৈরি হয়েছে',
     'billing.generateMonthTotal': 'এই ধাপের পর মাসের মোট',
-    'billing.generateDueOn': 'পরিশোধের শেষ তারিখ',
+    'billing.generateDueOn': 'পেমেন্টের শেষ তারিখ',
     'billing.generateHint': 'এখনও কিছু সংরক্ষণ করা হয়নি। {count}টি বিল তৈরি করতে নিশ্চিত করুন।',
-    'billing.generateNone': 'এই মাসের জন্য যোগ্য প্রতিটি গৃহস্থালির বিল আগেই তৈরি হয়েছে।',
+    'billing.generateNone': 'এই মাসের জন্য যোগ্য প্রতিটি হাউসহোল্ডের বিল আগেই তৈরি হয়েছে।',
     'billing.generateConfirm': '{count}টি বিল তৈরি করুন',
   },
 }
