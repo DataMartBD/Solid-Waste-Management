@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from django.contrib import admin
 
-from .models import Bill, BillingRun, Deposit, Payment
+from .models import Bill, BillingRun, Deposit, Payment, Remittance
 from .services import paid_total_expr
 
 
@@ -91,4 +91,14 @@ class DepositAdmin(admin.ModelAdmin):
     search_fields = ("id", "collector__id", "collector__name", "ref")
     ordering = ("-at",)
     raw_id_fields = ("collector", "method", "received_by")
+    readonly_fields = ("id", "created_at", "updated_at")
+
+
+@admin.register(Remittance)
+class RemittanceAdmin(admin.ModelAdmin):
+    list_display = ("id", "agency", "period", "method", "amount", "at", "ref", "received_by")
+    list_filter = ("period", "method", "agency")
+    search_fields = ("id", "agency__name", "agency__short_code", "ref")
+    ordering = ("-at",)
+    raw_id_fields = ("agency", "method", "received_by")
     readonly_fields = ("id", "created_at", "updated_at")

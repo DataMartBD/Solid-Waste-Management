@@ -23,7 +23,15 @@ from swms.common.exceptions import DomainError
 from swms.common.ids import bill_id
 from swms.customers.models import HoldingStatus, Household
 
-from .models import Bill, BillingRun, BillStatus, Deposit, Payment, refresh_household_dues
+from .models import (
+    Bill,
+    BillingRun,
+    BillStatus,
+    Deposit,
+    Payment,
+    Remittance,
+    refresh_household_dues,
+)
 
 # --------------------------------------------------------------------------- #
 # Shared helpers
@@ -144,7 +152,9 @@ def generate_bills(
 
     already_billed = Bill.objects.filter(period=period).values("household_id")
     candidates = (
-        Household.objects.filter(status=HoldingStatus.ACTIVE, route_stop__isnull=False)
+        Household.objects.filter(
+            status=HoldingStatus.ACTIVE, holding__route_stop__isnull=False
+        )
         .exclude(pk__in=already_billed)
         .select_related("tier")
         .order_by("pk")
@@ -466,5 +476,134 @@ def cash_position(period: str) -> dict:
             "collected": sum(r["collected"] for r in ordered),
             "deposited": sum(r["deposited"] for r in ordered),
             "variance": sum(r["variance"] for r in ordered),
+        },
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Remittance — the agency's hand-over to the corporation
+# --------------------------------------------------------------------------- #
+
+
+@transaction.atomic
+def record_remittance(
+    agency,
+    period: str,
+    method,
+    amount: int,
+    *,
+    at=None,
+    ref: str = "",
+    note: str = "",
+    user=None,
+) -> Remittance:
+    """Record money an agency has handed to KCC for one month.
+
+    Deliberately an insert, not the upsert `record_deposit` performs. A hand-in
+    by a collector is a single running total for the month; a remittance is a
+    bank transfer with its own reference, and several in a month are normal.
+    Collapsing them would lose the link to the bank statement.
+
+    The amount is what was actually transferred. It is not derived from what was
+    collected, because comparing the two is the entire purpose of
+    `agency_cash_position()`.
+    """
+    parse_period(period)
+    if amount is None or amount <= 0:
+        raise DomainError("A remittance must be a positive amount.", code="bad_amount")
+
+    return Remittance.objects.create(
+        agency=agency,
+        period=period,
+        method=method,
+        amount=amount,
+        at=at or timezone.now(),
+        ref=ref or "",
+        note=note or "",
+        received_by=user if getattr(user, "is_authenticated", False) else None,
+    )
+
+
+def agency_cash_position(period: str, *, agency=None) -> dict:
+    """Where one month's money is, per agency: collected → deposited → remitted.
+
+    Three figures and two gaps, because the cash makes two hops and each can
+    stall independently:
+
+    * ``collected``  households paid the agency's collectors
+    * ``deposited``  collectors handed it to their agency
+    * ``remitted``   the agency handed it to KCC
+
+    ``inField``    = collected − deposited, still in collectors' pockets.
+    ``withAgency`` = deposited − remitted, banked by the agency but not yet KCC's.
+
+    Every figure reads the stamped ``agency`` column rather than joining through
+    the collector's current employer, so a transfer cannot move a settled month's
+    money onto another contractor's books.
+
+    Agencies remit in full, so both gaps should close to zero once a month is
+    settled. A standing shortfall is a real finding, not a modelling artefact.
+    """
+    parse_period(period)
+    start, end = period_bounds(period)
+
+    collected = (
+        Payment.objects.filter(at__gte=start, at__lt=end, agency__isnull=False)
+        .values("agency_id")
+        .annotate(total=Coalesce(Sum("amount"), 0))
+    )
+    deposited = (
+        Deposit.objects.filter(period=period, agency__isnull=False)
+        .values("agency_id")
+        .annotate(total=Coalesce(Sum("amount"), 0))
+    )
+    remitted = (
+        Remittance.objects.filter(period=period)
+        .values("agency_id")
+        .annotate(total=Coalesce(Sum("amount"), 0))
+    )
+
+    if agency is not None:
+        agency_id = getattr(agency, "id", agency)
+        collected = collected.filter(agency_id=agency_id)
+        deposited = deposited.filter(agency_id=agency_id)
+        remitted = remitted.filter(agency_id=agency_id)
+
+    rows: dict[str, dict] = {}
+
+    def row_for(key: str) -> dict:
+        return rows.setdefault(
+            key, {"agency": key, "collected": 0, "deposited": 0, "remitted": 0}
+        )
+
+    for source, field in ((collected, "collected"), (deposited, "deposited"), (remitted, "remitted")):
+        for entry in source:
+            row_for(entry["agency_id"])[field] += entry["total"]
+
+    ordered = sorted(rows.values(), key=lambda r: r["agency"])
+    for row in ordered:
+        row["inField"] = row["collected"] - row["deposited"]
+        row["withAgency"] = row["deposited"] - row["remitted"]
+        row["outstanding"] = row["collected"] - row["remitted"]
+
+    # Money taken at the office counter has no collector and therefore no
+    # agency. It is KCC's already and owes no remittance, but leaving it out
+    # entirely would make the total disagree with the bill reports.
+    counter = (
+        Payment.objects.filter(at__gte=start, at__lt=end, agency__isnull=True)
+        .aggregate(total=Coalesce(Sum("amount"), 0))["total"]
+    )
+
+    return {
+        "period": period,
+        "rows": ordered,
+        "counterCollected": counter,
+        "totals": {
+            "collected": sum(r["collected"] for r in ordered),
+            "deposited": sum(r["deposited"] for r in ordered),
+            "remitted": sum(r["remitted"] for r in ordered),
+            "inField": sum(r["inField"] for r in ordered),
+            "withAgency": sum(r["withAgency"] for r in ordered),
+            "outstanding": sum(r["outstanding"] for r in ordered),
         },
     }

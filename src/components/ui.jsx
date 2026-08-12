@@ -12,7 +12,23 @@ export const CHART_TOOLTIP = {
   color: 'var(--text)',
 }
 
-export function PageHeader({ title, subtitle, actions }) {
+// `sticky` is for a long form: the heading pins under the topbar and carries the
+// save button with it, so the operator never has to scroll back up to submit.
+// It is a thin bar rather than the usual block — a header that stays on screen
+// is paying for its height on every row of the form below it, so the subtitle
+// moves onto the same line as the title instead of taking one of its own.
+export function PageHeader({ title, subtitle, actions, sticky }) {
+  if (sticky) {
+    return (
+      <div className="page-head-sticky row between wrap gap-16">
+        <div className="row gap-12 wrap" style={{ alignItems: 'baseline' }}>
+          <h1>{title}</h1>
+          {subtitle && <span className="tiny muted">{subtitle}</span>}
+        </div>
+        {actions && <div className="row gap-8 wrap">{actions}</div>}
+      </div>
+    )
+  }
   return (
     <div className="row between wrap gap-16" style={{ marginBottom: 20 }}>
       <div>

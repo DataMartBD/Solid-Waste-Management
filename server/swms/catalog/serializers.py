@@ -9,6 +9,7 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from .models import (
+    Block,
     CurrentPractice,
     CustomerType,
     HoldingType,
@@ -67,6 +68,14 @@ class WardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ward
         fields = ["id", "key", "name", "zone", "lat", "lng"]
+
+
+class BlockSerializer(serializers.ModelSerializer):
+    ward = serializers.CharField(source="ward_id")
+
+    class Meta:
+        model = Block
+        fields = ["id", "ward", "name"]
 
 
 class RoadSerializer(serializers.ModelSerializer):

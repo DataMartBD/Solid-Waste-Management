@@ -29,7 +29,7 @@ from swms.catalog.models import (
     Zone,
 )
 from swms.common.exceptions import DomainError
-from swms.customers.models import Household
+from swms.customers.models import Holding, Household
 from swms.fieldops.models import Collector
 
 from . import services
@@ -65,10 +65,18 @@ class ComplaintTestCase(TestCase):
         }
         cls.payment_mode = _option(PaymentMode, "cash")
 
+        def _holding(number):
+            return Holding.objects.create(
+                ward=cls.ward,
+                road=cls.road,
+                holding_no=number,
+                holding_type=profile["holding_type"],
+                owner_name=f"Owner {number}",
+                verified=True,
+            )
+
         cls.household = Household.objects.create(
-            ward=cls.ward,
-            road=cls.road,
-            holding="142/B",
+            holding=_holding("142/B"),
             head="Rahima Begum",
             phone="01711000001",
             tier=cls.tier,
@@ -76,9 +84,7 @@ class ComplaintTestCase(TestCase):
             **profile,
         )
         cls.other_household = Household.objects.create(
-            ward=cls.ward,
-            road=cls.road,
-            holding="143/A",
+            holding=_holding("143/A"),
             head="Karim Mia",
             tier=cls.tier,
             payment_mode=cls.payment_mode,

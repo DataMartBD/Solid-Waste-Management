@@ -34,6 +34,17 @@ def _ward_scope(request):
     return request.user.visible_ward_ids()
 
 
+def _agency_scope(request):
+    """The agency this caller is confined to; None means every contractor.
+
+    Reports used to refuse an agency account outright, because each aggregate
+    scopes by its own ward path and one blanket filter could not express the
+    agency equivalent. `aggregates.AGENCY_PATHS` now states the path per
+    model, so every report can be narrowed honestly instead.
+    """
+    return request.user.visible_agency_id()
+
+
 def _mode(request, default=periods.MONTHLY) -> str:
     return periods.normalise_mode(request.query_params.get("mode") or default)
 
@@ -135,6 +146,7 @@ def waste_collection(request):
     rows = aggregates.waste_collection(
         mode=mode,
         ward_ids=_ward_scope(request),
+        agency_id=_agency_scope(request),
         date_from=_date(request, "from"),
         date_to=_date(request, "to"),
         collector=request.query_params.get("collector") or None,
@@ -160,6 +172,7 @@ def service_series(request):
     rows = aggregates.service_series(
         days=_int(request, "days", 30, high=730),
         ward_ids=_ward_scope(request),
+        agency_id=_agency_scope(request),
         end=_date(request, "end"),
     )
     return _respond(
@@ -184,7 +197,8 @@ def service_series(request):
 @permission_classes([IsAuthenticated])
 def ward_collection(request):
     """Per-ward service and revenue for a month."""
-    rows = aggregates.ward_collection(period=_period(request, required=True), ward_ids=_ward_scope(request))
+    rows = aggregates.ward_collection(period=_period(request, required=True), ward_ids=_ward_scope(request),
+        agency_id=_agency_scope(request))
     return _respond(
         request,
         title="Ward collection",
@@ -217,6 +231,7 @@ def bill_collection(request):
     rows = aggregates.bill_collection(
         mode=mode,
         ward_ids=_ward_scope(request),
+        agency_id=_agency_scope(request),
         period_from=request.query_params.get("from") or None,
         period_to=request.query_params.get("to") or None,
     )
@@ -251,7 +266,8 @@ def bill_collection(request):
 def bill_status(request):
     """Paid / partial / unpaid / overdue counts for a billing month, per collector."""
     period = _period(request, required=True)
-    rows = aggregates.bill_status(period=period, ward_ids=_ward_scope(request))
+    rows = aggregates.bill_status(period=period, ward_ids=_ward_scope(request),
+        agency_id=_agency_scope(request))
     return _respond(
         request,
         title="Bill status",
@@ -283,6 +299,7 @@ def customer_collection(request):
     rows = aggregates.customer_collection(
         mode=mode,
         ward_ids=_ward_scope(request),
+        agency_id=_agency_scope(request),
         period_from=request.query_params.get("from") or None,
         period_to=request.query_params.get("to") or None,
         household=request.query_params.get("hh") or None,
@@ -316,7 +333,8 @@ def customer_collection(request):
 def customer_bill_status(request):
     """One row per bill, settlement derived from the payments that exist."""
     period = _period(request, required=True)
-    rows = aggregates.customer_bill_status(period=period, ward_ids=_ward_scope(request))
+    rows = aggregates.customer_bill_status(period=period, ward_ids=_ward_scope(request),
+        agency_id=_agency_scope(request))
     return _respond(
         request,
         title="Customer bill status",
@@ -354,7 +372,8 @@ def reconciliation(request):
     cash rows and returns the exceptions alongside in the JSON body.
     """
     period = _period(request, required=True)
-    data = aggregates.reconciliation(period=period, ward_ids=_ward_scope(request))
+    data = aggregates.reconciliation(period=period, ward_ids=_ward_scope(request),
+        agency_id=_agency_scope(request))
     fmt = _fmt(request)
     if fmt:
         return export(
@@ -386,7 +405,8 @@ def reconciliation(request):
 def kpis(request):
     """The six-figure scorecard, every number derived rather than hard-coded."""
     return Response(
-        aggregates.kpis(period=_period(request, required=True), ward_ids=_ward_scope(request))
+        aggregates.kpis(period=_period(request, required=True), ward_ids=_ward_scope(request),
+        agency_id=_agency_scope(request))
     )
 
 
@@ -396,7 +416,8 @@ def kpis(request):
 def waste_by_zone(request):
     """Estimated tonnage per zone. Rows carry `estimated: true` — nothing weighs it."""
     return Response(
-        aggregates.waste_by_zone(period=_period(request), ward_ids=_ward_scope(request))
+        aggregates.waste_by_zone(period=_period(request), ward_ids=_ward_scope(request),
+        agency_id=_agency_scope(request))
     )
 
 
@@ -405,7 +426,8 @@ def waste_by_zone(request):
 @permission_classes([IsAuthenticated])
 def complaint_summary(request):
     return Response(
-        aggregates.complaint_summary(period=_period(request), ward_ids=_ward_scope(request))
+        aggregates.complaint_summary(period=_period(request), ward_ids=_ward_scope(request),
+        agency_id=_agency_scope(request))
     )
 
 
@@ -414,7 +436,8 @@ def complaint_summary(request):
 @permission_classes([IsAuthenticated])
 def customer_funnel(request):
     """Survey-to-customer conversion, and the monthly revenue still on the table."""
-    return Response(aggregates.customer_funnel(ward_ids=_ward_scope(request)))
+    return Response(aggregates.customer_funnel(ward_ids=_ward_scope(request),
+        agency_id=_agency_scope(request)))
 
 
 @extend_schema(responses=OpenApiTypes.OBJECT)
@@ -428,17 +451,24 @@ def dashboard(request):
     ward scope at the same instant.
     """
     wards = _ward_scope(request)
+    agency = _agency_scope(request)
     period = _period(request, required=True)
     return Response(
         {
             "period": period,
-            "kpis": aggregates.kpis(period=period, ward_ids=wards),
+            "kpis": aggregates.kpis(period=period, ward_ids=wards, agency_id=agency),
             "collectionTrend": aggregates.collection_trend(
-                days=_int(request, "trendDays", 7, high=90), ward_ids=wards
+                days=_int(request, "trendDays", 7, high=90), ward_ids=wards, agency_id=agency
             ),
-            "wasteByZone": aggregates.waste_by_zone(period=period, ward_ids=wards),
-            "wardCollection": aggregates.ward_collection(period=period, ward_ids=wards),
-            "complaints": aggregates.complaint_summary(period=period, ward_ids=wards),
-            "funnel": aggregates.customer_funnel(ward_ids=wards),
+            "wasteByZone": aggregates.waste_by_zone(
+                period=period, ward_ids=wards, agency_id=agency
+            ),
+            "wardCollection": aggregates.ward_collection(
+                period=period, ward_ids=wards, agency_id=agency
+            ),
+            "complaints": aggregates.complaint_summary(
+                period=period, ward_ids=wards, agency_id=agency
+            ),
+            "funnel": aggregates.customer_funnel(ward_ids=wards, agency_id=agency),
         }
     )

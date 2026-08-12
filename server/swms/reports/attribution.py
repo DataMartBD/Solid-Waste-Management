@@ -29,17 +29,24 @@ def planned_owner_subquery(household_field: str = "household_id") -> Subquery:
     `household_field` is the outer query's column holding the household id —
     `"household_id"` on Visit, Bill and Payment; `"id"` when the outer query *is*
     Household.
+
+    The plan is holding-wise, so the stop is found through the family's
+    *building*: whoever walks the block is the planned owner of every flat in
+    it. The join lands on one household id, so the subquery still yields at
+    most one row per outer row.
     """
     return Subquery(
         RouteStop.objects.filter(
-            household_id=OuterRef(household_field),
+            holding__households__id=OuterRef(household_field),
             route__active=True,
             route__assignment_links__assignment__active=True,
         ).values("route__assignment_links__assignment__collector_id")[:1]
     )
 
 
-def planned_owners(ward_ids: list[str] | None = None) -> dict[str, str]:
+def planned_owners(
+    ward_ids: list[str] | None = None, agency_id: str | None = None
+) -> dict[str, str]:
     """`{household_id: collector_id}` for every routed holding.
 
     One flat query. Used where attribution has to happen in Python — the
@@ -51,8 +58,13 @@ def planned_owners(ward_ids: list[str] | None = None) -> dict[str, str]:
         route__assignment_links__assignment__active=True,
     )
     if ward_ids is not None:
-        rows = rows.filter(household__ward_id__in=ward_ids)
+        rows = rows.filter(holding__ward_id__in=ward_ids)
+    if agency_id is not None:
+        rows = rows.filter(holding__agency_id=agency_id)
+    # A stop is a building, so each one answers for every family inside it —
+    # the map is still keyed by household, because that is what a bill, a
+    # payment and a visit carry.
     pairs = rows.values_list(
-        "household_id", "route__assignment_links__assignment__collector_id"
+        "holding__households__id", "route__assignment_links__assignment__collector_id"
     ).distinct()
-    return {household: collector for household, collector in pairs if collector}
+    return {household: collector for household, collector in pairs if collector and household}

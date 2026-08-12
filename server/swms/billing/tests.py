@@ -25,7 +25,7 @@ from swms.catalog.models import (
     Zone,
 )
 from swms.common.exceptions import DomainError
-from swms.customers.models import HoldingStatus, Household
+from swms.customers.models import Holding, HoldingStatus, Household
 from swms.fieldops.models import Collector, Route, RouteStop
 
 from .models import Bill, BillingRun, BillStatus, Deposit, Payment
@@ -86,10 +86,18 @@ class BillingTestCase(TestCase):
 
     def make_household(self, holding: str, *, charge: int = 0, status=HoldingStatus.ACTIVE,
                        routed: bool = True) -> Household:
-        household = Household.objects.create(
+        parent = Holding.objects.filter(
+            ward=self.ward, road=self.road, holding_no=holding
+        ).first() or Holding.objects.create(
             ward=self.ward,
             road=self.road,
-            holding=holding,
+            holding_no=holding,
+            holding_type=self.holding_type,
+            owner_name=f"Owner of {holding}",
+            verified=True,
+        )
+        household = Household.objects.create(
+            holding=parent,
             head=f"Head of {holding}",
             customer_type=self.customer_type,
             storage=self.storage,
@@ -101,8 +109,11 @@ class BillingTestCase(TestCase):
             status=status,
         )
         if routed:
-            RouteStop.objects.create(
-                route=self.route, household=household, seq=RouteStop.objects.count() + 1
+            # A stop is a building, so a second flat in the same block does not
+            # add a stop — it is already walked.
+            RouteStop.objects.get_or_create(
+                holding=household.holding,
+                defaults={"route": self.route, "seq": RouteStop.objects.count() + 1},
             )
         return household
 

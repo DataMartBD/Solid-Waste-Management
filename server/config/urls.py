@@ -12,12 +12,14 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 api_patterns = [
     path("auth/", include("swms.accounts.urls")),
+    path("", include("swms.agencies.urls")),
     path("", include("swms.catalog.urls")),
     path("", include("swms.customers.urls")),
     path("", include("swms.fieldops.urls")),
     path("", include("swms.fleet.urls")),
     path("", include("swms.complaints.urls")),
     path("", include("swms.billing.urls")),
+    path("", include("swms.surveys.urls")),
     path("reports/", include("swms.reports.urls")),
     path("ai/", include("swms.ai.urls")),
 ]

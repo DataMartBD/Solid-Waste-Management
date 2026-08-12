@@ -25,6 +25,7 @@ export const IconLogout = (p) => <S {...p}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2
 export const IconSearch = (p) => <S {...p}><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></S>
 export const IconBell = (p) => <S {...p}><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z"/><path d="M10 19a2 2 0 0 0 4 0"/></S>
 export const IconQr = (p) => <S {...p}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M20 14v.01M14 20h.01M17 20h3v-3"/></S>
+export const IconClipboard = (p) => <S {...p}><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1H9V4Z"/><path d="M9 11h6M9 15h4"/></S>
 export const IconCheck = (p) => <S {...p}><path d="M20 6 9 17l-5-5"/></S>
 export const IconClock = (p) => <S {...p}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></S>
 export const IconFuel = (p) => <S {...p}><rect x="4" y="4" width="9" height="16" rx="1.5"/><path d="M13 9h3l2 2v6a2 2 0 0 1-4 0v-3"/><path d="M6 8h5"/></S>

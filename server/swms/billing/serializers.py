@@ -20,11 +20,13 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from swms.catalog.models import PaymentMode, Ward
+from swms.agencies.models import Agency
+from swms.common.scoping import guard
 from swms.common.serializers import SwmsModelSerializer
 from swms.customers.models import Household
 from swms.fieldops.models import Collector
 
-from .models import Bill, BillingRun, Deposit, Payment
+from .models import Bill, BillingRun, Deposit, Payment, Remittance
 from .services import settlement_state
 
 
@@ -183,6 +185,10 @@ class DepositSerializer(SwmsModelSerializer):
     method = serializers.PrimaryKeyRelatedField(queryset=PaymentMode.objects.all())
     at = serializers.DateTimeField(required=False)
 
+    def validate_collector(self, collector):
+        guard(self, ward_id=collector.ward_id, agency_id=collector.agency_id)
+        return collector
+
     class Meta:
         model = Deposit
         fields = ["id", "collector", "period", "method", "amount", "at", "ref"]
@@ -258,6 +264,11 @@ class RecordPaymentSerializer(serializers.Serializer):
         queryset=Collector.objects.all(), required=False, allow_null=True
     )
 
+    def validate_collector(self, collector):
+        if collector is not None:
+            guard(self, ward_id=collector.ward_id, agency_id=collector.agency_id)
+        return collector
+
     def validate(self, attrs):
         _validate_amount_against_bill(self.context.get("bill"), attrs.get("amount"))
         return attrs
@@ -271,6 +282,46 @@ class GenerateBillsSerializer(serializers.Serializer):
     #: The mock's bills fell due ten days after issue; keep that as the default.
     dueDays = serializers.IntegerField(required=False, default=10, min_value=0, max_value=90)
     dryRun = serializers.BooleanField(required=False, default=False)
+
+    def validate_period(self, value):
+        return _validated_period(value)
+
+
+class RemittanceSerializer(SwmsModelSerializer):
+    """An agency's hand-over to the corporation."""
+
+    agency = serializers.PrimaryKeyRelatedField(queryset=Agency.objects.all())
+    agencyName = serializers.CharField(source="agency.name", read_only=True)
+    method = serializers.PrimaryKeyRelatedField(queryset=PaymentMode.objects.all())
+    at = serializers.DateTimeField(required=False)
+    receivedBy = serializers.CharField(source="received_by.name", read_only=True, default=None)
+
+    class Meta:
+        model = Remittance
+        fields = [
+            "id", "agency", "agencyName", "period", "method",
+            "amount", "at", "ref", "note", "receivedBy",
+        ]
+        read_only_fields = ["id"]
+
+    def validate_period(self, value):
+        return _validated_period(value)
+
+
+class RecordRemittanceSerializer(serializers.Serializer):
+    """Payload for POST /remittances/record/."""
+
+    agency = serializers.PrimaryKeyRelatedField(queryset=Agency.objects.all())
+    period = serializers.CharField()
+
+    def validate_agency(self, agency):
+        guard(self, agency_id=agency.id)
+        return agency
+    method = serializers.PrimaryKeyRelatedField(queryset=PaymentMode.objects.all())
+    amount = serializers.IntegerField(min_value=1)
+    at = serializers.DateTimeField(required=False, allow_null=True)
+    ref = serializers.CharField(required=False, allow_blank=True, max_length=64)
+    note = serializers.CharField(required=False, allow_blank=True, max_length=200)
 
     def validate_period(self, value):
         return _validated_period(value)

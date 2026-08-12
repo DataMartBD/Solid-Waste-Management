@@ -6,6 +6,7 @@ from . import views
 router = DefaultRouter()
 router.register("zones", views.ZoneViewSet, basename="zone")
 router.register("wards", views.WardViewSet, basename="ward")
+router.register("blocks", views.BlockViewSet, basename="block")
 router.register("roads", views.RoadViewSet, basename="road")
 router.register("tiers", views.TierViewSet, basename="tier")
 

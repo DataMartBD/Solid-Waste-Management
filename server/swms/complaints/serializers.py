@@ -103,7 +103,7 @@ class ComplaintSerializer(SwmsModelSerializer):
     # next to every row. Shipping them inline keeps the table one request
     # instead of a second lookup per ticket.
     head = serializers.CharField(source="household.head", read_only=True)
-    holding = serializers.CharField(source="household.holding", read_only=True)
+    holding = serializers.CharField(source="household.holding_no", read_only=True)
     road = serializers.CharField(source="household.road.name", read_only=True)
     phone = serializers.CharField(source="household.phone", read_only=True)
 

@@ -14,8 +14,8 @@ class RouteStopInline(admin.TabularInline):
     extra = 0
     ordering = ["seq"]
     # raw id rather than autocomplete: customers has no ModelAdmin to search.
-    raw_id_fields = ["household"]
-    fields = ["seq", "household"]
+    raw_id_fields = ["holding"]
+    fields = ["seq", "holding"]
 
 
 class AssignmentRouteInline(admin.TabularInline):
@@ -64,11 +64,11 @@ class RouteAdmin(admin.ModelAdmin):
 
 @admin.register(RouteStop)
 class RouteStopAdmin(admin.ModelAdmin):
-    list_display = ["route", "seq", "household"]
+    list_display = ["route", "seq", "holding"]
     list_filter = ["route__ward", "route"]
-    search_fields = ["route__id", "route__name", "household__id", "household__holding"]
-    list_select_related = ["route", "household"]
-    raw_id_fields = ["household"]
+    search_fields = ["route__id", "route__name", "holding__id", "holding__holding_no"]
+    list_select_related = ["route", "holding"]
+    raw_id_fields = ["holding"]
     ordering = ["route_id", "seq"]
 
 

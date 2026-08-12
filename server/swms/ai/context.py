@@ -32,10 +32,13 @@ def build_facts(user) -> dict:
     cannot report another ward's figures.
     """
     ward_ids = user.visible_ward_ids()
+    agency_id = user.visible_agency_id()
     period = periods.current_month()
     today = timezone.localdate()
 
     households = _scoped(Household.objects.all(), ward_ids)
+    if agency_id is not None:
+        households = households.filter(holding__agency_id=agency_id)
     dues = households.filter(dues__gt=0).aggregate(
         count=Count("id"), total=Coalesce(Sum("dues"), 0)
     )
@@ -58,7 +61,7 @@ def build_facts(user) -> dict:
         skipped=Count("id", filter=Q(status=VisitStatus.SKIPPED)),
     )
     planned_today = _scoped(
-        RouteStop.objects.filter(route__active=True), ward_ids, "household__ward_id"
+        RouteStop.objects.filter(route__active=True), ward_ids, "holding__ward_id"
     ).count()
 
     vans = Van.objects.exclude(status=VanStatus.RETIRED)
@@ -76,8 +79,8 @@ def build_facts(user) -> dict:
         "households": {
             "total": households.count(),
             "active": households.filter(status=HoldingStatus.ACTIVE).count(),
-            "verified": households.filter(verified=True).count(),
-            "unrouted": households.filter(route_stop__isnull=True).count(),
+            "verified": households.filter(holding__verified=True).count(),
+            "unrouted": households.filter(holding__route_stop__isnull=True).count(),
             "withDues": dues["count"],
             "duesTotalBdt": dues["total"],
         },

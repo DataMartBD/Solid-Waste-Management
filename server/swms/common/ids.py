@@ -14,6 +14,8 @@ from __future__ import annotations
 from django.db import models, transaction
 
 PREFIXES = {
+    "agency": "AGN-KCC",
+    "holding": "HLD-KCC",
     "household": "HH-KCC",
     "potential": "POT",
     "collector": "C",
@@ -27,6 +29,8 @@ PREFIXES = {
     "bill": "B",
     "payment": "PAY",
     "deposit": "DEP",
+    "survey": "SRV",
+    "remittance": "REM",
 }
 
 
@@ -77,6 +81,14 @@ def reserve(kind: str, value: int) -> None:
     if not created and row.last_value < value:
         row.last_value = value
         row.save(update_fields=["last_value"])
+
+
+def agency_id() -> str:
+    return next_id("agency", width=4)
+
+
+def holding_id() -> str:
+    return next_id("holding", width=6)
 
 
 def household_id() -> str:
@@ -137,3 +149,11 @@ def payment_id(period: str) -> str:
 
 def deposit_id(period: str) -> str:
     return f"DEP-{period}-{_next_value(f'deposit:{period}', 1):04d}"
+
+
+def survey_id() -> str:
+    return next_id("survey", width=6)
+
+
+def remittance_id(period: str) -> str:
+    return f"REM-{period}-{_next_value(f'remittance:{period}', 1):04d}"

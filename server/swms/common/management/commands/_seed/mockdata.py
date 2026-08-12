@@ -440,6 +440,19 @@ OPERATORS = [
     {"phone": "01800778899", "name": "KCC Cell", "role": "kcc_viewer", "scope_kind": "city"},
 ]
 
+#: The contractor supplying the demo collectors. One agency, matching how the
+#: live database looked when agencies were introduced.
+AGENCY = {
+    "name": "Premier Clean Management",
+    "shortCode": "PCM",
+    "type": "private",
+    "contactPerson": "Shahidul Islam",
+    "phone": "+8801711-445566",
+    "contractNo": "KCC/SWM/2026/07",
+    "contractStart": "2026-01-01",
+    "contractEnd": "2027-12-31",
+}
+
 DEMO_PIN = "1470"
 # Login is phone + password, so every seeded operator needs one or the demo
 # accounts cannot sign in at all.

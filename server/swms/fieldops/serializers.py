@@ -24,8 +24,9 @@ from collections import Counter
 from rest_framework import serializers
 
 from swms.catalog.models import Ward
+from swms.common.scoping import guard
 from swms.common.serializers import IdListField, NullableDecimal, SwmsModelSerializer
-from swms.customers.models import Household
+from swms.customers.models import Holding, Household
 
 from .models import (
     Assignment,
@@ -42,21 +43,21 @@ from .models import (
 TIME_FORMATS = ["%H:%M", "%H:%M:%S"]
 
 
-def validate_stop_households(household_ids: list[str], ward_id: str | None) -> list[str]:
+def validate_stop_holdings(holding_ids: list[str], ward_id: str | None) -> list[str]:
     """Check a proposed walking order before it is written.
 
-    Three rules the planner enforced client-side and the mock trusted it on:
+    A stop is a building, so these are holding ids. Three rules:
 
-    * a holding appears once — `RouteStop` is one-to-one on household, so a
+    * a building appears once — `RouteStop` is one-to-one on holding, so a
       repeat would silently collapse rather than error;
-    * its pin is verified — an unverified holding has no confirmed coordinates,
+    * its pin is verified — an unverified building has no confirmed coordinates,
       so nobody can be sent to it (this is `isRoutable`);
     * it sits in the route's own ward, because a round stays inside one ward.
 
-    Offenders are named in the error: a planner dragging thirty holdings needs to
-    know which one was refused.
+    Offenders are named in the error: a planner dragging thirty buildings needs
+    to know which one was refused.
     """
-    repeated = sorted(name for name, count in Counter(household_ids).items() if count > 1)
+    repeated = sorted(name for name, count in Counter(holding_ids).items() if count > 1)
     if repeated:
         raise serializers.ValidationError(
             {"stops": f"Listed more than once: {', '.join(repeated)}."}
@@ -64,16 +65,16 @@ def validate_stop_households(household_ids: list[str], ward_id: str | None) -> l
 
     known = {
         row["id"]: row
-        for row in Household.objects.filter(pk__in=household_ids).values(
+        for row in Holding.objects.filter(pk__in=holding_ids).values(
             "id", "verified", "ward_id"
         )
     }
 
-    missing = [hh for hh in household_ids if hh not in known]
+    missing = [pk for pk in holding_ids if pk not in known]
     if missing:
         raise serializers.ValidationError({"stops": f"Unknown holdings: {', '.join(missing)}."})
 
-    unverified = [hh for hh in household_ids if not known[hh]["verified"]]
+    unverified = [pk for pk in holding_ids if not known[pk]["verified"]]
     if unverified:
         raise serializers.ValidationError(
             {
@@ -85,20 +86,21 @@ def validate_stop_households(household_ids: list[str], ward_id: str | None) -> l
         )
 
     if ward_id:
-        strays = [hh for hh in household_ids if known[hh]["ward_id"] != ward_id]
+        strays = [pk for pk in holding_ids if known[pk]["ward_id"] != ward_id]
         if strays:
             raise serializers.ValidationError(
                 {"stops": f"Not in {ward_id}: {', '.join(strays)}."}
             )
 
-    return household_ids
+    return holding_ids
 
 
 class StopIdsField(IdListField):
     """`route.stops` — reads the walking order, writes are applied by the parent.
 
-    `get_attribute` hands over the route itself because the ordered household ids
-    live in the through table, not in an attribute of that name.
+    The ids are **buildings**: the plan is holding-wise, so a block of flats is
+    one stop. `get_attribute` hands over the route itself because the order
+    lives in the through table, not in an attribute of that name.
     """
 
     def get_attribute(self, instance):
@@ -107,7 +109,7 @@ class StopIdsField(IdListField):
     def to_representation(self, route):
         # Uses the prefetched `stops` (RouteStop.Meta orders them by seq) rather
         # than re-querying, so a route list stays one query.
-        return [stop.household_id for stop in route.stops.all()]
+        return [stop.holding_id for stop in route.stops.all()]
 
 
 class RouteIdsField(IdListField):
@@ -135,6 +137,9 @@ class CollectorSerializer(SwmsModelSerializer):
     complaints = serializers.SerializerMethodField()
     vanId = serializers.SerializerMethodField()
     assignmentId = serializers.SerializerMethodField()
+    #: Read-only: employment is changed through POST /collectors/{id}/transfer/,
+    #: which writes the history row and this FK together.
+    agencyName = serializers.CharField(source="agency.name", read_only=True, default=None)
 
     class Meta:
         model = Collector
@@ -142,6 +147,8 @@ class CollectorSerializer(SwmsModelSerializer):
             "id",
             "name",
             "dspId",
+            "agency",
+            "agencyName",
             "zone",
             "phone",
             "onTime",
@@ -156,7 +163,7 @@ class CollectorSerializer(SwmsModelSerializer):
             "vanId",
             "assignmentId",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "agency"]
 
     def get_complaints(self, obj) -> int:
         """Prefers the viewset's annotation; falls back for one-off serialising."""
@@ -200,7 +207,7 @@ class RouteSerializer(SwmsModelSerializer):
         if "stops" in attrs:
             ward = attrs.get("ward")
             ward_id = ward.id if ward is not None else getattr(self.instance, "ward_id", None)
-            validate_stop_households(attrs["stops"], ward_id)
+            validate_stop_holdings(attrs["stops"], ward_id)
         return attrs
 
     def _check_window(self, attrs):
@@ -236,6 +243,10 @@ class AssignmentSerializer(SwmsModelSerializer):
         model = Assignment
         fields = ["id", "collector", "routes", "active"]
         read_only_fields = ["id"]
+
+    def validate_collector(self, collector):
+        guard(self, ward_id=collector.ward_id, agency_id=collector.agency_id)
+        return collector
 
     def validate_routes(self, value):
         repeated = sorted(name for name, count in Counter(value).items() if count > 1)
@@ -320,6 +331,15 @@ class RecordVisitSerializer(serializers.Serializer):
     collector = serializers.PrimaryKeyRelatedField(
         queryset=Collector.objects.all(), required=False, allow_null=True
     )
+
+    def validate_hh(self, household):
+        guard(self, ward_id=household.ward_id, agency_id=household.holding.agency_id)
+        return household
+
+    def validate_collector(self, collector):
+        if collector is not None:
+            guard(self, ward_id=collector.ward_id, agency_id=collector.agency_id)
+        return collector
     status = serializers.ChoiceField(choices=VisitStatus.choices, default=VisitStatus.COLLECTED)
     source = serializers.ChoiceField(
         choices=VisitSource.choices, required=False, allow_blank=True, default=""
@@ -372,7 +392,7 @@ class ReorderStopsSerializer(serializers.Serializer):
 
     def validate_stops(self, value):
         route = self.context.get("route")
-        return validate_stop_households(value, getattr(route, "ward_id", None))
+        return validate_stop_holdings(value, getattr(route, "ward_id", None))
 
 
 class SingleStopSerializer(serializers.Serializer):

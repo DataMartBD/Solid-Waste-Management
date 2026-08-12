@@ -82,8 +82,11 @@ class VanViewSet(SwmsModelViewSet):
     search_fields = ["id", "plate", "gps", "driver__name"]
     ordering_fields = ["id", "plate", "odometer", "status", "capacity"]
     # No ward scoping: the fleet is a city-wide asset pool. A van works whichever
-    # ward it is sent to, so `ward_scope_field` stays unset.
+    # ward it is sent to, so `ward_scope_field` stays unset. Agency is a
+    # different question: KCC and its contractors both own vehicles, and a
+    # contractor has no business seeing a rival's fleet.
     ward_scope_field = None
+    agency_scope_field = "agency_id"
     # Buying, registering and retiring vehicles is an admin act, not an
     # operational one — a supervisor logs work against a van but does not create it.
     write_roles = ADMIN_WRITERS
@@ -171,8 +174,9 @@ class MaintenanceViewSet(SwmsModelViewSet):
     filterset_class = MaintenanceFilter
     search_fields = ["id", "van_id", "reason", "vendor"]
     ordering_fields = ["opened", "closed", "cost", "downtime"]
-    # Fleet is city-wide (see VanViewSet).
+    # Fleet is city-wide (see VanViewSet), but follows its van for agency.
     ward_scope_field = None
+    agency_scope_field = "van__agency_id"
     write_roles = OPERATIONAL_WRITERS
 
     def get_queryset(self):
@@ -229,8 +233,9 @@ class FuelLogViewSet(SwmsModelViewSet):
     filterset_class = FuelLogFilter
     search_fields = ["id", "van_id"]
     ordering_fields = ["at", "litres", "cost", "odometer", "kmpl"]
-    # Fleet is city-wide (see VanViewSet).
+    # Fleet is city-wide (see VanViewSet), but follows its van for agency.
     ward_scope_field = None
+    agency_scope_field = "van__agency_id"
     write_roles = OPERATIONAL_WRITERS
 
     def get_queryset(self):
@@ -295,4 +300,9 @@ class LiveMapView(APIView):
 
     @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def get(self, request):
-        return Response(live_snapshot(ward_ids=request.user.visible_ward_ids()))
+        return Response(
+            live_snapshot(
+                ward_ids=request.user.visible_ward_ids(),
+                agency_id=request.user.visible_agency_id(),
+            )
+        )

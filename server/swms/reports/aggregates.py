@@ -27,7 +27,7 @@ from django.utils import timezone
 from swms.billing.models import Bill, Deposit, Payment
 from swms.catalog.models import Ward, Zone
 from swms.complaints.models import ACTIVE_STATUSES, Complaint
-from swms.customers.models import Household, HoldingStatus
+from swms.customers.models import Household, HoldingStatus, PotentialCustomer
 from swms.fieldops.models import RouteStop, Visit, VisitStatus
 from swms.fleet.models import Van, VanStatus
 
@@ -57,8 +57,74 @@ def _pct(numerator, denominator) -> int:
     return round((numerator / denominator) * 100) if denominator else 0
 
 
-def _scoped(queryset, ward_ids, path="ward_id"):
-    return queryset if ward_ids is None else queryset.filter(**{f"{path}__in": ward_ids})
+#: How to reach an agency id from each model a report aggregates over.
+#:
+#: The ward path cannot be transformed into this mechanically — four different
+#: models are scoped by a bare ``ward_id`` and each reaches its agency
+#: differently — so the mapping is written out once, here, where it can be read
+#: and checked in one place rather than repeated at thirty-odd call sites.
+#:
+#: `Visit`, `Payment` and `Deposit` carry the agency directly because it is
+#: stamped when the row is written; everything else traverses to the holding,
+#: which is what says who services a building.
+#:
+#: ``None`` means the model genuinely has no agency: wards and zones are the
+#: city's own geography, shared by every contractor.
+AGENCY_PATHS = {
+    Bill: "household__holding__agency_id",
+    Complaint: "household__holding__agency_id",
+    Deposit: "agency_id",
+    Household: "holding__agency_id",
+    Payment: "agency_id",
+    PotentialCustomer: "holding__agency_id",
+    RouteStop: "holding__agency_id",
+    Visit: "agency_id",
+    Ward: None,
+    Zone: None,
+}
+
+
+def _scoped(queryset, ward_ids, path="ward_id", *, agency_id=None):
+    """Narrow a report queryset by ward and, for a tenant, by agency.
+
+    The agency path is looked up from the queryset's own model rather than
+    passed in, so a call site cannot quietly get it wrong. A model missing from
+    `AGENCY_PATHS` raises: an unmapped model would otherwise be served
+    unfiltered to a contractor, which is the one outcome worth crashing over.
+    """
+    if ward_ids is not None:
+        queryset = queryset.filter(**{f"{path}__in": ward_ids})
+    if agency_id is None:
+        return queryset
+
+    model = queryset.model
+    if model not in AGENCY_PATHS:
+        raise RuntimeError(
+            f"{model.__name__} has no entry in AGENCY_PATHS, so it cannot be "
+            "scoped to an agency. Add one before reporting on it."
+        )
+    agency_path = AGENCY_PATHS[model]
+    if agency_path is None:
+        return queryset
+    return queryset.filter(**{agency_path: agency_id})
+
+
+def _planned_households(ward_ids, agency_id=None):
+    """Active families whose building is on a live round.
+
+    Counted in families, not stops. Since the plan went holding-wise a stop is
+    a *building*, so comparing stops with visits would divide a block's twelve
+    collections by its one stop. Everything downstream compares this against
+    `Visit` rows, which are one per family per day.
+    """
+    return _scoped(
+        Household.objects.filter(
+            status=HoldingStatus.ACTIVE,
+            holding__route_stop__route__active=True,
+        ),
+        ward_ids,
+        agency_id=agency_id,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -70,6 +136,7 @@ def waste_collection(
     *,
     mode: str = periods.DAILY,
     ward_ids: list[str] | None = None,
+    agency_id: str | None = None,
     date_from: dt.date | None = None,
     date_to: dt.date | None = None,
     collector: str | None = None,
@@ -86,7 +153,7 @@ def waste_collection(
     assigned to somebody else — cover work made visible.
     """
     mode = periods.normalise_mode(mode)
-    visits = _scoped(Visit.objects.all(), ward_ids, "household__ward_id")
+    visits = _scoped(Visit.objects.all(), ward_ids, "household__ward_id", agency_id=agency_id)
     if date_from:
         visits = visits.filter(served_on__gte=date_from)
     if date_to:
@@ -120,7 +187,7 @@ def waste_collection(
     }
 
     planned_per_collector: dict[str, int] = defaultdict(int)
-    for owner in planned_owners(ward_ids).values():
+    for owner in planned_owners(ward_ids, agency_id).values():
         planned_per_collector[owner] += 1
 
     rows = []
@@ -158,7 +225,8 @@ def overall_by_period(rows: list[dict], fields: list[str]) -> list[dict]:
 
 
 def service_series(
-    *, days: int = 30, ward_ids: list[str] | None = None, end: dt.date | None = None
+    *, days: int = 30, ward_ids: list[str] | None = None,
+    agency_id: str | None = None, end: dt.date | None = None
 ) -> list[dict]:
     """Day-by-day service and money, oldest first.
 
@@ -174,8 +242,7 @@ def service_series(
     visits = _scoped(
         Visit.objects.filter(served_on__gte=start, served_on__lte=end),
         ward_ids,
-        "household__ward_id",
-    )
+        "household__ward_id", agency_id=agency_id)
     served_by_day = {
         row["served_on"]: row
         for row in visits.values("served_on").annotate(
@@ -184,15 +251,14 @@ def service_series(
         )
     }
 
-    bills = _scoped(Bill.objects.filter(issued_at__gte=start, issued_at__lte=end), ward_ids)
+    bills = _scoped(Bill.objects.filter(issued_at__gte=start, issued_at__lte=end), ward_ids, agency_id=agency_id)
     billed_by_day = {
         row["issued_at"]: row["billed"]
         for row in bills.values("issued_at").annotate(billed=Coalesce(Sum("amount"), 0))
     }
 
     payments = _scoped(
-        Payment.objects.all(), ward_ids, "household__ward_id"
-    ).filter(**_datetime_window("at", start, end))
+        Payment.objects.all(), ward_ids, "household__ward_id", agency_id=agency_id).filter(**_datetime_window("at", start, end))
     collected_by_day = {
         periods.label(row["day"], periods.DAILY): row["collected"]
         for row in payments.annotate(day=periods.trunc("at", periods.DAILY))
@@ -200,7 +266,7 @@ def service_series(
         .annotate(collected=Coalesce(Sum("amount"), 0))
     }
 
-    scheduled = _scoped(RouteStop.objects.filter(route__active=True), ward_ids, "household__ward_id").count()
+    scheduled = _planned_households(ward_ids, agency_id).count()
 
     out = []
     for offset in range(days):
@@ -232,7 +298,8 @@ def _datetime_window(field: str, start: dt.date, end: dt.date) -> dict:
     }
 
 
-def collection_trend(*, days: int = 7, ward_ids: list[str] | None = None) -> list[dict]:
+def collection_trend(*, days: int = 7, ward_ids: list[str] | None = None,
+    agency_id: str | None = None) -> list[dict]:
     """The dashboard's area chart: last `days` days with a weekday label."""
     series = service_series(days=days, ward_ids=ward_ids)
     names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -251,7 +318,8 @@ def collection_trend(*, days: int = 7, ward_ids: list[str] | None = None) -> lis
     return out
 
 
-def waste_by_zone(*, period: str | None = None, ward_ids: list[str] | None = None) -> list[dict]:
+def waste_by_zone(*, period: str | None = None, ward_ids: list[str] | None = None,
+    agency_id: str | None = None) -> list[dict]:
     """Estimated tonnage per zone for a month.
 
     Nothing weighs the waste, so this multiplies collected stops by the per-
@@ -265,8 +333,7 @@ def waste_by_zone(*, period: str | None = None, ward_ids: list[str] | None = Non
             status=VisitStatus.COLLECTED, served_on__gte=start, served_on__lte=end
         ),
         ward_ids,
-        "household__ward_id",
-    )
+        "household__ward_id", agency_id=agency_id)
     rows = visits.values(
         "household__ward__zone_id", "household__ward__zone__name", "household__customer_type_id"
     ).annotate(stops=Count("id"))
@@ -288,20 +355,21 @@ def waste_by_zone(*, period: str | None = None, ward_ids: list[str] | None = Non
     return sorted(out, key=lambda r: r["zoneId"] or "")
 
 
-def ward_collection(*, period: str | None = None, ward_ids: list[str] | None = None) -> list[dict]:
+def ward_collection(*, period: str | None = None, ward_ids: list[str] | None = None,
+    agency_id: str | None = None) -> list[dict]:
     """Per-ward service and revenue for a month."""
     period = period if periods.is_month(period) else periods.current_month()
     start, end = periods.month_bounds(period)
 
-    wards = _scoped(Ward.objects.filter(active=True), ward_ids, "id").select_related("zone")
+    wards = _scoped(Ward.objects.filter(active=True), ward_ids, "id", agency_id=agency_id).select_related("zone")
     households = dict(
-        _scoped(Household.objects.filter(status=HoldingStatus.ACTIVE), ward_ids)
+        _scoped(Household.objects.filter(status=HoldingStatus.ACTIVE), ward_ids, agency_id=agency_id)
         .values_list("ward_id")
         .annotate(total=Count("id"))
     )
     scheduled = dict(
-        _scoped(RouteStop.objects.filter(route__active=True), ward_ids, "household__ward_id")
-        .values_list("household__ward_id")
+        _planned_households(ward_ids, agency_id)
+        .values_list("ward_id")
         .annotate(total=Count("id"))
     )
     served = dict(
@@ -310,18 +378,17 @@ def ward_collection(*, period: str | None = None, ward_ids: list[str] | None = N
                 status=VisitStatus.COLLECTED, served_on__gte=start, served_on__lte=end
             ),
             ward_ids,
-            "household__ward_id",
-        )
+            "household__ward_id", agency_id=agency_id)
         .values_list("household__ward_id")
         .annotate(total=Count("id"))
     )
     billed = dict(
-        _scoped(Bill.objects.filter(period=period), ward_ids)
+        _scoped(Bill.objects.filter(period=period), ward_ids, agency_id=agency_id)
         .values_list("ward_id")
         .annotate(total=Coalesce(Sum("amount"), 0))
     )
     collected = dict(
-        _scoped(Payment.objects.all(), ward_ids, "household__ward_id")
+        _scoped(Payment.objects.all(), ward_ids, "household__ward_id", agency_id=agency_id)
         .filter(**periods.month_range_filter("at", period))
         .values_list("household__ward_id")
         .annotate(total=Coalesce(Sum("amount"), 0))
@@ -360,6 +427,7 @@ def bill_collection(
     *,
     mode: str = periods.MONTHLY,
     ward_ids: list[str] | None = None,
+    agency_id: str | None = None,
     period_from: str | None = None,
     period_to: str | None = None,
 ) -> list[dict]:
@@ -370,7 +438,7 @@ def bill_collection(
     exactly the lag this report exists to surface.
     """
     mode = periods.normalise_mode(mode)
-    bills = _scoped(Bill.objects.all(), ward_ids)
+    bills = _scoped(Bill.objects.all(), ward_ids, agency_id=agency_id)
     if period_from:
         bills = bills.filter(period__gte=period_from)
     if period_to:
@@ -402,7 +470,7 @@ def bill_collection(
         target["billed"] += row["billed"]
         target["bills"] += row["count"]
 
-    payments = _scoped(Payment.objects.all(), ward_ids, "household__ward_id")
+    payments = _scoped(Payment.objects.all(), ward_ids, "household__ward_id", agency_id=agency_id)
     if period_from:
         payments = payments.filter(bill__period__gte=period_from)
     if period_to:
@@ -451,10 +519,11 @@ def _settlement(amount: int, received: int, due_on: dt.date | None, today: dt.da
     return "unpaid"
 
 
-def bill_status(*, period: str | None = None, ward_ids: list[str] | None = None) -> list[dict]:
+def bill_status(*, period: str | None = None, ward_ids: list[str] | None = None,
+    agency_id: str | None = None) -> list[dict]:
     """Paid / partial / unpaid / overdue counts for one billing month, per collector."""
     today = timezone.localdate()
-    bills = _scoped(Bill.objects.all(), ward_ids)
+    bills = _scoped(Bill.objects.all(), ward_ids, agency_id=agency_id)
     if period:
         bills = bills.filter(period=period)
 
@@ -498,6 +567,7 @@ def customer_collection(
     *,
     mode: str = periods.MONTHLY,
     ward_ids: list[str] | None = None,
+    agency_id: str | None = None,
     period_from: str | None = None,
     period_to: str | None = None,
     household: str | None = None,
@@ -508,8 +578,8 @@ def customer_collection(
     "who has not paid?" — the list a ward office actually acts on.
     """
     mode = periods.normalise_mode(mode)
-    bills = _scoped(Bill.objects.all(), ward_ids)
-    payments = _scoped(Payment.objects.all(), ward_ids, "household__ward_id")
+    bills = _scoped(Bill.objects.all(), ward_ids, agency_id=agency_id)
+    payments = _scoped(Payment.objects.all(), ward_ids, "household__ward_id", agency_id=agency_id)
     if period_from:
         bills, payments = bills.filter(period__gte=period_from), payments.filter(
             bill__period__gte=period_from
@@ -549,7 +619,7 @@ def customer_collection(
         "household__head",
         "household__ward_id",
         "household__road__name",
-        "household__holding",
+        "household__holding_no",
     ).annotate(billed=Coalesce(Sum("amount"), 0), count=Count("id")):
         period = periods.bill_label(row["period"], row["issued_at"], mode)
         if period is None:
@@ -561,7 +631,7 @@ def customer_collection(
                 "head": row["household__head"],
                 "ward": row["household__ward_id"],
                 "road": row["household__road__name"],
-                "holding": row["household__holding"],
+                "holding": row["household__holding_no"],
             },
         )
         target["billed"] += row["billed"]
@@ -575,7 +645,7 @@ def customer_collection(
             "household__head",
             "household__ward_id",
             "household__road__name",
-            "household__holding",
+            "household__holding_no",
         )
         .annotate(received=Coalesce(Sum("amount"), 0), count=Count("id"))
     ):
@@ -589,7 +659,7 @@ def customer_collection(
                 "head": row["household__head"],
                 "ward": row["household__ward_id"],
                 "road": row["household__road__name"],
-                "holding": row["household__holding"],
+                "holding": row["household__holding_no"],
             },
         )
         target["received"] += row["received"]
@@ -608,7 +678,8 @@ def customer_collection(
 
 
 def customer_bill_status(
-    *, period: str | None = None, ward_ids: list[str] | None = None
+    *, period: str | None = None, ward_ids: list[str] | None = None,
+    agency_id: str | None = None
 ) -> list[dict]:
     """One row per bill, with its settlement state derived from real payments.
 
@@ -617,7 +688,7 @@ def customer_bill_status(
     the first would misstate how the money arrived.
     """
     today = timezone.localdate()
-    bills = _scoped(Bill.objects.select_related("household", "household__road"), ward_ids)
+    bills = _scoped(Bill.objects.select_related("household", "household__road"), ward_ids, agency_id=agency_id)
     if period:
         bills = bills.filter(period=period)
     bills = bills.annotate(planned=planned_owner_subquery())
@@ -643,7 +714,7 @@ def customer_bill_status(
                 "head": household.head,
                 "ward": household.ward_id,
                 "road": household.road.name if household.road_id else None,
-                "holding": household.holding,
+                "holding": household.holding_no,
                 "collector": bill.planned,
                 "billed": bill.amount,
                 "received": received,
@@ -682,7 +753,8 @@ def state_tally(rows: list[dict]) -> dict:
 # --------------------------------------------------------------------------- #
 
 
-def reconciliation(*, period: str | None = None, ward_ids: list[str] | None = None) -> dict:
+def reconciliation(*, period: str | None = None, ward_ids: list[str] | None = None,
+    agency_id: str | None = None) -> dict:
     """Service against revenue, and cash taken against cash handed in.
 
     Two questions in one report:
@@ -695,21 +767,23 @@ def reconciliation(*, period: str | None = None, ward_ids: list[str] | None = No
     """
     period = period if periods.is_month(period) else periods.current_month()
     start, end = periods.month_bounds(period)
-    owner = planned_owners(ward_ids)
+    owner = planned_owners(ward_ids, agency_id)
 
-    bills = _scoped(Bill.objects.filter(period=period), ward_ids)
-    payments = _scoped(Payment.objects.all(), ward_ids, "household__ward_id").filter(
+    bills = _scoped(Bill.objects.filter(period=period), ward_ids, agency_id=agency_id)
+    payments = _scoped(Payment.objects.all(), ward_ids, "household__ward_id", agency_id=agency_id).filter(
         **periods.month_range_filter("at", period)
     )
     visits = _scoped(
         Visit.objects.filter(served_on__gte=start, served_on__lte=end),
         ward_ids,
-        "household__ward_id",
-    )
+        "household__ward_id", agency_id=agency_id)
     deposits = Deposit.objects.filter(period=period)
     if ward_ids is not None:
         # Deposits belong to a collector, not a ward; scope by the collector's ward.
         deposits = deposits.filter(collector__ward_id__in=ward_ids)
+    if agency_id is not None:
+        # …but the agency is stamped on the row, so it needs no such detour.
+        deposits = deposits.filter(agency_id=agency_id)
 
     served_households = set(
         visits.filter(status=VisitStatus.COLLECTED).values_list("household_id", flat=True)
@@ -804,7 +878,8 @@ def reconciliation(*, period: str | None = None, ward_ids: list[str] | None = No
 # --------------------------------------------------------------------------- #
 
 
-def kpis(*, period: str | None = None, ward_ids: list[str] | None = None) -> dict:
+def kpis(*, period: str | None = None, ward_ids: list[str] | None = None,
+    agency_id: str | None = None) -> dict:
     """The scorecard on the Dashboard and the Reports KPI tab.
 
     Every figure is derived; the mock hard-coded all six.
@@ -816,8 +891,7 @@ def kpis(*, period: str | None = None, ward_ids: list[str] | None = None) -> dic
     visits = _scoped(
         Visit.objects.filter(served_on__gte=start, served_on__lte=end),
         ward_ids,
-        "household__ward_id",
-    )
+        "household__ward_id", agency_id=agency_id)
     counts = visits.aggregate(
         served=Count("id", filter=Q(status=VisitStatus.COLLECTED)),
         actioned=Count("id"),
@@ -825,9 +899,7 @@ def kpis(*, period: str | None = None, ward_ids: list[str] | None = None) -> dic
 
     # Scheduled stop-days: the standing round multiplied by the service days that
     # have actually happened in the period so far.
-    stops = _scoped(
-        RouteStop.objects.filter(route__active=True), ward_ids, "household__ward_id"
-    ).count()
+    stops = _planned_households(ward_ids, agency_id).count()
     last_day = min(end, today)
     service_days = sum(
         1
@@ -836,23 +908,29 @@ def kpis(*, period: str | None = None, ward_ids: list[str] | None = None) -> dic
     )
     scheduled = stops * service_days
 
-    bills = _scoped(Bill.objects.filter(period=period), ward_ids)
+    bills = _scoped(Bill.objects.filter(period=period), ward_ids, agency_id=agency_id)
     billed = bills.aggregate(total=Coalesce(Sum("amount"), 0))["total"]
     received = (
-        _scoped(Payment.objects.all(), ward_ids, "household__ward_id")
+        _scoped(Payment.objects.all(), ward_ids, "household__ward_id", agency_id=agency_id)
         .filter(**periods.month_range_filter("at", period))
         .aggregate(total=Coalesce(Sum("amount"), 0))["total"]
     )
 
     active_households = _scoped(
-        Household.objects.filter(status=HoldingStatus.ACTIVE), ward_ids
-    ).count()
+        Household.objects.filter(status=HoldingStatus.ACTIVE), ward_ids, agency_id=agency_id).count()
+    # "Covered" means the family's *building* is on a round — the plan is
+    # holding-wise, so a stop covers every flat behind that door.
     covered_households = _scoped(
-        Household.objects.filter(status=HoldingStatus.ACTIVE, route_stop__isnull=False),
-        ward_ids,
-    ).count()
+        Household.objects.filter(
+            status=HoldingStatus.ACTIVE, holding__route_stop__isnull=False
+        ),
+        ward_ids, agency_id=agency_id).count()
 
     vans = Van.objects.exclude(status=VanStatus.RETIRED)
+    if agency_id is not None:
+        # Fleet readiness means *my* fleet; the city total is not a tenant's
+        # business and would otherwise sail through untouched.
+        vans = vans.filter(agency_id=agency_id)
     fleet_total = vans.count()
     fleet_active = vans.filter(status=VanStatus.ACTIVE).count()
 
@@ -861,8 +939,12 @@ def kpis(*, period: str | None = None, ward_ids: list[str] | None = None) -> dic
         "collectionEfficiency": _pct(counts["served"], scheduled),
         "chargeRate": _pct(received, billed),
         "coverage": _pct(covered_households, active_households),
-        "complaintMedianH": complaint_resolution_median(period=period, ward_ids=ward_ids),
-        "onTimeCompletion": on_time_completion(period=period, ward_ids=ward_ids),
+        "complaintMedianH": complaint_resolution_median(
+            period=period, ward_ids=ward_ids, agency_id=agency_id
+        ),
+        "onTimeCompletion": on_time_completion(
+            period=period, ward_ids=ward_ids, agency_id=agency_id
+        ),
         "fleetAvailability": _pct(fleet_active, fleet_total),
         # Denominators, so the UI can show "1,240 of 1,330" rather than just a %.
         "servedStops": counts["served"],
@@ -874,7 +956,8 @@ def kpis(*, period: str | None = None, ward_ids: list[str] | None = None) -> dic
     }
 
 
-def on_time_completion(*, period: str | None = None, ward_ids: list[str] | None = None) -> int:
+def on_time_completion(*, period: str | None = None, ward_ids: list[str] | None = None,
+    agency_id: str | None = None) -> int:
     """Share of collections recorded inside their route's time window.
 
     The comparison is a local time-of-day against a per-row window, which SQL
@@ -892,8 +975,7 @@ def on_time_completion(*, period: str | None = None, ward_ids: list[str] | None 
             route__isnull=False,
         ),
         ward_ids,
-        "household__ward_id",
-    ).values_list("at", "route__window_start", "route__window_end")
+        "household__ward_id", agency_id=agency_id).values_list("at", "route__window_start", "route__window_end")
 
     total = on_time = 0
     for at, window_start, window_end in visits:
@@ -905,22 +987,23 @@ def on_time_completion(*, period: str | None = None, ward_ids: list[str] | None 
 
 
 def complaint_resolution_median(
-    *, period: str | None = None, ward_ids: list[str] | None = None
+    *, period: str | None = None, ward_ids: list[str] | None = None,
+    agency_id: str | None = None
 ) -> int:
     """Median hours from opening to resolution, for complaints closed out in the month."""
     period = period if periods.is_month(period) else periods.current_month()
     rows = _scoped(
-        Complaint.objects.filter(resolved_at__isnull=False), ward_ids
-    ).filter(**periods.month_range_filter("resolved_at", period)).values_list(
+        Complaint.objects.filter(resolved_at__isnull=False), ward_ids, agency_id=agency_id).filter(**periods.month_range_filter("resolved_at", period)).values_list(
         "opened", "resolved_at"
     )
     hours = [(resolved - opened).total_seconds() / 3600 for opened, resolved in rows]
     return round(statistics.median(hours)) if hours else 0
 
 
-def complaint_summary(*, period: str | None = None, ward_ids: list[str] | None = None) -> dict:
+def complaint_summary(*, period: str | None = None, ward_ids: list[str] | None = None,
+    agency_id: str | None = None) -> dict:
     """Counts by status, priority and type, plus how many have breached SLA."""
-    complaints = _scoped(Complaint.objects.all(), ward_ids)
+    complaints = _scoped(Complaint.objects.all(), ward_ids, agency_id=agency_id)
     if periods.is_month(period):
         complaints = complaints.filter(**periods.month_range_filter("opened", period))
 
@@ -943,11 +1026,14 @@ def complaint_summary(*, period: str | None = None, ward_ids: list[str] | None =
         "total": complaints.count(),
         "active": complaints.filter(status__in=ACTIVE_STATUSES).count(),
         "breached": breached,
-        "medianResolutionHours": complaint_resolution_median(period=period, ward_ids=ward_ids),
+        "medianResolutionHours": complaint_resolution_median(
+            period=period, ward_ids=ward_ids, agency_id=agency_id
+        ),
     }
 
 
-def customer_funnel(*, ward_ids: list[str] | None = None) -> dict:
+def customer_funnel(*, ward_ids: list[str] | None = None,
+    agency_id: str | None = None) -> dict:
     """Survey-to-customer conversion.
 
     Only possible because converted survey rows are kept rather than deleted —
@@ -955,7 +1041,7 @@ def customer_funnel(*, ward_ids: list[str] | None = None) -> dict:
     """
     from swms.customers.models import PotentialCustomer
 
-    surveys = _scoped(PotentialCustomer.objects.all(), ward_ids)
+    surveys = _scoped(PotentialCustomer.objects.all(), ward_ids, agency_id=agency_id)
     total = surveys.count()
     converted = surveys.filter(converted_at__isnull=False).count()
     by_reason = {

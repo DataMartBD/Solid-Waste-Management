@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     # local
     "swms.common",
     "swms.accounts",
+    "swms.agencies",
     "swms.catalog",
     "swms.customers",
     "swms.fieldops",
@@ -68,6 +69,7 @@ INSTALLED_APPS = [
     "swms.complaints",
     "swms.billing",
     "swms.reports",
+    "swms.surveys",
     "swms.ai",
 ]
 

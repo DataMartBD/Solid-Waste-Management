@@ -11,6 +11,8 @@ import { del, download, get, list, patch, post, request } from './client.js'
 // Collections the app mirrors in memory, mapped to their REST resource.
 // DataContext uses this map for generic create/update/delete.
 export const RESOURCES = {
+  agencies: '/agencies/',
+  holdings: '/holdings/',
   households: '/households/',
   potentialCustomers: '/potential-customers/',
   collectors: '/collectors/',
@@ -30,14 +32,72 @@ export const catalog = {
   load: () => get('/catalog/'),
 }
 
+// The contractors that supply collectors. An agency is master data, so the
+// list is small and loaded whole rather than paged.
+export const agencies = {
+  list: (params) => list('/agencies/', params),
+  get: (id) => get(`/agencies/${id}/`),
+  create: (body) => post('/agencies/', body),
+  update: (id, body) => patch(`/agencies/${id}/`, body),
+  remove: (id) => del(`/agencies/${id}/`),
+  collectors: (id) => get(`/agencies/${id}/collectors/`),
+  employmentHistory: (id) => get(`/agencies/${id}/employment-history/`),
+}
+
+// Field surveys. The questionnaire itself is data, so the app fetches the form
+// and renders whatever questions it carries — see `SurveyForm.jsx`.
+export const surveys = {
+  forms: (params) => list('/survey-forms/', params),
+  // The whole questionnaire: every question, option and display rule. Fetched
+  // once, then rendered offline.
+  form: (id) => get(`/survey-forms/${id}/`),
+  published: (code) => get('/survey-forms/published/', code ? { code } : undefined),
+  list: (params) => list('/surveys/', params),
+  get: (id) => get(`/surveys/${id}/`),
+  record: (body) => post('/surveys/', body),
+  // Drain a device's offline queue. Answers per row, not per upload, so one
+  // bad record does not cost the surveyor their morning.
+  bulk: (rows) => post('/surveys/bulk/', { rows }),
+  review: (id, body) => post(`/surveys/${id}/review/`, body),
+  // What converting would create, and which of the register's requirements the
+  // survey cannot satisfy on its own — asked before the irreversible step.
+  convertPreview: (id) => get(`/surveys/${id}/convert-preview/`),
+  convert: (id, body) => post(`/surveys/${id}/convert/`, body),
+  blocks: (ward) => list('/blocks/', ward ? { ward } : undefined),
+}
+
+// Money handed from an agency to KCC — the second hop after a collector's
+// deposit. Several a month are normal, each with its own bank reference.
+export const remittances = {
+  list: (params) => list('/remittances/', params),
+  record: (body) => post('/remittances/record/', body),
+  // collected → deposited → remitted, per agency, for one month.
+  cashPosition: (params) => get('/remittances/cash-position/', params),
+}
+
+// The Holding Master. A household cannot exist without one of these, so the
+// household form reads this list and can create into it inline.
+export const holdings = {
+  list: (params) => list('/holdings/', params),
+  get: (id) => get(`/holdings/${id}/`),
+  create: (body) => post('/holdings/', body),
+  update: (id, body) => patch(`/holdings/${id}/`, body),
+  remove: (id) => del(`/holdings/${id}/`),
+  // Pinning the building makes every household in it routable at once.
+  verify: (id, body) => post(`/holdings/${id}/verify/`, body),
+  households: (id) => get(`/holdings/${id}/households/`),
+  // The route planner's to-do list: buildings not yet on any round.
+  unplanned: (params) => get('/holdings/unplanned/', params),
+}
+
 export const households = {
   list: (params) => list('/households/', params),
   get: (id) => get(`/households/${id}/`),
   create: (body) => post('/households/', body),
   update: (id, body) => patch(`/households/${id}/`, body),
   remove: (id) => del(`/households/${id}/`),
-  verify: (id, body) => post(`/households/${id}/verify/`, body),
-  unplanned: (params) => get('/households/unplanned/', params),
+  // No verify here: pinning is a building-level act on /holdings/{id}/verify/.
+
   byQr: (tag) => get(`/households/by-qr/${encodeURIComponent(tag)}/`),
 }
 
@@ -46,7 +106,6 @@ export const potentialCustomers = {
   create: (body) => post('/potential-customers/', body),
   update: (id, body) => patch(`/potential-customers/${id}/`, body),
   remove: (id) => del(`/potential-customers/${id}/`),
-  verify: (id, body) => post(`/potential-customers/${id}/verify/`, body),
   // Returns { household, potential } — the new customer and the closed survey.
   convert: (id, body) => post(`/potential-customers/${id}/convert/`, body || {}),
 }

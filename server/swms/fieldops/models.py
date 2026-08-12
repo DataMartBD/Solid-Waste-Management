@@ -2,9 +2,12 @@
 
 Two mock-data shapes are normalised here:
 
-* `route.stops` was an ordered array of household ids → the `RouteStop` through
-  table, with the ordering held in `seq`. A household belongs to exactly one
-  route, which is now a database constraint rather than a convention.
+* `route.stops` was an ordered array of ids → the `RouteStop` through table,
+  with the ordering held in `seq`. A stop is a **building**: a collector walks
+  to an address once and empties every flat in it, so the plan is holding-wise
+  and a block of twelve is one stop rather than twelve. A building belongs to
+  exactly one route, which is a database constraint rather than a convention.
+  Collection remains per family — see `RouteStop` and `round_for_collector`.
 * `assignment.routes` was an array of route ids → `AssignmentRoute`. A collector
   has at most one *active* assignment, also enforced.
 
@@ -58,6 +61,17 @@ class Collector(TextKeyModel):
 
     name = models.CharField(max_length=120)
     dsp_id = models.CharField(max_length=20, unique=True, help_text="e.g. DSP-0042")
+    #: Current employer. History lives in `agencies.CollectorEmployment`, and
+    #: both are written together by `agencies.services.transfer_collector` —
+    #: setting this directly leaves the history with a gap. Nullable while
+    #: agencies are being adopted; a collector with no agency is KCC's own.
+    agency = models.ForeignKey(
+        "agencies.Agency",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="collectors",
+    )
     ward = models.ForeignKey(
         "catalog.Ward",
         on_delete=models.PROTECT,
@@ -119,6 +133,16 @@ class Route(TextKeyModel):
 
     name = models.CharField(max_length=120, help_text="Usually the road name")
     ward = models.ForeignKey("catalog.Ward", on_delete=models.PROTECT, related_name="routes")
+    #: Whose round this is. A route used to be identified by its ward alone,
+    #: which stopped being enough once two contractors could work one ward —
+    #: "the KDA Avenue round" is then two different rounds.
+    agency = models.ForeignKey(
+        "agencies.Agency",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="routes",
+    )
     window_start = models.TimeField(default="06:00")
     window_end = models.TimeField(default="09:30")
     active = models.BooleanField(default=True)
@@ -141,25 +165,25 @@ class Route(TextKeyModel):
         """'06:00–09:30' with an en dash, as the UI renders it."""
         return f"{self.window_start:%H:%M}–{self.window_end:%H:%M}"
 
-    def household_ids(self) -> list[str]:
-        return list(self.stops.order_by("seq").values_list("household_id", flat=True))
+    def holding_ids(self) -> list[str]:
+        return list(self.stops.order_by("seq").values_list("holding_id", flat=True))
 
     @transaction.atomic
-    def resequence(self, household_ids: list[str]) -> None:
-        """Rewrite the stop order from a list of household ids.
+    def resequence(self, holding_ids: list[str]) -> None:
+        """Rewrite the stop order from a list of holding ids.
 
         Runs in a transaction because reordering necessarily passes through
         states where two stops briefly share a `seq` — the uniqueness check is
         deferred to commit (see RouteStop.Meta), which is what makes a plain
         move-up/move-down permutation possible in one pass.
         """
-        existing = {s.household_id: s for s in self.stops.all()}
+        existing = {s.holding_id: s for s in self.stops.all()}
         keep = []
-        for index, hh_id in enumerate(household_ids, start=1):
-            stop = existing.pop(hh_id, None)
+        for index, holding_id in enumerate(holding_ids, start=1):
+            stop = existing.pop(holding_id, None)
             if stop is None:
                 RouteStop.objects.update_or_create(
-                    household_id=hh_id, defaults={"route": self, "seq": index}
+                    holding_id=holding_id, defaults={"route": self, "seq": index}
                 )
             elif stop.seq != index:
                 stop.seq = index
@@ -171,11 +195,20 @@ class Route(TextKeyModel):
 
 
 class RouteStop(models.Model):
-    """One household's place in one route's running order."""
+    """One building's place in one route's running order.
+
+    A stop is a *building*, not a family. A collector walks to an address once
+    and takes the waste of everyone in it, so a twelve-flat block is one stop on
+    the plan rather than twelve — which is what a planner dragging a round
+    actually means, and what the pin on the map represents.
+
+    Collection stays per family: the round expands each stop into the households
+    inside it, so every flat keeps its own QR tag, visit record and bill.
+    """
 
     route = models.ForeignKey(Route, on_delete=models.CASCADE, related_name="stops")
-    household = models.OneToOneField(
-        "customers.Household", on_delete=models.CASCADE, related_name="route_stop"
+    holding = models.OneToOneField(
+        "customers.Holding", on_delete=models.CASCADE, related_name="route_stop"
     )
     seq = models.PositiveSmallIntegerField()
 
@@ -194,7 +227,7 @@ class RouteStop(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.route_id}#{self.seq} {self.household_id}"
+        return f"{self.route_id}#{self.seq} {self.holding_id}"
 
 
 class Assignment(TextKeyModel):
@@ -237,10 +270,33 @@ class Assignment(TextKeyModel):
 
         The RoutePlan page allows reassigning a route that already belongs to
         somebody else, so any conflicting active link is removed first.
+
+        Stealing stops at the agency boundary. Within one contractor a
+        supervisor moving a round between their own collectors is ordinary
+        planning; across contractors it would take a rival's work off them
+        silently, and no ownership check existed here before.
         """
-        AssignmentRoute.objects.filter(route_id__in=route_ids, assignment__active=True).exclude(
-            assignment=self
-        ).delete()
+        from swms.common.exceptions import DomainError
+
+        taking_from = (
+            AssignmentRoute.objects.filter(route_id__in=route_ids, assignment__active=True)
+            .exclude(assignment=self)
+            .select_related("assignment__collector", "route")
+        )
+        mine = self.collector.agency_id
+        poached = [
+            link
+            for link in taking_from
+            if link.assignment.collector.agency_id != mine
+        ]
+        if poached:
+            names = ", ".join(sorted({link.route_id for link in poached}))
+            raise DomainError(
+                f"These routes belong to another agency and cannot be reassigned: {names}.",
+                code="route_other_agency",
+            )
+
+        taking_from.delete()
         self.route_links.all().delete()
         AssignmentRoute.objects.bulk_create(
             [
@@ -283,6 +339,26 @@ class Visit(TextKeyModel):
     )
     collector = models.ForeignKey(
         Collector, null=True, blank=True, on_delete=models.SET_NULL, related_name="visits"
+    )
+    #: Which vehicle actually served the stop. Stamped from the collector's van
+    #: at the moment of recording, because `Van.driver` is only ever the *current*
+    #: driver — reading it later would misattribute an old visit to whoever
+    #: happens to be driving now. Null on every visit recorded before this field
+    #: existed; that history is not recoverable from the data we hold.
+    van = models.ForeignKey(
+        "fleet.Van", null=True, blank=True, on_delete=models.SET_NULL, related_name="visits"
+    )
+    #: Whose operation did this work — stamped from the collector's employment
+    #: at the moment of recording, never resolved at read time. A collector who
+    #: moves to another agency would otherwise take every past round with them,
+    #: silently restating last quarter's coverage figures. Null when no
+    #: collector is attached, because then nobody's agency did it.
+    agency = models.ForeignKey(
+        "agencies.Agency",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="visits",
     )
     route = models.ForeignKey(
         Route, null=True, blank=True, on_delete=models.SET_NULL, related_name="visits"

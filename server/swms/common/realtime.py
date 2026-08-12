@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 
 from asgiref.sync import async_to_sync
+from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.layers import get_channel_layer
 from django.urls import path
@@ -23,6 +24,7 @@ from django.utils import timezone
 
 logger = logging.getLogger("swms.realtime")
 
+#: KCC's own staff, who see the whole city.
 LIVE_GROUP = "live"
 
 VEHICLE_POSITION = "vehicle.position"
@@ -32,8 +34,28 @@ COMPLAINT_UPDATED = "complaint.updated"
 COLLECTOR_STATUS = "collector.status"
 
 
-def publish(event_type: str, payload: dict) -> None:
-    """Broadcast one event to every connected client."""
+def agency_group(agency_id: str) -> str:
+    """One group per contractor. Group names must be ASCII and punctuation-free
+    beyond `.-_`, which agency ids already satisfy (`AGN-KCC-0001`)."""
+    return f"live.agency.{agency_id}"
+
+
+def publish(event_type: str, payload: dict, *, agency_id: str | None = None) -> None:
+    """Broadcast one event.
+
+    Every frame goes to `LIVE_GROUP`, which only KCC's own staff join, and — when
+    the event belongs to a contractor — to that contractor's group as well.
+
+    Before this there was a single group: every authenticated client received
+    every vehicle position and visit in the city, and `LiveMap.jsx` dropped the
+    ones it could not place. That is a rendering filter, not a boundary; the
+    payload had already reached the browser. With two contractors that means one
+    receiving the other's live vehicle tracking.
+
+    An event with no `agency_id` reaches KCC only. That is the safe direction:
+    an agency missing a frame sees a stale marker, whereas a rival receiving one
+    cannot be undone.
+    """
     layer = get_channel_layer()
     if layer is None:
         return
@@ -43,8 +65,12 @@ def publish(event_type: str, payload: dict) -> None:
         "payload": payload,
         "at": timezone.now().isoformat(),
     }
+    targets = [LIVE_GROUP]
+    if agency_id:
+        targets.append(agency_group(agency_id))
     try:
-        async_to_sync(layer.group_send)(LIVE_GROUP, frame)
+        for target in targets:
+            async_to_sync(layer.group_send)(target, frame)
     except Exception:  # pragma: no cover — never break the originating write
         logger.warning("live broadcast failed for %s", event_type, exc_info=True)
 
@@ -57,12 +83,19 @@ class LiveConsumer(AsyncJsonWebsocketConsumer):
         if user is None or not user.is_authenticated:
             await self.close(code=4401)
             return
-        await self.channel_layer.group_add(LIVE_GROUP, self.channel_name)
+        # A contractor joins only their own group, so a rival's frames are never
+        # written to this socket — as opposed to being filtered in the browser,
+        # which is where this used to happen.
+        agency_id = await database_sync_to_async(user.visible_agency_id)()
+        self.group = agency_group(agency_id) if agency_id else LIVE_GROUP
+        await self.channel_layer.group_add(self.group, self.channel_name)
         await self.accept()
         await self.send_json({"event": "ready", "payload": {"role": user.role}})
 
     async def disconnect(self, code):
-        await self.channel_layer.group_discard(LIVE_GROUP, self.channel_name)
+        await self.channel_layer.group_discard(
+            getattr(self, "group", LIVE_GROUP), self.channel_name
+        )
 
     async def receive_json(self, content, **kwargs):
         # The only client message is a keepalive.

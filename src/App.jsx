@@ -5,7 +5,12 @@ import Layout from './components/Layout.jsx'
 import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import LiveMap from './pages/LiveMap.jsx'
-import Households from './pages/Households.jsx'
+import Agencies from './pages/Agencies.jsx'
+import Holdings from './pages/Holdings.jsx'
+import HoldingEditor from './pages/HoldingEditor.jsx'
+import HoldingHouseholds from './pages/HoldingHouseholds.jsx'
+import Surveys from './pages/Surveys.jsx'
+import SurveyEntry from './pages/SurveyEntry.jsx'
 import RoutesPage from './pages/RoutesPage.jsx'
 import Complaints from './pages/Complaints.jsx'
 import Billing from './pages/Billing.jsx'
@@ -56,7 +61,12 @@ export default function App() {
         <Route index element={<Navigate to={homeFor(user)} replace />} />
         <Route path="dashboard" element={gated(<Dashboard />)} />
         <Route path="live" element={gated(<LiveMap />)} />
-        <Route path="households" element={gated(<Households />)} />
+        <Route path="holdings" element={gated(<Holdings />)} />
+        <Route path="holdings/new" element={gated(<HoldingEditor />)} />
+        <Route path="holdings/:id/edit" element={gated(<HoldingEditor />)} />
+        <Route path="holdings/:id/households" element={gated(<HoldingHouseholds />)} />
+        <Route path="surveys" element={gated(<Surveys />)} />
+        <Route path="surveys/new" element={gated(<SurveyEntry />)} />
         <Route path="collection" element={gated(<Collection />)} />
         <Route path="route-plan" element={gated(<RoutePlan />)} />
         <Route path="routes" element={gated(<RoutesPage />)} />
@@ -64,6 +74,7 @@ export default function App() {
         <Route path="billing" element={gated(<Billing />)} />
         <Route path="fleet" element={gated(<Fleet />)} />
         <Route path="collectors" element={gated(<Collectors />)} />
+        <Route path="agencies" element={gated(<Agencies />)} />
         <Route path="reports" element={gated(<Reports />)} />
         <Route path="reports-customer" element={gated(<ReportsCustomer />)} />
         <Route path="profile" element={<Profile />} />

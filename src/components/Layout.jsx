@@ -9,7 +9,7 @@ import FloatingAI from './FloatingAI.jsx'
 import {
   IconDashboard, IconHome, IconMap, IconRoute, IconAlert, IconBill,
   IconTruck, IconUsers, IconChart, IconLogout, IconBell, IconSearch,
-  IconSun, IconMoon, IconUser, IconQr,
+  IconSun, IconMoon, IconUser, IconQr, IconClipboard,
 } from './Icons.jsx'
 
 // Labels are translation keys; the sidebar resolves them at render time so the
@@ -25,7 +25,13 @@ const NAV_GROUPS = [
   {
     label: 'nav.group.operations',
     items: [
-      { to: '/app/households', label: 'nav.households', icon: IconHome },
+      // The register is entered through the building: a household only means
+      // anything in relation to its holding, so the families are a page you
+      // reach from a row here rather than a city-wide list of their own.
+      { to: '/app/holdings', label: 'nav.holdings', icon: IconHome },
+      // Surveys feed the two lists above them: a door is surveyed, then the
+      // holding is registered, then the households inside it.
+      { to: '/app/surveys', label: 'nav.surveys', icon: IconClipboard },
       { to: '/app/collection', label: 'nav.collection', icon: IconQr },
       { to: '/app/routes', label: 'nav.routes', icon: IconRoute },
       { to: '/app/route-plan', label: 'nav.routePlan', icon: IconMap },
@@ -38,6 +44,8 @@ const NAV_GROUPS = [
     items: [
       { to: '/app/fleet', label: 'nav.fleet', icon: IconTruck },
       { to: '/app/collectors', label: 'nav.collectors', icon: IconUsers },
+      // Agencies employ the collectors above them, so they sit together.
+      { to: '/app/agencies', label: 'nav.agencies', icon: IconUsers },
     ],
   },
   {

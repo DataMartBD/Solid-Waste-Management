@@ -56,6 +56,9 @@
 
   --sidebar-w: 252px;
   --topbar-h: 62px;
+  /* Where a pinned panel starts: the topbar plus a thin sticky page heading
+     (43px) plus a little air, so nothing pinned hides behind either bar. */
+  --pin-top: 117px;
   /* Noto Sans Bengali sits after Inter so Latin glyphs keep Inter's metrics and
      only Bangla codepoints fall through to it. */
   --font: 'Inter', 'Noto Sans Bengali', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -194,10 +197,17 @@ table.data tbody tr:last-child td { border-bottom: none; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: 12.5px; font-weight: 600; color: var(--text-2); }
 .input, .select {
-  width: 100%; padding: 10px 12px; font-size: 14px; font-family: inherit;
+  width: 100%; font-size: 14px; font-family: inherit;
   border: 1px solid var(--border); border-radius: var(--radius-sm);
   background: var(--surface); color: var(--text); transition: .15s;
+  /* An input and a select with identical padding still come out different
+     heights — each gets its own internal line box from the browser. Pinning
+     the height is what makes them line up, which shows most on the holding
+     editor where a select sits beside an input in nearly every row. */
+  height: 38px; padding: 0 12px;
 }
+/* The textarea shares the class but is sized by its rows. */
+textarea.input { height: auto; padding: 10px 12px; line-height: 1.5; }
 .input:focus, .select:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--focus-ring); }
 
 /* ---------- Utilities ---------- */
@@ -223,3 +233,121 @@ table.data tbody tr:last-child td { border-bottom: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid rgba(255,255,255,.4); border-top-color: #fff; animation: spin .7s linear infinite; }
 .spinner-dark { border-color: var(--brand-100); border-top-color: var(--brand); }
+
+/* ---------- Survey form ---------- */
+/* A questionnaire is mostly checkboxes and radios rather than text inputs, and
+   several of its options are full sentences in Bangla — so the grid wraps on
+   content width instead of forcing equal columns. */
+.check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px 16px; }
+.check { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.45; cursor: pointer; }
+.check input { margin-top: 2px; flex: none; accent-color: var(--brand); }
+.required-mark { color: var(--danger, #dc2626); }
+/* Only shown after a submit attempt, so a half-filled form is not a wall of red. */
+.input.invalid, .select.invalid { border-color: var(--danger, #dc2626); }
+
+/* ---------- Holding editor: building on the left, families on the right ---- */
+/* The two are a parent and its children, so they sit side by side rather than
+   one after the other. The building is the narrower column: it is a fixed set
+   of fields, while the family list grows with the building. */
+.editor-split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 16px; align-items: start; }
+
+/* The building is a fixed set of fields; the family list is not. Pinning the
+   left column means the operator can add the tenth flat while still seeing
+   which building they are adding it to, and only the side that actually grows
+   moves. `--pin-top` is the topbar plus the sticky heading above it. */
+@media (min-width: 1101px) {
+  .editor-split > :first-child {
+    position: sticky; top: var(--pin-top);
+    /* Taller than the viewport on a short screen, so it scrolls within itself
+       rather than having its last fields cut off with no way to reach them. */
+    max-height: calc(100vh - var(--pin-top) - 16px);
+    overflow-y: auto;
+  }
+}
+@media (max-width: 1100px) {
+  /* Below this the two columns are too narrow to hold a label and its field,
+     so they stack — building first, which is the order they are filled in. */
+  .editor-split { grid-template-columns: 1fr; }
+}
+
+/* A thin heading bar that stays under the topbar. The negative margins let its
+   underline run the full width of the content area rather than stopping at the
+   page padding, and pull it up to sit flush against the topbar. */
+.page-head-sticky {
+  position: sticky; top: var(--topbar-h); z-index: 15;
+  align-items: center;
+  background: var(--bg);
+  margin: -24px -24px 16px; padding: 10px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.page-head-sticky h1 { font-size: 17px; }
+
+.family-list { display: flex; flex-direction: column; }
+.family-card { border-bottom: 1px solid var(--border); }
+.family-card:last-child { border-bottom: 0; }
+.family-card.open { background: var(--surface-2); }
+.family-card.bad { box-shadow: inset 3px 0 0 var(--danger); }
+
+.family-head { display: flex; align-items: center; gap: 6px; padding: 0 12px 0 0; }
+.family-toggle {
+  flex: 1; display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; border: 0; background: none; text-align: left;
+  font: inherit; color: var(--text); cursor: pointer;
+}
+.family-toggle:hover { color: var(--brand-700); }
+.family-index {
+  flex: none; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  background: var(--surface-2); color: var(--text-2);
+}
+.family-card.open .family-index { background: var(--brand); color: #fff; }
+.family-title { flex: 1; font-size: 13.5px; }
+.family-remove { padding: 6px 8px; color: var(--text-3); }
+.family-remove:hover { color: var(--danger); }
+.family-error { padding: 0 16px 10px 48px; font-size: 11.5px; color: var(--danger-fg); font-weight: 600; }
+.family-body { padding: 4px 16px 18px; border-top: 1px solid var(--border); }
+
+/* ---------- DataTable ---------- */
+.dt-toolbar { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.dt-pager { padding: 10px 14px; border-top: 1px solid var(--border); }
+/* The header is a button so it is reachable by keyboard; it should still read
+   as a table heading rather than as a control. */
+.dt-sort {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 0; background: none; padding: 0; font: inherit; color: inherit;
+  cursor: pointer; text-align: left;
+}
+.dt-sort:hover { color: var(--brand-700); }
+.dt-arrow { font-size: 9px; color: var(--text-3); }
+.dt-arrow.on { color: var(--brand); }
+.dt-row-link { cursor: pointer; }
+.dt-row-link:hover { background: var(--surface-2); }
+
+/* ---------- Survey form: several questions to a row ---------- */
+/* A six-column track so a question can take a third, two thirds or the whole
+   width without the rows going ragged. `minmax(0, …)` rather than `1fr` so a
+   long option label cannot push a column wider than its share. */
+.survey-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px 16px;
+  align-items: start;
+}
+.survey-q.span-1 { grid-column: span 2; }
+.survey-q.span-2 { grid-column: span 3; }
+.survey-q.span-3 { grid-column: span 6; }
+
+@media (max-width: 1100px) {
+  /* Two across: a third of a 900px page is too narrow for a labelled control. */
+  .survey-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .survey-q.span-1 { grid-column: span 1; }
+  .survey-q.span-2,
+  .survey-q.span-3 { grid-column: span 2; }
+}
+@media (max-width: 700px) {
+  /* On a phone every question is its own row — this form is filled at a door. */
+  .survey-grid { grid-template-columns: 1fr; }
+  .survey-q.span-1,
+  .survey-q.span-2,
+  .survey-q.span-3 { grid-column: span 1; }
+}

@@ -11,9 +11,13 @@ from .models import Household, HoldingStatus, PotentialCustomer
 
 #: Columns copied verbatim from a survey record to the new household.
 _CARRIED_OVER = (
+    # The holding comes across too, so a converted survey stays attached to the
+    # same building rather than becoming a second, unlinked address.
+    "holding_id",
+    "unit",
     "ward_id",
     "road_id",
-    "holding",
+    "holding_no",
     "head",
     "phone",
     "lat",
@@ -94,14 +98,24 @@ def convert_potential(
     return household
 
 
+@transaction.atomic
 def verify_location(
     holding, *, lat: float, lng: float, accuracy: int | None, placed_by_hand: bool, user=None
 ):
-    """Confirm a holding's map pin.
+    """Confirm a **building's** map pin, and push it down to everyone in it.
 
     Verification is what makes a household routable, so it is a deliberate
-    action with an audit trail rather than a plain field edit.
+    action with an audit trail rather than a plain field edit. It belongs to the
+    holding: a surveyor stands in front of a building once, not once per flat —
+    so pinning it makes every household in that building routable at a stroke.
+
+    `holding` may be a `Holding` or, for the household endpoint the collector
+    app already calls, a `Household`; either way the holding is what is written
+    and the families are re-saved so their mirrored copy follows.
     """
+    if isinstance(holding, (Household, PotentialCustomer)):
+        holding = holding.holding
+
     holding.lat = lat
     holding.lng = lng
     holding.accuracy = accuracy
@@ -123,4 +137,8 @@ def verify_location(
             "updated_at",
         ]
     )
+    # save() re-runs sync_from_holding, so the mirrored pin on each family
+    # follows the building's without a second source of truth.
+    for row in [*holding.households.all(), *holding.surveys.all()]:
+        row.save()
     return holding

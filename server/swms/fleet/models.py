@@ -56,6 +56,14 @@ class Van(TextKeyModel):
     gps = models.CharField(max_length=24, blank=True, help_text="Tracker device id")
     odometer = models.PositiveIntegerField(default=0, help_text="Kilometres")
     status = models.CharField(max_length=16, choices=VanStatus.choices, default=VanStatus.ACTIVE)
+    #: Which agency owns the vehicle. Null means KCC's own fleet — both exist.
+    agency = models.ForeignKey(
+        "agencies.Agency",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="vans",
+    )
     driver = models.ForeignKey(
         "fieldops.Collector",
         null=True,

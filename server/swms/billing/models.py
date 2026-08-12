@@ -16,7 +16,7 @@ from django.db.models import Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from swms.common.ids import deposit_id, payment_id
+from swms.common.ids import deposit_id, payment_id, remittance_id
 from swms.common.models import TextKeyModel, TimeStampedModel
 
 
@@ -141,6 +141,18 @@ class Payment(TextKeyModel):
         related_name="payments",
         help_text="Who actually took the money",
     )
+    #: Which agency's collector took it, stamped in `save()` from their
+    #: employment on the day. This is the row that will say who owes KCC the
+    #: remittance; resolving it through today's employer instead would move a
+    #: past debt every time somebody changed jobs. Null for an office-counter
+    #: payment, which has no collector and is KCC's own.
+    agency = models.ForeignKey(
+        "agencies.Agency",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="payments",
+    )
     amount = models.PositiveIntegerField(help_text="BDT")
     method = models.ForeignKey("catalog.PaymentMode", on_delete=models.PROTECT, related_name="+")
     at = models.DateTimeField(default=timezone.now, db_index=True)
@@ -175,6 +187,13 @@ class Payment(TextKeyModel):
             self.household_id = self.bill.household_id
         if not self.id:
             self.id = payment_id(self.bill.period)
+        if self.agency_id is None and self.collector_id is not None:
+            # Stamped here rather than resolved at read time: this row says
+            # which agency owes KCC this taka, and a later transfer must not
+            # move that debt to the collector's new employer.
+            from swms.agencies.services import stamp_agency_for
+
+            self.agency = stamp_agency_for(self.collector, timezone.localtime(self.at).date())
         super().save(*args, **kwargs)
         # A payment is the only thing that can change a bill's settlement.
         self.bill.recalculate()
@@ -190,6 +209,17 @@ class Deposit(TextKeyModel):
 
     collector = models.ForeignKey(
         "fieldops.Collector", on_delete=models.CASCADE, related_name="deposits"
+    )
+    #: Stamped like `Payment.agency`, and for the same reason: this hand-in is
+    #: part of what one agency owes KCC. Reading it back through the collector's
+    #: current employer would move a settled month's cash onto whoever employs
+    #: them now.
+    agency = models.ForeignKey(
+        "agencies.Agency",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="deposits",
     )
     period = models.CharField(max_length=7, db_index=True, help_text="YYYY-MM")
     method = models.ForeignKey("catalog.PaymentMode", on_delete=models.PROTECT, related_name="+")
@@ -216,6 +246,67 @@ class Deposit(TextKeyModel):
     def save(self, *args, **kwargs):
         if not self.id:
             self.id = deposit_id(self.period)
+        if self.agency_id is None and self.collector_id is not None:
+            from swms.agencies.services import stamp_agency_for
+
+            # Resolved as of the month being settled, not today, so a hand-in
+            # keyed months later still lands on the agency that held the cash.
+            self.agency = stamp_agency_for(self.collector, timezone.localtime(self.at).date())
+        super().save(*args, **kwargs)
+
+
+class Remittance(TextKeyModel):
+    """An agency handing collected service charges to KCC. Id: 'REM-2026-07-0003'.
+
+    The second hop of the money. A household pays a collector (`Payment`), the
+    collector hands the cash to their agency (`Deposit`), and the agency remits
+    it to the corporation — this row. Agencies remit in full, so what KCC should
+    receive is simply what was collected.
+
+    Unlike `Deposit`, this is **not** keyed unique per period: a bank transfer is
+    an external document with its own reference, and folding two of them into one
+    corrected total would break the trail back to the bank statement. Several
+    remittances in a month are normal and the reconciliation sums them.
+    """
+
+    agency = models.ForeignKey(
+        "agencies.Agency", on_delete=models.PROTECT, related_name="remittances"
+    )
+    period = models.CharField(max_length=7, db_index=True, help_text="YYYY-MM being settled")
+    method = models.ForeignKey(
+        "catalog.PaymentMode",
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text="How the agency paid KCC — bank transfer, cheque, cash",
+    )
+    amount = models.PositiveIntegerField(help_text="BDT remitted")
+    at = models.DateTimeField(default=timezone.now, db_index=True)
+    ref = models.CharField(
+        max_length=64, blank=True, help_text="Bank transfer / cheque / challan number"
+    )
+    received_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text="The KCC officer who accepted it",
+    )
+    note = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        db_table = "remittance"
+        ordering = ["-at"]
+        indexes = [
+            models.Index(fields=["agency", "period"], name="remittance_agency_period_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.id} — {self.agency_id} {self.period} {self.amount} BDT"
+
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.id = remittance_id(self.period)
         super().save(*args, **kwargs)
 
 

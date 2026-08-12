@@ -61,6 +61,14 @@ const joinWindow = (route) => (
 // A refused write names the holding or the route it refused, under `fields`.
 // That is what a planner dragging thirty holdings needs; the top-level detail
 // only says "Invalid input".
+// How many families live behind a stop. The dictionary has no plural rules, so
+// the two cases are two keys.
+const familyLabel = (t, n, count) => (
+  Number(count) === 1
+    ? t('routePlan.editor.familyOne')
+    : t('routePlan.editor.families', { count: n(count || 0) })
+)
+
 function message(error) {
   const named = error.fieldError('stops') || error.fieldError('routes')
   if (named) return named
@@ -70,7 +78,7 @@ function message(error) {
 }
 
 export default function RoutePlan() {
-  const { collectors, households, routes, assignments, wards, api, act, create, update, remove, ready } = useData()
+  const { collectors, holdings, routes, assignments, wards, api, act, create, update, remove, ready } = useData()
   const { t, n } = useLang()
 
   const [tab, setTab] = useState('routes')
@@ -82,13 +90,17 @@ export default function RoutePlan() {
   const [error, setError] = useState(null)
   const [unplanned, setUnplanned] = useState(NO_GAPS)
 
-  const byId = useMemo(() => new Map(households.map((h) => [h.id, h])), [households])
-  const plannedCount = households.length - unplanned.total
+  // A stop is a building, so the planner works in holdings throughout: the
+  // ids in `route.stops`, the picker's candidates and the coverage figures are
+  // all buildings. A collector walks to an address once and empties every flat
+  // in it, which is what a round is.
+  const byId = useMemo(() => new Map(holdings.map((h) => [h.id, h])), [holdings])
+  const plannedCount = holdings.length - unplanned.total
 
   // The coverage gap is a server aggregate now: "on no route" is a join the
   // browser can only guess at once the household list is paginated.
   const loadGaps = useCallback(async () => {
-    const res = await act(api.households.unplanned())
+    const res = await act(api.holdings.unplanned())
     if (res.ok) setUnplanned(res.data)
   }, [act, api])
 
@@ -280,7 +292,7 @@ export default function RoutePlan() {
           value={n(routes.length)} sub={t('routePlan.stat.routesSub')} />
         <StatCard icon={<IconCheck size={18} />} tone="ok" label={t('routePlan.stat.planned')}
           value={n(plannedCount)} sub={t('routePlan.stat.plannedSub')}
-          progress={households.length ? (plannedCount / households.length) * 100 : 0} />
+          progress={holdings.length ? (plannedCount / holdings.length) * 100 : 0} />
         <StatCard icon={<IconHome size={18} />} tone="warn" label={t('routePlan.stat.unplanned')}
           value={n(unplanned.total)} sub={t('routePlan.stat.unplannedSub')} />
         <StatCard icon={<IconShield size={18} />} tone="danger" label={t('routePlan.stat.unverified')}
@@ -391,7 +403,7 @@ function CoverageGap({ unplanned }) {
       </div>
       {homes.slice(0, PREVIEW).map((h) => (
         <div key={h.id} className="tiny muted" style={{ padding: '3px 0' }}>
-          {h.head} · {digits(h.holding)} · {h.road} · {wardName(h.ward)}
+          {t('routePlan.col.holding')} {digits(h.holdingNo)} · {h.ownerName} · {h.road} · {wardName(h.ward)}
         </div>
       ))}
       {homes.length > PREVIEW && (
@@ -616,11 +628,13 @@ function RouteEditor({
                 }}
               >{n(i + 1)}</span>
               <div className="grow" style={{ minWidth: 180 }}>
-                <div style={{ fontWeight: 600 }}>{s.missing ? s.id : s.head}</div>
+                <div style={{ fontWeight: 600 }}>
+                  {s.missing ? s.id : `${t('routePlan.col.holding')} ${digits(s.holdingNo)}`}
+                </div>
                 <div className="tiny muted-3">
                   {s.missing
                     ? t('routePlan.editor.missing')
-                    : `${t('routePlan.col.holding')} ${digits(s.holding)} · ${s.road} · ${wardName(s.ward)}`}
+                    : `${s.ownerName} · ${s.road} · ${wardName(s.ward)} · ${familyLabel(t, n, s.householdCount)}`}
                 </div>
               </div>
               <div className="row gap-8 wrap">
@@ -671,7 +685,7 @@ function StopPicker({ route, unplanned, busy, onAdd, onClose }) {
     const all = [...routable, ...blocked]
     if (!q) return all
     const needle = q.toLowerCase()
-    return all.filter((h) => [h.head, h.holding, h.road, h.id]
+    return all.filter((h) => [h.holdingNo, h.ownerName, h.road, h.id]
       .some((v) => String(v || '').toLowerCase().includes(needle)))
   }, [routable, blocked, q])
 
@@ -766,15 +780,17 @@ function StopPicker({ route, unplanned, busy, onAdd, onClose }) {
                     checked={ok && ticked.has(h.id)}
                     disabled={!ok}
                     onChange={() => toggle(h.id)}
-                    aria-label={h.head}
+                    aria-label={h.holdingNo}
                   />
                   <div className="grow" style={{ minWidth: 200 }}>
                     <div className="row gap-8 wrap">
-                      <span style={{ fontWeight: 600 }}>{h.head}</span>
+                      <span style={{ fontWeight: 600 }}>
+                        {t('routePlan.col.holding')} {digits(h.holdingNo)}
+                      </span>
                       {!ok && <span className="badge badge-danger"><span className="dot" />{t('routePlan.picker.unverified')}</span>}
                     </div>
                     <div className="tiny muted-3 mt-4">
-                      {t('routePlan.col.holding')} {digits(h.holding)} · {h.road} · {wardName(h.ward)}
+                      {h.ownerName} · {h.road} · {wardName(h.ward)} · {familyLabel(t, n, h.householdCount)}
                     </div>
                     {!ok && (
                       <div className="tiny" style={{ color: 'var(--danger-fg, var(--danger))', marginTop: 4 }}>

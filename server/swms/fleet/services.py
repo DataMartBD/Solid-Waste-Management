@@ -237,6 +237,7 @@ def record_position(
             "ignition": position.ignition,
             "at": position.at.isoformat(),
         },
+        agency_id=van.agency_id,
     )
     return position
 
@@ -246,7 +247,7 @@ def record_position(
 # --------------------------------------------------------------------------- #
 
 
-def live_snapshot(*, ward_ids=None) -> dict:
+def live_snapshot(*, ward_ids=None, agency_id=None) -> dict:
     """The live map's initial state: where every working van is, and what to plot.
 
     Shape of the work, and why:
@@ -272,13 +273,17 @@ def live_snapshot(*, ward_ids=None) -> dict:
     ward-scoped supervisor is responsible for.
     """
     from swms.customers.models import Household, HoldingStatus
-    from swms.fieldops.models import AssignmentRoute, RouteStop, Visit, VisitStatus
+    from swms.customers.models import Household
+    from swms.fieldops.models import AssignmentRoute, Visit, VisitStatus
 
     now = timezone.now()
     today = timezone.localdate()
 
     # --- 1. the vans worth drawing ---------------------------------------- #
     vans = Van.objects.exclude(status=VanStatus.RETIRED).select_related("driver", "driver__ward")
+    if agency_id is not None:
+        # A contractor sees its own vehicles, not a rival's.
+        vans = vans.filter(agency_id=agency_id)
     if ward_ids is not None:
         vans = vans.filter(driver__ward_id__in=ward_ids)
     van_rows = list(vans)
@@ -308,11 +313,15 @@ def live_snapshot(*, ward_ids=None) -> dict:
     route_ids = [route.id for route in route_for_collector.values()]
 
     # --- 4. progress on those routes -------------------------------------- #
+    # Households, not stops: the plan is holding-wise but a visit is one family,
+    # so "8 of 12 collected" has to compare like with like.
     stop_totals = {
-        row["route_id"]: row["total"]
-        for row in RouteStop.objects.filter(route_id__in=route_ids)
-        .values("route_id")
-        .annotate(total=Count("pk"))
+        row["holding__route_stop__route_id"]: row["total"]
+        for row in Household.objects.filter(
+            status=HoldingStatus.ACTIVE, holding__route_stop__route_id__in=route_ids
+        )
+        .values("holding__route_stop__route_id")
+        .annotate(total=Count("id", distinct=True))
     }
     progress = {
         row["route_id"]: row
@@ -381,20 +390,26 @@ def live_snapshot(*, ward_ids=None) -> dict:
 
     # --- 5. the pins ------------------------------------------------------- #
     households = Household.objects.filter(
-        status=HoldingStatus.ACTIVE, lat__isnull=False, lng__isnull=False
+        status=HoldingStatus.ACTIVE,
+        holding__lat__isnull=False,
+        holding__lng__isnull=False,
     )
     if ward_ids is not None:
         households = households.filter(ward_id__in=ward_ids)
+    if agency_id is not None:
+        households = households.filter(holding__agency_id=agency_id)
     household_payload = [
         {
             "id": row["id"],
-            "lat": _num(row["lat"]),
-            "lng": _num(row["lng"]),
-            "verified": row["verified"],
+            # The pin comes from the building now; the payload keys are
+            # unchanged so the live map reads exactly what it always did.
+            "lat": _num(row["holding__lat"]),
+            "lng": _num(row["holding__lng"]),
+            "verified": row["holding__verified"],
             "dues": row["dues"],
             "ward": row["ward_id"],
         }
-        for row in households.values("id", "lat", "lng", "verified", "dues", "ward_id")
+        for row in households.values("id", "holding__lat", "holding__lng", "holding__verified", "dues", "ward_id")
     ]
 
     return {

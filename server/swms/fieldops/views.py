@@ -13,6 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from swms.agencies.views import CollectorTransferMixin
 from swms.common.exceptions import DomainError
 from swms.common.permissions import IsAgencyAdmin
 from swms.common.roles import OPERATIONAL_WRITERS, Role
@@ -32,7 +33,7 @@ from .serializers import (
     ScanSerializer,
     SingleStopSerializer,
     VisitSerializer,
-    validate_stop_households,
+    validate_stop_holdings,
 )
 from .services import (
     bulk_record_visits,
@@ -84,19 +85,20 @@ class CollectorFilter(filters.FilterSet):
         return queryset.filter(vans__isnull=not value).distinct()
 
 
-class CollectorViewSet(SwmsModelViewSet):
-    """CRUD plus attendance and the metrics recalculation."""
+class CollectorViewSet(CollectorTransferMixin, SwmsModelViewSet):
+    """CRUD plus attendance, metrics recalculation and agency transfer."""
 
     serializer_class = CollectorSerializer
     filterset_class = CollectorFilter
     search_fields = ["id", "name", "dsp_id", "phone", "license"]
+    agency_scope_field = "agency_id"
     ordering_fields = ["name", "coverage", "on_time", "joined", "id"]
     ward_scope_field = "ward_id"
     write_roles = OPERATIONAL_WRITERS
 
     def get_queryset(self):
         queryset = (
-            Collector.objects.select_related("ward")
+            Collector.objects.select_related("ward", "agency")
             # `vanId` and `assignmentId` are read off these; without the prefetch
             # a 60-row staff list costs 120 extra queries.
             .prefetch_related("vans", "assignments")
@@ -174,15 +176,16 @@ class RouteViewSet(SwmsModelViewSet):
     search_fields = ["id", "name"]
     ordering_fields = ["name", "ward_id", "id"]
     ward_scope_field = "ward_id"
+    agency_scope_field = "agency_id"
     write_roles = OPERATIONAL_WRITERS
 
     def get_queryset(self):
-        queryset = Route.objects.select_related("ward").prefetch_related("stops")
+        queryset = Route.objects.select_related("ward", "agency").prefetch_related("stops")
         return self.scope_queryset(queryset)
 
-    def _reordered(self, route, household_ids):
+    def _reordered(self, route, holding_ids):
         """Apply a walking order and answer with the route as it now stands."""
-        route.resequence(household_ids)
+        route.resequence(holding_ids)
         return Response(self.get_serializer(self.get_queryset().get(pk=route.pk)).data)
 
     @action(detail=True, methods=["post"])
@@ -203,13 +206,13 @@ class RouteViewSet(SwmsModelViewSet):
         route = self.get_object()
         serializer = SingleStopSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        household_id = serializer.validated_data["hh"]
-        validate_stop_households([household_id], route.ward_id)
+        holding_id = serializer.validated_data["hh"]
+        validate_stop_holdings([holding_id], route.ward_id)
 
-        current = [stop.household_id for stop in route.stops.all()]
-        if household_id in current:
+        current = [stop.holding_id for stop in route.stops.all()]
+        if holding_id in current:
             return Response(self.get_serializer(route).data)
-        return self._reordered(route, current + [household_id])
+        return self._reordered(route, current + [holding_id])
 
     @action(detail=True, methods=["post"], url_path="remove-stop")
     def remove_stop(self, request, pk=None):
@@ -217,14 +220,14 @@ class RouteViewSet(SwmsModelViewSet):
         route = self.get_object()
         serializer = SingleStopSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        household_id = serializer.validated_data["hh"]
+        holding_id = serializer.validated_data["hh"]
 
-        current = [stop.household_id for stop in route.stops.all()]
-        if household_id not in current:
+        current = [stop.holding_id for stop in route.stops.all()]
+        if holding_id not in current:
             raise DomainError(
-                f"{household_id} is not a stop on {route.id}.", code="not_a_stop"
+                f"{holding_id} is not a stop on {route.id}.", code="not_a_stop"
             )
-        return self._reordered(route, [hh for hh in current if hh != household_id])
+        return self._reordered(route, [pk for pk in current if pk != holding_id])
 
 
 class AssignmentFilter(filters.FilterSet):
@@ -241,6 +244,7 @@ class AssignmentViewSet(SwmsModelViewSet):
     filterset_class = AssignmentFilter
     search_fields = ["id", "collector_id", "collector__name"]
     ward_scope_field = "collector__ward_id"
+    agency_scope_field = "collector__agency_id"
     write_roles = OPERATIONAL_WRITERS
 
     def get_queryset(self):
@@ -283,6 +287,7 @@ class VisitViewSet(SwmsModelViewSet):
     search_fields = ["id", "household_id", "qr"]
     ordering_fields = ["at", "served_on", "id"]
     ward_scope_field = "household__ward_id"
+    agency_scope_field = "agency_id"
     # Recording collections is the collector's core job.
     write_roles = OPERATIONAL_WRITERS | {Role.COLLECTOR}
 
@@ -308,7 +313,11 @@ class VisitViewSet(SwmsModelViewSet):
         row is reused, the tag and route are taken from the plan, and the live map
         hears about it.
         """
-        serializer = RecordVisitSerializer(data=request.data)
+        # Context matters: the scope guards read the caller from it, and a
+        # serializer built without it would pass them silently.
+        serializer = RecordVisitSerializer(
+            data=request.data, context=self.get_serializer_context()
+        )
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         visit = record_visit(

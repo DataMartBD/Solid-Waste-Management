@@ -396,7 +396,12 @@ describe('operational history', () => {
   const householdIds = new Set(households.map((h) => h.id))
   const collectorIds = new Set(collectors.map((c) => c.id))
   const billIds = new Set(bills.map((b) => b.id))
-  const today = new Date().toISOString().slice(0, 10)
+  // The mock stamps visits with the *local* date (`isoDay`, built from
+  // getFullYear/getMonth/getDate). Comparing against `toISOString()` compares
+  // against UTC, and Dhaka is UTC+6 — so between midnight and 6am the local
+  // date is a day ahead and every visit looked like it was in the future.
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
   it('carries enough service history for a daily, weekly, monthly and yearly view', () => {
     const days = new Set(visits.map((v) => v.at.slice(0, 10)))

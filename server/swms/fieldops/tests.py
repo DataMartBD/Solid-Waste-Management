@@ -32,7 +32,7 @@ from swms.catalog.models import (
 )
 from swms.common.exceptions import DomainError
 from swms.common.roles import Role
-from swms.customers.models import Household
+from swms.customers.models import Holding, Household
 
 from .models import Assignment, Collector, Route, RouteStop, Visit, VisitStatus
 from .serializers import RouteSerializer
@@ -73,16 +73,35 @@ class FieldOpsData(TestCase):
         )
 
     @classmethod
-    def make_household(cls, holding, *, verified=True, ward=None, road=None, dues=0):
-        return Household.objects.create(
+    def make_holding(cls, holding_no, *, verified=True, ward=None, road=None):
+        return Holding.objects.create(
             ward=ward or cls.ward,
             road=road or cls.road,
-            holding=holding,
-            head=f"Head {holding}",
-            phone="01711000000",
-            lat=22.836000,
-            lng=89.530000,
+            holding_no=holding_no,
+            holding_type=cls.holding_type,
+            owner_name=f"Owner {holding_no}",
+            owner_phone="01711000000",
+            lat=22.836000 if verified else None,
+            lng=89.530000 if verified else None,
             verified=verified,
+        )
+
+    @classmethod
+    def make_household(cls, holding, *, verified=True, ward=None, road=None, dues=0, unit=""):
+        """A family, and the building it sits in if that does not exist yet.
+
+        Address and pin are no longer passed here: they belong to the holding
+        and are mirrored down on save, so setting them on the household would
+        be overwritten and mask a real mismatch.
+        """
+        parent = Holding.objects.filter(
+            ward=ward or cls.ward, road=road or cls.road, holding_no=holding
+        ).first() or cls.make_holding(holding, verified=verified, ward=ward, road=road)
+        return Household.objects.create(
+            holding=parent,
+            unit=unit,
+            head=f"Head {holding}{unit}",
+            phone="01711000000",
             dues=dues,
             tier=cls.tier,
             customer_type=cls.customer_type,
@@ -94,6 +113,12 @@ class FieldOpsData(TestCase):
 
     @classmethod
     def make_route(cls, name, *, ward=None, households=()):
+        """A route. `households` is taken as the families to walk.
+
+        A stop is a *building*, so the households are mapped to theirs and
+        repeats collapse — which is exactly what routing two flats of one block
+        means.
+        """
         route = Route.objects.create(
             name=name,
             ward=ward or cls.ward,
@@ -101,7 +126,13 @@ class FieldOpsData(TestCase):
             window_end=time(9, 30),
         )
         if households:
-            route.resequence([household.id for household in households])
+            seen, holdings = set(), []
+            for household in households:
+                if household.holding_id in seen:
+                    continue
+                seen.add(household.holding_id)
+                holdings.append(household.holding_id)
+            route.resequence(holdings)
         return route
 
     @classmethod
@@ -118,31 +149,31 @@ class FieldOpsData(TestCase):
 class RoutePlanningTests(FieldOpsData):
     """`isRoutable` and "a round stays in its ward", now enforced server-side."""
 
-    def test_unverified_household_cannot_be_routed(self):
+    def test_unverified_holding_cannot_be_routed(self):
         route = self.make_route("KDA Avenue")
-        unverified = self.make_household("142/B", verified=False)
+        unverified = self.make_holding("142/B", verified=False)
 
         serializer = RouteSerializer(instance=route, data={"stops": [unverified.id]}, partial=True)
 
         self.assertFalse(serializer.is_valid())
         self.assertIn("stops", serializer.errors)
-        # The planner needs to know *which* holding was refused.
+        # The planner needs to know *which* building was refused.
         self.assertIn(unverified.id, str(serializer.errors["stops"]))
         self.assertEqual(RouteStop.objects.count(), 0)
 
-    def test_household_from_another_ward_cannot_be_routed(self):
+    def test_holding_from_another_ward_cannot_be_routed(self):
         route = self.make_route("KDA Avenue")
-        stray = self.make_household("7", ward=self.other_ward, road=self.other_road)
+        stray = self.make_holding("7", ward=self.other_ward, road=self.other_road)
 
         serializer = RouteSerializer(instance=route, data={"stops": [stray.id]}, partial=True)
 
         self.assertFalse(serializer.is_valid())
         self.assertIn(stray.id, str(serializer.errors["stops"]))
 
-    def test_verified_households_are_saved_in_the_given_order(self):
+    def test_verified_holdings_are_saved_in_the_given_order(self):
         route = self.make_route("KDA Avenue")
-        first = self.make_household("1")
-        second = self.make_household("2")
+        first = self.make_holding("1")
+        second = self.make_holding("2")
 
         serializer = RouteSerializer(
             instance=route, data={"stops": [second.id, first.id]}, partial=True
@@ -151,7 +182,7 @@ class RoutePlanningTests(FieldOpsData):
         serializer.save()
 
         self.assertEqual(
-            list(route.stops.order_by("seq").values_list("household_id", "seq")),
+            list(route.stops.order_by("seq").values_list("holding_id", "seq")),
             [(second.id, 1), (first.id, 2)],
         )
 

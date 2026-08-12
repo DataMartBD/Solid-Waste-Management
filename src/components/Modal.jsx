@@ -39,8 +39,19 @@ export function Modal({ title, subtitle, onClose, children, width = 520 }) {
 
 // Labeled form control. `as` = 'input' | 'select' | 'textarea'
 // `half` / `third` set the width when the field sits inside a <FormRow>.
-export function Field({ label, hint, as = 'input', options, children, half, third, id, ...props }) {
-  const width = third ? { flex: '1 1 29%', minWidth: 130 } : half ? { flex: '1 1 45%', minWidth: 160 } : undefined
+export function Field({ label, hint, as = 'input', options, children, half, third, narrow, id, ...props }) {
+  // `narrow` is for a value that is short and always will be — a blood group,
+  // a day of the month, a floor. Giving those the same width as an email
+  // address wastes a row and makes the form look longer than it is.
+  //
+  // The minimum matters as much as the basis: a <FormRow> wraps, so a min that
+  // is wider than its share of a narrow column pushes the field onto a line of
+  // its own — which is the whole thing `narrow` exists to avoid. "AB+" and a
+  // dropdown arrow need very little.
+  const width = narrow
+    ? { flex: '0 1 130px', minWidth: 104 }
+    : third ? { flex: '1 1 29%', minWidth: 130 }
+      : half ? { flex: '1 1 45%', minWidth: 160 } : undefined
   // The label was previously bare, so clicking it did nothing and screen readers
   // announced "edit, blank" for every control. useId gives each field a stable
   // unique id; callers can still pass an explicit `id` to override.

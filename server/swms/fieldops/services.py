@@ -19,12 +19,13 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.utils import timezone
 
+from swms.agencies.services import stamp_agency_for
 from swms.common.exceptions import DomainError
 from swms.common.realtime import COLLECTOR_STATUS, VISIT_RECORDED, publish
-from swms.customers.models import Household
+from swms.customers.models import HoldingStatus, Household
 
 from .models import Assignment, Collector, Route, RouteStop, Visit, VisitStatus
 
@@ -85,7 +86,9 @@ def record_visit(
     """
     if not isinstance(household, Household):
         household = (
-            Household.objects.select_related("route_stop").filter(pk=household).first()
+            Household.objects.select_related("holding", "holding__route_stop")
+            .filter(pk=household)
+            .first()
         )
     if household is None:
         raise DomainError("No such household.", code="unknown_household")
@@ -96,10 +99,16 @@ def record_visit(
 
     at = at or timezone.now()
     served_on = timezone.localtime(at).date()
-    stop = getattr(household, "route_stop", None)
+    # The plan is holding-wise, so the route a visit belongs to is the one this
+    # family's *building* sits on.
+    stop = getattr(household.holding, "route_stop", None)
 
     values = {
         "collector": collector,
+        # Stamped, not derived: see the note on `Visit.agency`. Resolved as of
+        # the day served so a round synced late is credited to whoever employed
+        # the collector then, not to whoever does now.
+        "agency": stamp_agency_for(collector, served_on),
         "route_id": stop.route_id if stop else None,
         "qr": household.qr or "",
         "status": status,
@@ -136,6 +145,7 @@ def record_visit(
             "lat": _as_float(visit.lat),
             "lng": _as_float(visit.lng),
         },
+        agency_id=visit.agency_id,
     )
     return visit
 
@@ -154,7 +164,7 @@ def bulk_record_visits(rows, user=None) -> dict:
     failed: list[dict] = []
 
     for index, row in enumerate(rows):
-        serializer = RecordVisitSerializer(data=row)
+        serializer = RecordVisitSerializer(data=row, context={"user": user})
         try:
             serializer.is_valid(raise_exception=True)
             data = serializer.validated_data
@@ -197,6 +207,7 @@ def set_attendance(collector: Collector, attendance: str, user=None) -> Collecto
             "status": collector.status,
             "attendance": collector.attendance,
         },
+        agency_id=collector.agency_id,
     )
     return collector
 
@@ -249,19 +260,40 @@ def round_for_collector(collector_id: str, day=None, *, user=None) -> list[dict]
 
     stop_rows = (
         RouteStop.objects.filter(route_id__in=[route.id for route in routes])
-        .select_related("household", "household__road")
+        .select_related("holding")
+        # A stop is a building; the round is a list of families. Each stop is
+        # expanded into the households inside it, so a block of twelve flats is
+        # one stop on the plan and twelve doors on the round — which is what the
+        # collector actually knocks on, and what billing needs.
+        .prefetch_related(
+            Prefetch(
+                "holding__households",
+                queryset=Household.objects.filter(status=HoldingStatus.ACTIVE)
+                .select_related("road", "holding")
+                .order_by("unit", "id"),
+                to_attr="round_households",
+            )
+        )
         .order_by("route_id", "seq")
     )
     if user is not None:
         ward_ids = user.visible_ward_ids()
         if ward_ids is not None:
-            stop_rows = stop_rows.filter(household__ward_id__in=ward_ids)
+            stop_rows = stop_rows.filter(holding__ward_id__in=ward_ids)
+        agency_id = user.visible_agency_id()
+        if agency_id is not None:
+            stop_rows = stop_rows.filter(holding__agency_id=agency_id)
 
     by_route: dict[str, list[RouteStop]] = {}
     for stop in stop_rows:
         by_route.setdefault(stop.route_id, []).append(stop)
 
-    household_ids = [stop.household_id for stops in by_route.values() for stop in stops]
+    household_ids = [
+        household.id
+        for stops in by_route.values()
+        for stop in stops
+        for household in stop.holding.round_households
+    ]
     visits = {
         visit.household_id: visit
         for visit in Visit.objects.filter(household_id__in=household_ids, served_on=day)
@@ -271,24 +303,26 @@ def round_for_collector(collector_id: str, day=None, *, user=None) -> list[dict]
     seen: set[str] = set()
     for route in routes:
         for stop in by_route.get(route.id, []):
-            # A holding sits on exactly one route (RouteStop is one-to-one on
-            # household), so this only guards against a plan repaired mid-read.
-            if stop.household_id in seen:
-                continue
-            seen.add(stop.household_id)
-            stops.append(_stop_payload(stop, route, visits.get(stop.household_id)))
+            for household in stop.holding.round_households:
+                # A building sits on exactly one route (RouteStop is one-to-one
+                # on holding), so this only guards a plan repaired mid-read.
+                if household.id in seen:
+                    continue
+                seen.add(household.id)
+                stops.append(
+                    _stop_payload(stop, household, route, visits.get(household.id))
+                )
     return stops
 
 
-def _stop_payload(stop: RouteStop, route: Route, visit: Visit | None) -> dict:
-    household = stop.household
+def _stop_payload(stop: RouteStop, household, route: Route, visit: Visit | None) -> dict:
     return {
         "hh": household.id,
         "routeId": route.id,
         "routeName": route.name,
         "seq": stop.seq,
         "head": household.head,
-        "holding": household.holding,
+        "holding": household.holding_no,
         "road": household.road.name,
         "ward": household.ward_id,
         "lat": _as_float(household.lat),
@@ -376,7 +410,7 @@ def match_scan(raw, collector_id: str, day=None, *, user=None) -> dict:
     if parsed["qr"]:
         predicate |= Q(qr__iexact=parsed["qr"])
     elsewhere = (
-        Household.objects.select_related("road").filter(predicate).first() if predicate else None
+        Household.objects.select_related("road", "holding").filter(predicate).first() if predicate else None
     )
     if elsewhere is not None:
         return {
@@ -385,7 +419,7 @@ def match_scan(raw, collector_id: str, day=None, *, user=None) -> dict:
             "household": {
                 "hh": elsewhere.id,
                 "head": elsewhere.head,
-                "holding": elsewhere.holding,
+                "holding": elsewhere.holding_no,
                 "road": elsewhere.road.name,
                 "ward": elsewhere.ward_id,
                 "qr": elsewhere.qr,
@@ -437,14 +471,20 @@ def refresh_collector_metrics(collector=None, *, days: int = 30) -> int:
     ids = [row.id for row in rows]
     since = timezone.localdate() - timedelta(days=days - 1)
 
+    # Counted in *households*, not stops. A stop is a building since the plan
+    # went holding-wise, but a visit is still one family — so counting stops
+    # here would divide twelve collections by one planned stop and report 1200%
+    # coverage for a block of flats.
     planned = {
-        entry["route__assignment_links__assignment__collector_id"]: entry["total"]
-        for entry in RouteStop.objects.filter(
-            route__active=True,
-            route__assignment_links__assignment__active=True,
-            route__assignment_links__assignment__collector_id__in=ids,
+        entry["holding__route_stop__route__assignment_links__assignment__collector_id"]:
+            entry["total"]
+        for entry in Household.objects.filter(
+            status=HoldingStatus.ACTIVE,
+            holding__route_stop__route__active=True,
+            holding__route_stop__route__assignment_links__assignment__active=True,
+            holding__route_stop__route__assignment_links__assignment__collector_id__in=ids,
         )
-        .values("route__assignment_links__assignment__collector_id")
+        .values("holding__route_stop__route__assignment_links__assignment__collector_id")
         .annotate(total=Count("id", distinct=True))
     }
 

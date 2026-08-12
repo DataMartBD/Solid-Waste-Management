@@ -13,6 +13,10 @@ in two aggregates and two bulk updates.
 
 from __future__ import annotations
 
+from io import StringIO
+
+from django.core.management import call_command
+
 import datetime as dt
 from collections import defaultdict
 from decimal import Decimal
@@ -21,6 +25,7 @@ from django.db.models import Sum
 from django.db.models.functions import Coalesce
 
 from swms.accounts.models import ScopeKind, User
+from swms.agencies.models import Agency, CollectorEmployment
 from swms.billing.models import Bill, BillingRun, BillStatus, Deposit, Payment
 from swms.catalog.models import (
     CurrentPractice,
@@ -38,7 +43,7 @@ from swms.catalog.models import (
 )
 from swms.common import ids
 from swms.complaints.models import SLA_HOURS, Complaint, ComplaintActivity, Priority
-from swms.customers.models import Household, PotentialCustomer
+from swms.customers.models import Holding, Household, PotentialCustomer
 from swms.fieldops.models import Assignment, AssignmentRoute, Collector, Route, RouteStop, Visit
 from swms.fleet.models import FuelLog, Maintenance, Van, VanStatus, VehiclePosition
 
@@ -108,6 +113,10 @@ def load_catalog() -> dict[tuple[str, str], int]:
         for ward_id, names in mock.ROADS_BY_WARD.items()
         for order, name in enumerate(names)
     )
+    # Blocks are the patch a surveyor walks. A fresh demo needs them or the
+    # survey form's block dropdown is empty, so the seed calls the same command
+    # an operator would rather than growing a second copy of the rule.
+    call_command("seed_blocks", stdout=StringIO())
     Tier.objects.bulk_create(
         Tier(
             id=row["id"],
@@ -129,12 +138,37 @@ def load_catalog() -> dict[tuple[str, str], int]:
     }
 
 
-def load_collectors() -> None:
+def load_agencies() -> Agency:
+    """The one demo contractor, and the wards it works.
+
+    A single agency mirrors the live database, where everything was attached to
+    one provider when agencies were introduced. Seeding two would make the demo
+    look like tenancy is enforced, which it is not yet.
+    """
+    agency = Agency.objects.create(
+        id="AGN-KCC-0001",
+        name=mock.AGENCY["name"],
+        short_code=mock.AGENCY["shortCode"],
+        agency_type=mock.AGENCY["type"],
+        contact_person=mock.AGENCY["contactPerson"],
+        phone=mock.AGENCY["phone"],
+        contract_no=mock.AGENCY["contractNo"],
+        contract_start=_date(mock.AGENCY["contractStart"]),
+        contract_end=_date(mock.AGENCY["contractEnd"]),
+        status="active",
+    )
+    agency.service_wards.set([row["id"] for row in mock.WARDS])
+    ids.reserve("agency", 1)
+    return agency
+
+
+def load_collectors(agency: Agency) -> None:
     Collector.objects.bulk_create(
         Collector(
             id=row["id"],
             name=row["name"],
             dsp_id=row["dspId"],
+            agency=agency,
             # The mock called this `zone` while storing a ward id.
             ward_id=row["zone"],
             phone=row["phone"],
@@ -148,6 +182,17 @@ def load_collectors() -> None:
         )
         for row in mock.COLLECTORS
     )
+    # The history behind `Collector.agency`. Opened on the joining date so the
+    # demo can answer "who employed them in March?" the same way live data will.
+    CollectorEmployment.objects.bulk_create(
+        CollectorEmployment(
+            collector_id=row["id"],
+            agency=agency,
+            from_date=_date(row["joined"]),
+            note="Seed opening record.",
+        )
+        for row in mock.COLLECTORS
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -155,20 +200,68 @@ def load_collectors() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def _profile_fields(row: dict, roads: dict[tuple[str, str], int]) -> dict:
+def load_holdings(
+    rows: list[dict], roads: dict[tuple[str, str], int], agency: Agency
+) -> dict[tuple[str, str, str], str]:
+    """Create one `Holding` per distinct address across households and surveys.
+
+    The demo data predates the holding table and carries one row per family, so
+    a building is inferred from the address its families share. Returns the
+    lookup `(ward, road, holding_no) -> holding id` that the loaders below use.
+
+    Ownership is seeded from the first family at the address: the mock has no
+    landlord field, and inventing one would put fictional names in a column
+    operators are meant to trust.
+    """
+    seen: dict[tuple[str, str, str], dict] = {}
+    for row in rows:
+        key = (row["ward"], row["road"], row["holding"])
+        if key not in seen:
+            seen[key] = row
+
+    holdings = []
+    lookup: dict[tuple[str, str, str], str] = {}
+    for index, (key, row) in enumerate(sorted(seen.items()), start=1):
+        holding_pk = f"HLD-KCC-{index:06d}"
+        lookup[key] = holding_pk
+        holdings.append(
+            Holding(
+                id=holding_pk,
+                ward_id=row["ward"],
+                road_id=roads[(row["ward"], row["road"])],
+                holding_no=row["holding"],
+                holding_type_id=row["holdingType"],
+                agency=agency,
+                owner_name=row["head"],
+                owner_phone=row["phone"],
+                address=row["address"],
+                lat=_coord(row.get("lat")),
+                lng=_coord(row.get("lng")),
+                accuracy=row["accuracy"],
+                verified=row["verified"],
+                verified_at=local_midnight(_date(row["verifiedAt"])) if row["verifiedAt"] else None,
+                verified_by_id=row["verifiedBy"],
+                status="active",
+            )
+        )
+    Holding.objects.bulk_create(holdings, batch_size=BATCH)
+    ids.reserve("holding", len(holdings))
+    return lookup
+
+
+def _profile_fields(
+    row: dict, roads: dict[tuple[str, str], int], holdings: dict[tuple[str, str, str], str]
+) -> dict:
     return {
+        "holding_id": holdings[(row["ward"], row["road"], row["holding"])],
+        "unit": row.get("unit", ""),
         "ward_id": row["ward"],
         "road_id": roads[(row["ward"], row["road"])],
-        "holding": row["holding"],
+        "holding_no": row["holding"],
         "head": row["head"],
         "phone": row["phone"],
-        # A surveyed holding has no coordinates at all until it is verified.
-        "lat": _coord(row.get("lat")),
-        "lng": _coord(row.get("lng")),
-        "accuracy": row["accuracy"],
-        "verified": row["verified"],
-        "verified_at": local_midnight(_date(row["verifiedAt"])) if row["verifiedAt"] else None,
-        "verified_by_id": row["verifiedBy"],
+        # No coordinates here any more: the pin belongs to the holding created
+        # above, and these rows read it through.
         "customer_type_id": row["customerType"],
         "profession": row["profession"],
         "address": row["address"],
@@ -186,7 +279,11 @@ def _profile_fields(row: dict, roads: dict[tuple[str, str], int]) -> dict:
     }
 
 
-def load_households(rows: list[dict], roads: dict[tuple[str, str], int]) -> None:
+def load_households(
+    rows: list[dict],
+    roads: dict[tuple[str, str], int],
+    holdings: dict[tuple[str, str, str], str],
+) -> None:
     """Load holdings. `dues` starts at zero — settle() derives it from the bills.
 
     The mock carried a hand-written dues figure per household that no billing
@@ -203,7 +300,7 @@ def load_households(rows: list[dict], roads: dict[tuple[str, str], int]) -> None
                 payment_mode_id=row["paymentMode"],
                 payment_day=row["paymentDay"],
                 dues=0,
-                **_profile_fields(row, roads),
+                **_profile_fields(row, roads, holdings),
             )
             for row in rows
         ),
@@ -211,7 +308,11 @@ def load_households(rows: list[dict], roads: dict[tuple[str, str], int]) -> None
     )
 
 
-def load_potential_customers(rows: list[dict], roads: dict[tuple[str, str], int]) -> None:
+def load_potential_customers(
+    rows: list[dict],
+    roads: dict[tuple[str, str], int],
+    holdings: dict[tuple[str, str, str], str],
+) -> None:
     PotentialCustomer.objects.bulk_create(
         PotentialCustomer(
             id=row["id"],
@@ -221,7 +322,7 @@ def load_potential_customers(rows: list[dict], roads: dict[tuple[str, str], int]
             reason_id=row["reason"],
             time_gap_id=row["timeGap"],
             current_practice_id=row["currentPractice"],
-            **_profile_fields(row, roads),
+            **_profile_fields(row, roads, holdings),
         )
         for row in rows
     )
@@ -232,12 +333,35 @@ def load_potential_customers(rows: list[dict], roads: dict[tuple[str, str], int]
 # --------------------------------------------------------------------------- #
 
 
-def load_plan(routes: list[dict], assignments: list[dict], effective_from: dt.date) -> None:
+def _holdings_for(household_ids: list[str]) -> list[str]:
+    """The buildings behind a list of households, in order and without repeats.
+
+    The mock plans a round as a list of households, because that is what it had.
+    The plan is holding-wise, so two flats of one building are one stop — the
+    first occurrence keeps the position, which preserves the walking order.
+    """
+    by_household = dict(
+        Household.objects.filter(pk__in=household_ids).values_list("id", "holding_id")
+    )
+    ordered, seen = [], set()
+    for household_id in household_ids:
+        holding_id = by_household.get(household_id)
+        if holding_id is None or holding_id in seen:
+            continue
+        seen.add(holding_id)
+        ordered.append(holding_id)
+    return ordered
+
+
+def load_plan(
+    routes: list[dict], assignments: list[dict], effective_from: dt.date, agency: Agency
+) -> None:
     Route.objects.bulk_create(
         Route(
             id=route["id"],
             name=route["name"],
             ward_id=route["ward"],
+            agency=agency,
             window_start=route["window_start"],
             window_end=route["window_end"],
             active=route["active"],
@@ -246,9 +370,11 @@ def load_plan(routes: list[dict], assignments: list[dict], effective_from: dt.da
     )
     RouteStop.objects.bulk_create(
         (
-            RouteStop(route_id=route["id"], household_id=household_id, seq=seq)
+            # The generator lists stops as households; the plan is holding-wise,
+            # so each is mapped to its building and repeats collapse.
+            RouteStop(route_id=route["id"], holding_id=holding_id, seq=seq)
             for route in routes
-            for seq, household_id in enumerate(route["stops"], start=1)
+            for seq, holding_id in enumerate(_holdings_for(route["stops"]), start=1)
         ),
         batch_size=BATCH,
     )
@@ -268,13 +394,14 @@ def load_plan(routes: list[dict], assignments: list[dict], effective_from: dt.da
     )
 
 
-def load_visits(rows: list[dict]) -> None:
+def load_visits(rows: list[dict], agency: Agency) -> None:
     Visit.objects.bulk_create(
         (
             Visit(
                 id=row["id"],
                 household_id=row["hh"],
                 collector_id=row["collector"],
+                agency=agency if row["collector"] else None,
                 route_id=row["route"],
                 qr=row["qr"],
                 status=row["status"],
@@ -365,12 +492,15 @@ def load_positions(rng, now: dt.datetime) -> None:
     stops_by_collector: dict[str, list[tuple[Decimal, Decimal]]] = {}
     routed = (
         Household.objects.filter(
-            route_stop__isnull=False,
-            lat__isnull=False,
-            route_stop__route__assignment_links__assignment__active=True,
+            holding__route_stop__isnull=False,
+            holding__lat__isnull=False,
+            holding__route_stop__route__assignment_links__assignment__active=True,
         )
-        .values_list("route_stop__route__assignment_links__assignment__collector_id", "id", "lat", "lng")
-        .order_by("route_stop__route_id", "route_stop__seq")
+        .values_list(
+            "holding__route_stop__route__assignment_links__assignment__collector_id",
+            "id", "holding__lat", "holding__lng",
+        )
+        .order_by("holding__route_stop__route_id", "holding__route_stop__seq")
     )
     for collector_id, _hh, lat, lng in routed:
         if collector_id:
@@ -462,7 +592,9 @@ def load_complaints() -> None:
 DUE_AFTER = dt.timedelta(days=10)
 
 
-def load_billing(bills: list[dict], payments: list[dict], deposits: list[dict]) -> None:
+def load_billing(
+    bills: list[dict], payments: list[dict], deposits: list[dict], agency: Agency
+) -> None:
     runs = _load_billing_runs(bills)
     Bill.objects.bulk_create(
         (
@@ -487,6 +619,7 @@ def load_billing(bills: list[dict], payments: list[dict], deposits: list[dict]) 
             Deposit(
                 id=row["id"],
                 collector_id=row["collector"],
+                agency=agency,
                 period=row["period"],
                 method_id=row["method"],
                 amount=row["amount"],
@@ -504,6 +637,7 @@ def load_billing(bills: list[dict], payments: list[dict], deposits: list[dict]) 
                 bill_id=row["bill"],
                 household_id=row["hh"],
                 collector_id=row["collector"],
+                agency=agency if row["collector"] else None,
                 amount=row["amount"],
                 method_id=row["method"],
                 at=localize(row["at"]),

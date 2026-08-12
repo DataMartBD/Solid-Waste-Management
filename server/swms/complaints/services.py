@@ -120,6 +120,8 @@ def _broadcast(complaint: Complaint, event: str = COMPLAINT_UPDATED) -> None:
             "sla": complaint.sla,
             "opened": complaint.opened.isoformat() if complaint.opened else None,
         },
+        # A complaint belongs to whoever services the building it is about.
+        agency_id=complaint.household.holding.agency_id if complaint.household_id else None,
     )
 
 

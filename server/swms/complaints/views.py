@@ -150,6 +150,7 @@ class ComplaintViewSet(SwmsModelViewSet):
     #: Ordering is triage order unless the client asks for something else.
     ordering_fields = ["opened", "priority", "status", "sla", "id"]
     ward_scope_field = "ward_id"
+    agency_scope_field = "household__holding__agency_id"
     # Collectors add notes and progress the jobs on their own round; ward scoping
     # already stops them seeing another ward's tickets.
     write_roles = OPERATIONAL_WRITERS | {Role.COLLECTOR}

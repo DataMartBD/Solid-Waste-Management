@@ -82,6 +82,19 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     emergency_contact = models.CharField(max_length=120, blank=True)
     avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
 
+    #: Which agency this user belongs to. Null for KCC's own staff and viewers.
+    #:
+    #: Purely informational today — `visible_ward_ids()` does not consult it, so
+    #: nobody's access changes. It is here so the tenancy work has something to
+    #: read when agency becomes a real boundary.
+    agency = models.ForeignKey(
+        "agencies.Agency",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="users",
+    )
+
     # --- link to the field-staff record, when this user is a collector ---- #
     collector = models.ForeignKey(
         "fieldops.Collector",
@@ -140,6 +153,22 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         if self.scope_kind == ScopeKind.ZONE:
             return f"Zone {self.scope_zone.removeprefix('Z-')}" if self.scope_zone else "Zone"
         return ScopeKind(self.scope_kind).label
+
+    def visible_agency_id(self) -> str | None:
+        """The agency this user is confined to; ``None`` means no restriction.
+
+        The companion to `visible_ward_ids`, and the second scoping axis. Ward
+        stopped being sufficient once two agencies could work one ward: filtering
+        by ward alone would hand a contractor its rival's rows.
+
+        KCC's own staff and viewers have no agency and are unrestricted, which is
+        what keeps agency scoping inert until somebody is deliberately made a
+        tenant. Superusers bypass, matching `visible_ward_ids` — so an agency
+        admin must never be given `is_superuser`.
+        """
+        if self.is_superuser:
+            return None
+        return self.agency_id or None
 
     def visible_ward_ids(self) -> list[str] | None:
         """Ward ids this user may see; ``None`` means "no restriction"."""

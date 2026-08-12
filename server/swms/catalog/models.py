@@ -59,6 +59,35 @@ class Ward(models.Model):
         return self.name.split("—")[0].strip()
 
 
+class Block(models.Model):
+    """A named division of a ward — 'Block-A', 'Block-B'.
+
+    A ward is too coarse for door-to-door work: surveyors are given a block and
+    walk it. It sits beside `Road` rather than above or below it, because the
+    two are different ways of cutting the same ward and a road can run through
+    more than one block.
+
+    Optional everywhere. Wards that are not divided into blocks simply have
+    none, and nothing requires one.
+    """
+
+    id = models.CharField(max_length=16, primary_key=True, help_text="e.g. W-22-A")
+    ward = models.ForeignKey(Ward, on_delete=models.CASCADE, related_name="blocks")
+    name = models.CharField(max_length=60, help_text="e.g. Block-A")
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "block"
+        ordering = ["ward_id", "sort_order", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["ward", "name"], name="block_unique_per_ward")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.ward_id})"
+
+
 class Road(models.Model):
     """A road within a ward. Households live on one."""
 
@@ -77,6 +106,55 @@ class Road(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.ward_id})"
+
+
+class GeoLocation(models.Model):
+    """The national administrative table: division → district → upazila → union.
+
+    Separate from `Zone`/`Ward`/`Road` on purpose. Those are Khulna City
+    Corporation's own service geography — the units routes and collectors are
+    organised by. This is Bangladesh's, and it is the same 4,537 rows for every
+    deployment. Holding an upazila here does not make it a ward, and no route
+    will ever be planned from it.
+
+    Deliberately flat, one row per union, exactly as the source file lists them.
+    Normalising it into four tables would buy referential tidiness for data that
+    is loaded whole, never edited, and only ever read as "the districts" or "the
+    upazilas of this district" — both of which are one indexed query here.
+
+    Every name is carried in English and Bangla because the form is used in both.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    division_name = models.CharField(max_length=64)
+    division_bn = models.CharField(max_length=64)
+    district_name = models.CharField(max_length=64)
+    district_bn = models.CharField(max_length=64)
+    #: Thana and upazila are the same unit under two names — the form asks for
+    #: "thana / upazila" and this is the column behind it.
+    upazila_name = models.CharField(max_length=96)
+    upazila_bn = models.CharField(max_length=96)
+    union_name = models.CharField(max_length=96)
+    union_bn = models.CharField(max_length=96)
+
+    class Meta:
+        db_table = "geo_location"
+        ordering = ["division_name", "district_name", "upazila_name", "union_name"]
+        indexes = [
+            # The two reads the holding form makes: the district list, and the
+            # upazilas of the district just chosen.
+            models.Index(fields=["district_name"], name="geo_district_idx"),
+            models.Index(fields=["district_name", "upazila_name"], name="geo_upazila_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["division_name", "district_name", "upazila_name", "union_name"],
+                name="geo_location_unique_union",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.union_name}, {self.upazila_name}, {self.district_name}"
 
 
 class Tier(OptionModel):

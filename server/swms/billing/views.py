@@ -25,7 +25,7 @@ from swms.common.permissions import IsAgencyAdmin
 from swms.common.roles import ADMIN_WRITERS, OPERATIONAL_WRITERS, Role
 from swms.common.views import SwmsModelViewSet
 
-from .models import Bill, BillingRun, BillStatus, Deposit, Payment
+from .models import Bill, BillingRun, BillStatus, Deposit, Payment, Remittance
 from .serializers import (
     BillingRunSerializer,
     BillSerializer,
@@ -34,8 +34,11 @@ from .serializers import (
     PaymentSerializer,
     RecordDepositSerializer,
     RecordPaymentSerializer,
+    RecordRemittanceSerializer,
+    RemittanceSerializer,
 )
 from .services import (
+    agency_cash_position,
     billing_summary,
     cash_position,
     generate_bills,
@@ -43,6 +46,7 @@ from .services import (
     period_bounds,
     record_deposit,
     record_payment,
+    record_remittance,
     void_payment,
     with_paid_total,
 )
@@ -101,10 +105,12 @@ class BillViewSet(SwmsModelViewSet):
 
     serializer_class = BillSerializer
     filterset_class = BillFilter
-    search_fields = ["id", "household_id", "household__head", "household__holding"]
+    search_fields = ["id", "household_id", "household__head", "household__holding_no"]
     ordering_fields = ["period", "issued_at", "amount", "status", "household_id"]
     ordering = ["-period", "household_id"]
     ward_scope_field = "ward_id"
+    #: A bill has no collector, so it belongs to whoever services the building.
+    agency_scope_field = "household__holding__agency_id"
     #: Issuing charges is an agency-admin act; a supervisor collects, not bills.
     write_roles = ADMIN_WRITERS
 
@@ -242,6 +248,7 @@ class PaymentViewSet(SwmsModelViewSet):
     ordering = ["-at"]
     #: A payment belongs to the ward its household sits in.
     ward_scope_field = "household__ward_id"
+    agency_scope_field = "agency_id"
     #: Collectors take money in the field, so they must be able to record it.
     write_roles = PAYMENT_WRITERS
 
@@ -296,10 +303,13 @@ class DepositViewSet(SwmsModelViewSet):
     # about a ward, and a supervisor reconciling their team needs to see all of
     # it. `None` here is a decision, not an omission.
     ward_scope_field = None
+    # …but it *is* an agency fact: the cash belongs to whoever employed the
+    # collector, which is why `Deposit.agency` is stamped at write time.
+    agency_scope_field = "agency_id"
     write_roles = OPERATIONAL_WRITERS
 
     def get_queryset(self):
-        return Deposit.objects.select_related("collector", "method")
+        return self.scope_queryset(Deposit.objects.select_related("collector", "method"))
 
     @action(detail=False, methods=["post"])
     def record(self, request):
@@ -338,13 +348,76 @@ class BillingRunViewSet(SwmsModelViewSet):
     search_fields = ["period"]
     #: A run is not ward-scoped — it covers the whole city for one month.
     ward_scope_field = None
+    #: Nor agency-scoped: KCC issues the charges, and a run is the corporation's
+    #: own act covering every contractor at once. There is nothing here that
+    #: belongs to one agency.
+    agency_scope_field = None
     write_roles = ADMIN_WRITERS
 
     def get_queryset(self):
-        return BillingRun.objects.select_related("generated_by")
+        return self.scope_queryset(BillingRun.objects.select_related("generated_by"))
 
     def create(self, request, *args, **kwargs):
         raise DomainError(
             "A billing run is created by POST /api/bills/generate/.",
             code="use_billing_run",
+        )
+
+
+class RemittanceFilter(filters.FilterSet):
+    agency = filters.CharFilter(field_name="agency_id")
+
+    class Meta:
+        model = Remittance
+        fields = ["agency", "period", "method"]
+
+
+class RemittanceViewSet(SwmsModelViewSet):
+    """Agency hand-overs to KCC, and the cash position they close out."""
+
+    serializer_class = RemittanceSerializer
+    filterset_class = RemittanceFilter
+    search_fields = ["id", "agency__name", "agency__short_code", "ref"]
+    ordering_fields = ["at", "period", "amount"]
+    ordering = ["-at"]
+    # Like deposits: a remittance is a fact about an agency and a month, not
+    # about a ward.
+    ward_scope_field = None
+    agency_scope_field = "agency_id"
+    # Money leaving the contractor for the corporation is master-data territory.
+    write_roles = ADMIN_WRITERS
+
+    def get_queryset(self):
+        return self.scope_queryset(
+            Remittance.objects.select_related("agency", "method", "received_by")
+        )
+
+    @action(detail=False, methods=["post"])
+    def record(self, request):
+        """Record one transfer. Several a month are normal — see the model."""
+        serializer = RecordRemittanceSerializer(
+            data=request.data, context=self.get_serializer_context()
+        )
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        remittance = record_remittance(
+            data["agency"],
+            data["period"],
+            data["method"],
+            data["amount"],
+            at=data.get("at"),
+            ref=data.get("ref", ""),
+            note=data.get("note", ""),
+            user=request.user,
+        )
+        return Response(self.get_serializer(remittance).data, status=201)
+
+    @action(detail=False, methods=["get"], url_path="cash-position")
+    def cash_position(self, request):
+        """Collected → deposited → remitted, per agency, for one month."""
+        period = request.query_params.get("period")
+        if not period:
+            raise DomainError("A ?period=YYYY-MM is required.", code="period_required")
+        return Response(
+            agency_cash_position(period, agency=request.query_params.get("agency") or None)
         )
