@@ -32,7 +32,8 @@ from swms.catalog.models import (
     TimeGap,
     Ward,
 )
-from swms.common.scoping import guard_ward
+from swms.agencies.models import Agency
+from swms.common.scoping import guard_agency, guard_ward
 from swms.common.serializers import SwmsModelSerializer
 from swms.fieldops.models import Collector
 
@@ -180,6 +181,15 @@ class HoldingSerializer(SwmsModelSerializer):
     householdCount = serializers.SerializerMethodField()
     activeHouseholdCount = serializers.SerializerMethodField()
 
+    #: Which contractor services this building. Writable so an unbound creator —
+    #: KCC's own staff, a super admin — can say; `perform_create` fills it from
+    #: the creator when they have an agency of their own, which covers everyone
+    #: else. Left unset the building is invisible to every agency-bound user,
+    #: which is how five of them went missing before this was exposed.
+    agency = serializers.PrimaryKeyRelatedField(
+        queryset=Agency.objects.all(), required=False, allow_null=True
+    )
+
     #: National geography. Optional — nothing registered before these fields
     #: existed has them, and an edit that does not mention them leaves them be.
     district = serializers.CharField(required=False, allow_blank=True)
@@ -189,6 +199,7 @@ class HoldingSerializer(SwmsModelSerializer):
         model = Holding
         fields = [
             "id",
+            "agency",
             "district",
             "thana",
             "ward",
@@ -224,6 +235,16 @@ class HoldingSerializer(SwmsModelSerializer):
 
     def get_activeHouseholdCount(self, obj) -> int:
         return sum(1 for h in obj.households.all() if h.status == "active")
+
+    def validate_agency(self, agency):
+        """Refuse an agency the caller is not part of.
+
+        Without it a bound supervisor could file a building under a rival
+        contractor — and then never see it again, because the same boundary that
+        hides it from them is the one they just wrote across.
+        """
+        guard_agency(self, agency.id if agency else None)
+        return agency
 
     def validate_ward(self, ward):
         """Refuse a ward the caller is not scoped to.

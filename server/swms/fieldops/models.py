@@ -18,6 +18,8 @@ truth.
 
 from __future__ import annotations
 
+import datetime as dt
+
 from django.core.validators import MaxValueValidator
 from django.db import models, transaction
 from django.db.models import Q
@@ -143,8 +145,13 @@ class Route(TextKeyModel):
         on_delete=models.PROTECT,
         related_name="routes",
     )
-    window_start = models.TimeField(default="06:00")
-    window_end = models.TimeField(default="09:30")
+    # Real `time` objects, not the strings these used to be. A string default is
+    # accepted on the way into the database, but the in-memory instance keeps it
+    # verbatim — so a route created without explicit times and then serialised in
+    # the same breath reached `window` below holding a `str`, and formatting it
+    # raised. That is every route created through the API without a window.
+    window_start = models.TimeField(default=dt.time(6, 0))
+    window_end = models.TimeField(default=dt.time(9, 30))
     active = models.BooleanField(default=True)
 
     class Meta:

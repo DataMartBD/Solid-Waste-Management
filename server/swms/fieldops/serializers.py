@@ -23,8 +23,9 @@ from collections import Counter
 
 from rest_framework import serializers
 
+from swms.agencies.models import Agency
 from swms.catalog.models import Ward
-from swms.common.scoping import guard
+from swms.common.scoping import guard, guard_agency
 from swms.common.serializers import IdListField, NullableDecimal, SwmsModelSerializer
 from swms.customers.models import Holding, Household
 
@@ -195,11 +196,27 @@ class RouteSerializer(SwmsModelSerializer):
         source="window_end", required=False, format="%H:%M", input_formats=TIME_FORMATS
     )
     stops = StopIdsField(required=False)
+    #: Whose round this is. Filled from the creator when they have an agency;
+    #: writable so an unbound one — KCC's own staff, a super admin — can say.
+    #: A route with none is invisible to every agency-bound user, which is how
+    #: two of them became unreachable before this was exposed.
+    agency = serializers.PrimaryKeyRelatedField(
+        queryset=Agency.objects.all(), required=False, allow_null=True
+    )
 
     class Meta:
         model = Route
-        fields = ["id", "name", "ward", "window", "windowStart", "windowEnd", "stops", "active"]
+        fields = [
+            "id", "name", "ward", "agency", "window", "windowStart", "windowEnd",
+            "stops", "active",
+        ]
         read_only_fields = ["id"]
+
+    def validate_agency(self, agency):
+        """Refuse an agency the caller is not part of — planning a round for a
+        rival contractor, and losing sight of it in the same stroke."""
+        guard_agency(self, agency.id if agency else None)
+        return agency
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

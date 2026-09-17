@@ -9,10 +9,21 @@
 // This map is the single source of truth, read by both the router (App.jsx) and
 // the sidebar (Layout.jsx). Keys are `roleKey` values from the API.
 
-export const ROLES = ['collector', 'supervisor', 'agency_admin', 'kcc_viewer']
+export const ROLES = ['collector', 'supervisor', 'agency_admin', 'super_admin', 'kcc_viewer']
 
 const ALL = ROLES
-const OFFICE = ['supervisor', 'agency_admin']
+const OFFICE = ['supervisor', 'agency_admin', 'super_admin']
+// Both administrators. They reach the same *pages*; what separates them is what
+// the server sends back — an agency admin's lists are narrowed to their own
+// contractor. Access control by row, not by screen, so there is no second copy
+// of the tenancy rule here to drift out of step with the one on the server.
+//
+// There is deliberately no super-admin-only *page*. What only a super admin may
+// do — redraw the city's wards, register an agency, run the month's billing over
+// every contractor — are individual actions inside shared screens, and the
+// server refuses them per action. A page-level rule here would be a second,
+// coarser copy of that.
+const ADMINS = ['agency_admin', 'super_admin']
 
 //: path -> roles allowed. A path absent from this map is open to any signed-in user.
 export const ROUTE_ACCESS = {
@@ -43,10 +54,18 @@ export const ROUTE_ACCESS = {
   '/app/billing': OFFICE,
   '/app/fleet': OFFICE,
   '/app/collectors': OFFICE,
-  // Contracts, licences and remittances. Writes are agency-admin only on the
-  // server, so the page is too — showing a supervisor buttons that 403 would
-  // be worse than not offering the page.
-  '/app/agencies': ['agency_admin'],
+  // Contracts, licences and remittances — what KCC holds a contractor to. The
+  // corporation's own screen, so a contractor does not get it: they would be
+  // reading their own contract terms on a page built to set them, and the
+  // server refuses every write on it anyway.
+  //
+  // Their agency's *name* still reaches them; that comes from the agency list,
+  // which every signed-in user loads for the pickers elsewhere.
+  '/app/agencies': ['super_admin'],
+  // Operator accounts. Agency-admin only on *both* verbs — unlike every other
+  // page, the server restricts reading too, because the list is every
+  // operator's phone number, national ID and next of kin.
+  '/app/users': ADMINS,
   // City-wide oversight is exactly what the KCC viewer exists for.
   '/app/reports': ['kcc_viewer', ...OFFICE],
   '/app/reports-customer': ['kcc_viewer', ...OFFICE],

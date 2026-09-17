@@ -2,12 +2,17 @@
 
 `GET /api/catalog/` returns everything the React app used to import from
 mockData.js as static arrays, in one round trip. The individual CRUD viewsets
-below exist so an agency admin can maintain the lists.
+below exist so the corporation can maintain the lists.
 
 None of it is agency-scoped, and that is a decision rather than an omission:
 wards, roads, tiers and the option lists are the city's own vocabulary. Two
 contractors working the same ward must name the same road the same way, and
 hiding Ward 14 from one of them would break every form that offers it.
+
+Which is also why writing it is `SUPER_ADMINS` and not `ADMIN_WRITERS`. Reading
+stays open to everyone signed in — every form needs the ward list — but an
+agency admin confined to one contractor must not be able to rename the road
+another contractor works, or reprice a tier the whole city is billed on.
 """
 
 from __future__ import annotations
@@ -19,7 +24,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from swms.common.roles import ADMIN_WRITERS
+from swms.common.roles import SUPER_ADMINS
 from swms.common.views import SwmsModelViewSet
 
 from .models import (
@@ -127,13 +132,13 @@ def catalog_bundle(request):
 class ZoneViewSet(SwmsModelViewSet):
     queryset = Zone.objects.all()
     serializer_class = ZoneSerializer
-    write_roles = ADMIN_WRITERS
+    write_roles = SUPER_ADMINS
 
 
 class WardViewSet(SwmsModelViewSet):
     queryset = Ward.objects.select_related("zone").all()
     serializer_class = WardSerializer
-    write_roles = ADMIN_WRITERS
+    write_roles = SUPER_ADMINS
     filterset_fields = ["zone", "active"]
     search_fields = ["id", "name"]
 
@@ -147,7 +152,7 @@ class BlockViewSet(SwmsModelViewSet):
 
     queryset = Block.objects.select_related("ward").all()
     serializer_class = BlockSerializer
-    write_roles = ADMIN_WRITERS
+    write_roles = SUPER_ADMINS
     filterset_fields = ["ward", "active"]
     search_fields = ["id", "name"]
 
@@ -155,7 +160,7 @@ class BlockViewSet(SwmsModelViewSet):
 class RoadViewSet(SwmsModelViewSet):
     queryset = Road.objects.select_related("ward").all()
     serializer_class = RoadSerializer
-    write_roles = ADMIN_WRITERS
+    write_roles = SUPER_ADMINS
     filterset_fields = ["ward", "active"]
     search_fields = ["name"]
 
@@ -163,4 +168,4 @@ class RoadViewSet(SwmsModelViewSet):
 class TierViewSet(SwmsModelViewSet):
     queryset = Tier.objects.all()
     serializer_class = TierSerializer
-    write_roles = ADMIN_WRITERS
+    write_roles = SUPER_ADMINS

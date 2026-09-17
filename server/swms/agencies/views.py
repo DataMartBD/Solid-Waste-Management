@@ -13,7 +13,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from swms.common.roles import ADMIN_WRITERS
+from swms.common.roles import SUPER_ADMINS
 from swms.common.views import SwmsModelViewSet
 from swms.fieldops.models import Collector
 
@@ -43,8 +43,17 @@ class AgencyViewSet(SwmsModelViewSet):
     search_fields = ["id", "name", "short_code", "contact_person", "phone", "contract_no"]
     ordering_fields = ["name", "short_code", "contract_end", "created_at"]
     agency_scope_field = "id"
-    # Staff and contract records are master data, like the fleet and the tiers.
-    write_roles = ADMIN_WRITERS
+    #: Writing is the corporation's, not a tenant's — every verb, not just
+    #: registering one. The contract, the licence dates, the service wards and
+    #: the status are what KCC holds a contractor to; a contractor editing their
+    #: own is marking their own homework.
+    #:
+    #: Reading stays open and scoped, and that is deliberate. The SPA loads this
+    #: list for every signed-in user — it is where agency *names* come from, for
+    #: the picker on the Users page and the one on the Holding editor — and the
+    #: scope field above already narrows a tenant to their own row. Seeing your
+    #: own agency's name is not access to the Agency Master.
+    write_roles = SUPER_ADMINS
 
     def get_queryset(self):
         return self.scope_queryset(

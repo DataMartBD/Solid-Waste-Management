@@ -32,6 +32,15 @@ class RoleWritePermission(BasePermission):
 
 
 class IsAgencyAdmin(BasePermission):
+    """An administrator — of one agency, or of the whole corporation.
+
+    Both are admitted, because everything gated on this is administration *of*
+    something an agency owns. What separates them is not the door, it is the
+    queryset behind it: an agency admin's narrows to their own contractor, a
+    super admin's does not. See `IsSuperAdmin` for the acts that belong to no
+    agency at all.
+    """
+
     message = "Agency administrator access required."
 
     def has_permission(self, request, view):
@@ -40,6 +49,27 @@ class IsAgencyAdmin(BasePermission):
             user
             and user.is_authenticated
             and (user.is_superuser or user.role in {r.value for r in ADMIN_WRITERS})
+        )
+
+
+class IsSuperAdmin(BasePermission):
+    """The corporation's own administrator.
+
+    For the acts that are not any one contractor's: redrawing the city's wards
+    and roads, setting service tiers, registering a new agency, and running the
+    month's billing over every agency at once. An agency admin confined to their
+    own tenant has no standing to do these, which is the whole point of the
+    confinement.
+    """
+
+    message = "Super administrator access required."
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(
+            user
+            and user.is_authenticated
+            and (user.is_superuser or user.role == Role.SUPER_ADMIN.value)
         )
 
 

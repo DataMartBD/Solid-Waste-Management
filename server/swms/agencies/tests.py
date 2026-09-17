@@ -151,9 +151,13 @@ class EmploymentTests(AgencyData):
 
 class AgencyApiTests(AgencyData):
     def setUp(self):
+        # The corporation's administrator, not a contractor's. Registering an
+        # agency is KCC's act: an agency admin is confined to their own row by
+        # `agency_scope_field`, so creating a second agency is not theirs to do.
+        # `TenancyTests` below covers what one of those *can* reach.
         self.admin = User.objects.create_user(
-            phone="01900445566", name="Admin", role=Role.AGENCY_ADMIN,
-            scope_kind=ScopeKind.AGENCY,
+            phone="01900445566", name="Admin", role=Role.SUPER_ADMIN,
+            scope_kind=ScopeKind.CITY,
         )
         self.client = APIClient()
         self.client.force_authenticate(self.admin)
@@ -605,17 +609,32 @@ class WriteGuardTests(TenancyTests):
         self.assertEqual(response.status_code, 400)
         self.assertIn("collector", response.json()["fields"])
 
-    def test_a_remittance_cannot_be_recorded_for_another_agency(self):
+    def test_a_tenant_cannot_record_a_remittance_at_all(self):
+        """403 rather than the 400 a field guard would give, and deliberately.
+
+        This used to be narrowed — a tenant could record their own hand-over but
+        not a rival's. Recording one is KCC acknowledging money received, and it
+        is entered from the Agency Master screen, which is the corporation's; so
+        the rule moved from the `agency` field up to the endpoint. Refusing the
+        whole verb is the stricter answer, and it makes the other agency's id
+        irrelevant rather than merely rejected.
+        """
         from swms.catalog.models import PaymentMode
 
         PaymentMode.objects.get_or_create(id="cash", defaults={"key": "opt.pm", "label": "Cash"})
-        response = self.client.post(
-            reverse("remittance-record"),
-            {"agency": self.second.id, "period": "2026-03", "method": "cash", "amount": 100},
-            format="json",
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("agency", response.json()["fields"])
+        for agency in (self.first, self.second):
+            response = self.client.post(
+                reverse("remittance-record"),
+                {"agency": agency.id, "period": "2026-03", "method": "cash", "amount": 100},
+                format="json",
+            )
+            self.assertEqual(response.status_code, 403)
+
+    def test_a_tenant_still_sees_their_own_remittances(self):
+        """Closing the write must not close the record: an agency needs to see
+        what it has handed over."""
+        response = self.client.get(reverse("remittance-list"))
+        self.assertEqual(response.status_code, 200)
 
     def test_my_own_records_are_still_writable(self):
         """The guards must narrow, not block."""

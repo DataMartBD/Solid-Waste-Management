@@ -21,8 +21,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from swms.common.exceptions import DomainError
-from swms.common.permissions import IsAgencyAdmin
-from swms.common.roles import ADMIN_WRITERS, OPERATIONAL_WRITERS, Role
+from swms.common.permissions import IsAgencyAdmin, IsSuperAdmin
+from swms.common.roles import ADMIN_WRITERS, OPERATIONAL_WRITERS, Role, SUPER_ADMINS
 from swms.common.views import SwmsModelViewSet
 
 from .models import Bill, BillingRun, BillStatus, Deposit, Payment, Remittance
@@ -182,9 +182,16 @@ class BillViewSet(SwmsModelViewSet):
         # `received` / `outstanding` / `settlement` rather than stale values.
         return Response(self.get_serializer(self.get_queryset().get(pk=bill.pk)).data)
 
-    @action(detail=False, methods=["post"], permission_classes=[IsAgencyAdmin])
+    @action(detail=False, methods=["post"], permission_classes=[IsSuperAdmin])
     def generate(self, request):
-        """Run — or with `dryRun`, preview — one month's charges."""
+        """Run — or with `dryRun`, preview — one month's charges.
+
+        Super-admin only. `generate_bills` takes a period and nothing else: it
+        charges every household in the city, across every contractor. An agency
+        admin confined to their own tenant would be issuing the other
+        contractors' invoices, which is not a permission they are supposed to
+        hold no matter how the queryset behind the list is scoped.
+        """
         serializer = GenerateBillsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -352,7 +359,10 @@ class BillingRunViewSet(SwmsModelViewSet):
     #: own act covering every contractor at once. There is nothing here that
     #: belongs to one agency.
     agency_scope_field = None
-    write_roles = ADMIN_WRITERS
+    #: And because it is the corporation's act over everybody, it is not an
+    #: agency admin's to make. Reading stays open — a contractor may see that a
+    #: month was billed — but issuing one is `SUPER_ADMINS`.
+    write_roles = SUPER_ADMINS
 
     def get_queryset(self):
         return self.scope_queryset(BillingRun.objects.select_related("generated_by"))
@@ -384,8 +394,12 @@ class RemittanceViewSet(SwmsModelViewSet):
     # about a ward.
     ward_scope_field = None
     agency_scope_field = "agency_id"
-    # Money leaving the contractor for the corporation is master-data territory.
-    write_roles = ADMIN_WRITERS
+    #: Recording a hand-over is KCC acknowledging receipt, so it follows the
+    #: Agency Master screen it is entered from — which is now the corporation's
+    #: alone. Left at `ADMIN_WRITERS` this would be an endpoint with no UI behind
+    #: it, on which a contractor could certify money they say they handed over.
+    #: Reading stays scoped, so an agency still sees its own hand-overs.
+    write_roles = SUPER_ADMINS
 
     def get_queryset(self):
         return self.scope_queryset(

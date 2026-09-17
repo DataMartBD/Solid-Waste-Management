@@ -66,6 +66,32 @@ class WardScopedQuerysetMixin:
         return self.scope_queryset(super().get_queryset())
 
 
+class StampsCreatorAgencyMixin:
+    """Give a new row the creating user's agency, when they have one.
+
+    Agency is an access boundary, and the filter that enforces it matches on the
+    column — so a row created with none is invisible to every agency-bound user,
+    including the one who just created it. That is not a theoretical shape: it is
+    how five holdings and two routes ended up unreachable before this existed.
+
+    Only fills a gap, never overrides. A caller who names an agency has already
+    been checked against their own by the serializer's `guard_agency`, and a
+    survey converted into a holding carries the agency of whoever walked the
+    street — neither should be second-guessed here.
+
+    An unbound creator — KCC's own staff, a super admin — has nothing to infer
+    from, so the field is left as sent. For them the answer has to come from the
+    form, which is why `agency` is writable on both endpoints.
+    """
+
+    def perform_create(self, serializer):
+        mine = self.request.user.visible_agency_id()
+        if mine is not None and not serializer.validated_data.get("agency"):
+            serializer.save(agency_id=mine)
+            return
+        serializer.save()
+
+
 class SwmsModelViewSet(WardScopedQuerysetMixin, viewsets.ModelViewSet):
     """The default CRUD endpoint shape for this project."""
 

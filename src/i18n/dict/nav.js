@@ -22,6 +22,7 @@ export default {
     'nav.routePlan': 'Route Plan',
     'nav.reports': 'Reports',
     'nav.reportsCustomer': 'Customer Reports',
+    'nav.users': 'Users',
     'nav.profile': 'My Profile',
 
     'nav.accessScope': 'Access scope',
@@ -59,6 +60,7 @@ export default {
     'nav.routePlan': 'রুট প্ল্যান',
     'nav.reports': 'রিপোর্ট',
     'nav.reportsCustomer': 'গ্রাহকভিত্তিক রিপোর্ট',
+    'nav.users': 'ব্যবহারকারী',
     'nav.profile': 'আমার প্রোফাইল',
 
     'nav.accessScope': 'অ্যাক্সেস পরিধি',

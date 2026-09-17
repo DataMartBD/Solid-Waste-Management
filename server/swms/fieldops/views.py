@@ -17,7 +17,7 @@ from swms.agencies.views import CollectorTransferMixin
 from swms.common.exceptions import DomainError
 from swms.common.permissions import IsAgencyAdmin
 from swms.common.roles import OPERATIONAL_WRITERS, Role
-from swms.common.views import SwmsModelViewSet
+from swms.common.views import StampsCreatorAgencyMixin, SwmsModelViewSet
 from swms.complaints.models import ComplaintStatus
 
 from .models import Assignment, Collector, Route, Visit
@@ -168,7 +168,7 @@ class RouteFilter(filters.FilterSet):
         )
 
 
-class RouteViewSet(SwmsModelViewSet):
+class RouteViewSet(StampsCreatorAgencyMixin, SwmsModelViewSet):
     """CRUD plus the stop-list edits the Route Plan screen performs."""
 
     serializer_class = RouteSerializer

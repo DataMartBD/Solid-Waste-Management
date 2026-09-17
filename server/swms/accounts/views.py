@@ -13,7 +13,8 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -24,7 +25,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from swms.common.exceptions import DomainError
+from swms.common.permissions import IsAgencyAdmin
 from swms.common.roles import Role
+from swms.common.views import WardScopedQuerysetMixin
 
 from .models import OtpCode, ScopeKind
 from .serializers import (
@@ -36,6 +39,7 @@ from .serializers import (
     PinLoginSerializer,
     PinSetSerializer,
     ProfileUpdateSerializer,
+    UserAdminSerializer,
     UserSerializer,
 )
 
@@ -393,3 +397,66 @@ class DemoOperatorsView(APIView):
                 for user in rows
             ]
         )
+
+
+class UserViewSet(WardScopedQuerysetMixin, viewsets.ModelViewSet):
+    """Operator accounts — the Users page.
+
+    Unlike every other endpoint in this project, **reading is restricted too**.
+    `SwmsModelViewSet` opens reads to anyone signed in, which is right for
+    households and routes and wrong here: this list is every operator's phone
+    number, national ID, blood group and next of kin. A collector has no reason
+    to enumerate it, so the permission covers GET as well as POST.
+
+    There is deliberately no delete. Visits, payments, complaints and surveys all
+    point at the user who recorded them with `on_delete=SET_NULL`, so removing an
+    account would quietly strip the name off work that was actually done. An
+    account that should stop being usable is deactivated, which the login view
+    already refuses — and the row, with its history, stays.
+    """
+
+    serializer_class = UserAdminSerializer
+    permission_classes = [IsAgencyAdmin]
+    # No `destroy`: see above. Django REST maps the rest of the verbs as usual.
+    http_method_names = ["get", "post", "patch", "head", "options"]
+    filterset_fields = ["role", "is_active", "agency"]
+    search_fields = ["name", "phone", "email", "nid"]
+    ordering_fields = ["name", "role", "last_login"]
+    #: Not ward-scoped: an administrator managing accounts needs to see the
+    #: accounts, including the ones scoped to wards they do not work in.
+    ward_scope_field = None
+    #: Agency-scoped, though. A contractor's administrator manages their own
+    #: staff; KCC's own admins have no agency and so are not narrowed at all.
+    agency_scope_field = "agency_id"
+
+    def get_queryset(self):
+        return self.scope_queryset(
+            User.objects.prefetch_related("scope_wards").select_related("agency", "collector")
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["user"] = self.request.user
+        return context
+
+    @action(detail=True, methods=["post"])
+    def deactivate(self, request, pk=None):
+        """Stop this account signing in, keeping everything it has recorded."""
+        user = self.get_object()
+        if user.pk == request.user.pk:
+            # The button is hidden for your own row, but the endpoint is reachable
+            # without it, and an administrator who disables themselves has nobody
+            # left to put it back.
+            raise DomainError(
+                "You cannot deactivate your own account.", code="self_deactivate"
+            )
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        return Response(self.get_serializer(user).data)
+
+    @action(detail=True, methods=["post"])
+    def activate(self, request, pk=None):
+        user = self.get_object()
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+        return Response(self.get_serializer(user).data)

@@ -165,16 +165,32 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         what keeps agency scoping inert until somebody is deliberately made a
         tenant. Superusers bypass, matching `visible_ward_ids` — so an agency
         admin must never be given `is_superuser`.
+
+        A super admin bypasses too, and bypasses *whatever is in the column*.
+        The role is the corporation's own administrator, so an agency left on
+        the row — from an earlier posting, or a mistake on the form — must not
+        quietly narrow them to one contractor. Read the other way: the only
+        thing that confines anybody here is being an agency admin with an
+        agency, which is exactly the boundary the role is supposed to draw.
         """
-        if self.is_superuser:
+        if self.is_superuser or self.role == Role.SUPER_ADMIN:
             return None
         return self.agency_id or None
 
     def visible_ward_ids(self) -> list[str] | None:
-        """Ward ids this user may see; ``None`` means "no restriction"."""
+        """Ward ids this user may see; ``None`` means "no restriction".
+
+        A super admin is unrestricted whatever their `scope_kind` says, for the
+        same reason as `visible_agency_id`: a stale ward list on the row must
+        not be able to blind the one account that is meant to see everything.
+        """
         from swms.catalog.models import Ward
 
-        if self.is_superuser or self.scope_kind in {ScopeKind.AGENCY, ScopeKind.CITY}:
+        if (
+            self.is_superuser
+            or self.role == Role.SUPER_ADMIN
+            or self.scope_kind in {ScopeKind.AGENCY, ScopeKind.CITY}
+        ):
             return None
         if self.scope_kind == ScopeKind.ZONE and self.scope_zone:
             return list(

@@ -21,6 +21,7 @@ import { IconPlus, IconHome, IconTrash } from '../components/Icons.jsx'
 // operator standing at the door has no way to tell.
 
 const BLANK_HOLDING = {
+  agency: '',
   district: '', thana: '', ward: '', road: '', holdingNo: '', holdingType: '',
   ownerName: '', ownerPhone: '', ownerAltPhone: '', ownerEmail: '',
   floors: '', unitsTotal: '', notes: '',
@@ -90,8 +91,10 @@ export default function HoldingEditor() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { t, taka, lang } = useLang()
-  const { canWrite } = useAuth()
-  const { catalog } = useData()
+  const { canWrite, user } = useAuth()
+  // An agency of their own means the server will stamp it; there is nothing to ask.
+  const myAgency = user?.agency || null
+  const { catalog, agencies } = useData()
   const isNew = !id
 
   const [form, setForm] = useState(BLANK_HOLDING)
@@ -108,6 +111,7 @@ export default function HoldingEditor() {
     try {
       const [holding, members] = await Promise.all([api.get(id), api.households(id)])
       setForm({
+        agency: holding.agency || '',
         district: holding.district || '', thana: holding.thana || '',
         ward: holding.ward || '', road: holding.road || '',
         holdingNo: holding.holdingNo || '', holdingType: holding.holdingType || '',
@@ -172,6 +176,9 @@ export default function HoldingEditor() {
 
   const payload = useMemo(() => ({
     ...form,
+    // Omitted rather than sent empty when nobody picked one: the server fills it
+    // from the creator's own agency, and a null would talk it out of that.
+    agency: form.agency || undefined,
     floors: form.floors === '' ? null : Number(form.floors),
     unitsTotal: form.unitsTotal === '' ? null : Number(form.unitsTotal),
     households: families.map((r) => ({
@@ -306,6 +313,20 @@ export default function HoldingEditor() {
                   hint={t('holdings.unitsHint')} />
               </FormRow>
             </FormSection>
+
+            {/* Only shown to someone the server cannot infer it for. An agency
+                admin or a bound supervisor gets their own stamped on save, so
+                asking them would be asking a question with one answer — and
+                offering a choice they are not allowed to make. */}
+            {!myAgency && (
+              <FormRow>
+                <Field half as="select" label={t('holdings.agency')} value={form.agency}
+                  onChange={set('agency')} disabled={busy}
+                  hint={t('holdings.agencyHint')}
+                  options={[{ value: '', label: t('holdings.agencyNone') },
+                    ...(agencies || []).map((a) => ({ value: a.id, label: a.name }))]} />
+              </FormRow>
+            )}
 
             <FormSection title={t('holdings.group.owner')}>
               <FormRow>

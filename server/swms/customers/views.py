@@ -8,7 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from swms.common.roles import OPERATIONAL_WRITERS, Role
-from swms.common.views import SwmsModelViewSet
+from swms.common.views import StampsCreatorAgencyMixin, SwmsModelViewSet
 
 from .models import Holding, Household, PotentialCustomer
 from .serializers import (
@@ -61,7 +61,7 @@ class HoldingFilter(filters.FilterSet):
         return queryset
 
 
-class HoldingViewSet(SwmsModelViewSet):
+class HoldingViewSet(StampsCreatorAgencyMixin, SwmsModelViewSet):
     """The Holding Master — every rated property, serviced or not."""
 
     serializer_class = HoldingSerializer

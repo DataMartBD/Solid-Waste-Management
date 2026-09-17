@@ -270,7 +270,10 @@ export function AuthProvider({ children }) {
     setPin, changePin, removePin,
     updateProfile, uploadAvatar, logout,
     // Convenience flags the pages read instead of comparing role strings.
-    isAdmin: user?.roleKey === 'agency_admin',
+    // Either administrator. Both administer; the difference is how far, and
+    // that is decided by the server's querysets rather than by this flag.
+    isAdmin: user?.roleKey === 'agency_admin' || user?.roleKey === 'super_admin',
+    isSuperAdmin: user?.roleKey === 'super_admin',
     isSupervisor: user?.roleKey === 'supervisor',
     isCollector: user?.roleKey === 'collector',
     canWrite: Boolean(user) && !user.readOnly,

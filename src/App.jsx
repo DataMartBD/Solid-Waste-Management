@@ -6,6 +6,7 @@ import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import LiveMap from './pages/LiveMap.jsx'
 import Agencies from './pages/Agencies.jsx'
+import Users from './pages/Users.jsx'
 import Holdings from './pages/Holdings.jsx'
 import HoldingEditor from './pages/HoldingEditor.jsx'
 import HoldingHouseholds from './pages/HoldingHouseholds.jsx'
@@ -75,6 +76,7 @@ export default function App() {
         <Route path="fleet" element={gated(<Fleet />)} />
         <Route path="collectors" element={gated(<Collectors />)} />
         <Route path="agencies" element={gated(<Agencies />)} />
+        <Route path="users" element={gated(<Users />)} />
         <Route path="reports" element={gated(<Reports />)} />
         <Route path="reports-customer" element={gated(<ReportsCustomer />)} />
         <Route path="profile" element={<Profile />} />

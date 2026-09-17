@@ -1,4 +1,8 @@
-"""Auth routes, all under /api/auth/."""
+"""Auth routes, all under /api/auth/.
+
+Managing *other people's* accounts is not authentication, so it is not here —
+see `user_urls.py`, mounted at /api/users/ alongside the other registers.
+"""
 
 from django.urls import path
 

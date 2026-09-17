@@ -32,6 +32,22 @@ export const catalog = {
   load: () => get('/catalog/'),
 }
 
+// Operator accounts. Deliberately absent from RESOURCES: DataContext mirrors its
+// collections in memory for every signed-in user, and this one is readable only
+// by an agency admin — a collector mirroring it would just log 403s on load.
+//
+// There is no `remove`. Visits, payments, complaints and surveys all point at
+// the user who recorded them, so deleting an account would strip the name off
+// work that was actually done; `deactivate` stops the sign-in and keeps the row.
+export const users = {
+  list: (params) => list('/users/', params),
+  get: (id) => get(`/users/${id}/`),
+  create: (body) => post('/users/', body),
+  update: (id, body) => patch(`/users/${id}/`, body),
+  deactivate: (id) => post(`/users/${id}/deactivate/`, {}),
+  activate: (id) => post(`/users/${id}/activate/`, {}),
+}
+
 // The contractors that supply collectors. An agency is master data, so the
 // list is small and loaded whole rather than paged.
 export const agencies = {
