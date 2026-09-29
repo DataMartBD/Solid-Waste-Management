@@ -28,6 +28,7 @@ from swms.common.exceptions import DomainError
 from swms.common.roles import Role
 from swms.fieldops.models import Collector
 
+from .forms_d2d import CODE as D2D_CODE, VERSION as D2D_VERSION
 from .models import (
     Answer,
     FormStatus,
@@ -495,7 +496,10 @@ class SeededFormTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         call_command("seed_survey_form", "--publish", stdout=StringIO())
-        cls.form = SurveyForm.objects.get(code="d2d-household", version=2)
+        # Read the version off the module rather than pinning it here: every
+        # edit to the questionnaire bumps it, and a hard-coded number turns
+        # that ordinary act into a failing test about nothing.
+        cls.form = SurveyForm.objects.get(code=D2D_CODE, version=D2D_VERSION)
 
     def test_it_is_published_and_complete(self):
         self.assertEqual(self.form.status, FormStatus.PUBLISHED)
@@ -510,6 +514,17 @@ class SeededFormTests(TestCase):
             question = self.form.questions.get(code=code)
             self.assertEqual(question.options_source, source)
             self.assertEqual(question.options.count(), 0)
+
+    def test_the_survey_area_offers_khulna_first_and_still_offers_sylhet(self):
+        """The corporation running this system leads the list.
+
+        Sylhet stays behind it: v1 and v2 answers carry the `scc` code, and an
+        option dropped from the form leaves those reading as a bare code.
+        """
+        options = self.form.questions.get(code="survey_area").options.all()
+        self.assertEqual([o.code for o in options], ["kcc", "scc"])
+        self.assertEqual(options[0].label, "Khulna City Corporation")
+        self.assertEqual(options[0].label_bn, "খুলনা সিটি কর্পোরেশন")
 
     def test_every_choice_question_has_options_to_choose_from(self):
         empty = [

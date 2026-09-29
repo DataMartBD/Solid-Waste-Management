@@ -17,6 +17,9 @@ Transcription notes, so a later reader can check it against the paper:
 * Version 2 also stopped hard-coding "Sylhet" as the only district. District and
   thana are drawn from `catalog.GeoLocation`, which is the list the holding
   register offers, so a survey and the holding it is converted into agree.
+* Version 3 adds Khulna City Corporation to the survey area, first in the list,
+  and is the only change from v2. Sylhet is kept so the answers already given
+  against v1 and v2 still read.
 * Bangla is the source text; the English alongside is a translation for the
   English UI and for exports, not an alternative wording of the question.
 * `maps_to` marks the handful of answers that also belong in a column — the
@@ -27,9 +30,9 @@ Transcription notes, so a later reader can check it against the paper:
 """
 
 CODE = "d2d-household"
-#: v1 has surveys attached, so it is frozen — the engine refuses to edit a
-#: version people have already answered. This is v2.
-VERSION = 2
+#: v1 and v2 have surveys attached, so both are frozen — the engine refuses to
+#: edit a version people have already answered. This is v3.
+VERSION = 3
 TITLE = "Door-to-door solid waste household survey"
 TITLE_BN = "বাড়ি বাড়ি কঠিন বর্জ্য সংগ্রহ জরিপ"
 ORGANISATION = "Sylhet City Corporation · READO Bangladesh"
@@ -73,11 +76,14 @@ QUESTIONS = [
       hint="One per premises", hint_bn="একটা স্থাপনায় একটা হবে",
       required=True, maps_to="holding_no"),
     # A single-option dropdown on the paper, because that copy was printed for
-    # Sylhet. It stays as printed; a deployment covering another corporation
-    # edits this option list.
+    # Sylhet. From v3 the corporation this system actually serves is on the list
+    # and stands first, so a Khulna surveyor is not scrolling past another city's
+    # name at every door. Sylhet stays: v2 surveys were answered with it, and a
+    # code that no longer exists on the form makes those answers unreadable.
     q("survey_area", "2", SURVEY_META, "single", "Survey area", "জরিপ এলাকা",
       hint="Choose the survey area", hint_bn="জরিপ এলাকা নির্বাচন করুন", required=True,
-      options=opts(("scc", "Sylhet City Corporation", "সিলেট সিটি কর্পোরেশন"))),
+      options=opts(("kcc", "Khulna City Corporation", "খুলনা সিটি কর্পোরেশন"),
+                   ("scc", "Sylhet City Corporation", "সিলেট সিটি কর্পোরেশন"))),
     # District and thana were one hard-coded option ("Sylhet") on the paper.
     # They now draw on the national geography table, the same list the holding
     # register offers, so a survey and the holding it becomes agree on where the
