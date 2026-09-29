@@ -116,6 +116,7 @@ class Command(BaseCommand):
                 max_value=item.get("max_value"),
                 maps_to=item.get("maps_to", ""),
                 options_source=source,
+                default_value=str(item.get("default", "")),
             )
             # full_clean here is the point of the MAPPABLE check — a typo in the
             # module must fail the seed, not produce a form that quietly drops
@@ -146,6 +147,18 @@ class Command(BaseCommand):
                 )
                 for i, opt in enumerate(listed, start=1)
             ])
+            # Checked here rather than in `Question.clean()`: the options are
+            # written after the question, so nothing earlier could have known
+            # whether the default names one of them. A default pointing at an
+            # option that does not exist prefills a dropdown with a blank.
+            if question.default_value and source == OptionSource.STATIC:
+                codes = {opt["code"] for opt in listed}
+                if codes and question.default_value not in codes:
+                    raise CommandError(
+                        f"Question '{question.code}' defaults to "
+                        f"'{question.default_value}', which is not one of its "
+                        f"options ({', '.join(sorted(codes))})."
+                    )
         return questions
 
     def _load_rules(self, spec, questions: dict) -> int:

@@ -12,6 +12,7 @@ from __future__ import annotations
 import datetime as dt
 from decimal import Decimal
 from io import StringIO
+from types import SimpleNamespace
 
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
@@ -29,6 +30,7 @@ from swms.common.roles import Role
 from swms.fieldops.models import Collector
 
 from .forms_d2d import CODE as D2D_CODE, VERSION as D2D_VERSION
+from .management.commands.seed_survey_form import Command as SeedCommand
 from .models import (
     Answer,
     FormStatus,
@@ -152,6 +154,38 @@ class ModelValidationTests(FormFixture):
         )
         with self.assertRaises(ValidationError):
             question.clean()
+
+    def test_a_date_default_is_an_iso_date_or_the_word_today(self):
+        question = Question(
+            form=self.form, code="x", kind="date", text="X", default_value="24-09-2026"
+        )
+        with self.assertRaises(ValidationError) as caught:
+            question.clean()
+        self.assertIn("neither an ISO date", str(caught.exception))
+
+        Question(
+            form=self.form, code="x", kind="date", text="X", default_value="today"
+        ).clean()  # no error
+        Question(
+            form=self.form, code="x", kind="date", text="X", default_value="2026-09-24"
+        ).clean()  # no error
+
+    def test_a_numeric_default_must_be_a_number(self):
+        question = Question(
+            form=self.form, code="x", kind="number", text="X", default_value="a few"
+        )
+        with self.assertRaises(ValidationError) as caught:
+            question.clean()
+        self.assertIn("not a number", str(caught.exception))
+
+    def test_a_note_cannot_carry_a_default(self):
+        """Nobody answers a section heading, so prefilling one means nothing."""
+        question = Question(
+            form=self.form, code="x", kind="note", text="X", default_value="anything"
+        )
+        with self.assertRaises(ValidationError) as caught:
+            question.clean()
+        self.assertIn("not answered", str(caught.exception))
 
     def test_question_codes_are_unique_within_a_form(self):
         with self.assertRaises(IntegrityError), transaction.atomic():
@@ -525,6 +559,43 @@ class SeededFormTests(TestCase):
         self.assertEqual([o.code for o in options], ["kcc", "scc"])
         self.assertEqual(options[0].label, "Khulna City Corporation")
         self.assertEqual(options[0].label_bn, "খুলনা সিটি কর্পোরেশন")
+
+    def test_the_survey_section_is_prefilled_for_khulna(self):
+        """The five answers that are the same at every door in the city.
+
+        A surveyor still changes any of them; these only save the taps.
+        """
+        defaults = {
+            q.code: q.default_value
+            for q in self.form.questions.exclude(default_value="")
+        }
+        self.assertEqual(defaults, {
+            "survey_area": "kcc",
+            "district": "Khulna",
+            "thana": "Khulna Sadar",
+            "surveyed_on": "today",
+            "partner": "snv",
+        })
+
+    def test_the_partner_list_offers_the_organisation_it_defaults_to(self):
+        options = self.form.questions.get(code="partner").options.all()
+        self.assertEqual([o.code for o in options], ["snv", "ngo_reado"])
+        self.assertEqual(options[0].label, "SNV Bangladesh")
+
+    def test_a_default_naming_no_option_fails_the_seed(self):
+        """A dropdown prefilled with a code it does not offer shows blank.
+
+        The check cannot live on the model: options are written after the
+        question, so at `clean()` time there is nothing yet to check against.
+        """
+        stub = SimpleNamespace(QUESTIONS=[{
+            "code": "x", "kind": "single", "text": "X", "default": "nope",
+            "options": [{"code": "yes", "label": "Yes"}],
+        }])
+        form = SurveyForm.objects.create(code="stub", version=1, title="Stub")
+        with self.assertRaises(CommandError) as caught:
+            SeedCommand()._load_questions(form, stub)
+        self.assertIn("is not one of its options", str(caught.exception))
 
     def test_every_choice_question_has_options_to_choose_from(self):
         empty = [

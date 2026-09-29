@@ -21474,6 +21474,17 @@
   {
     "division_name": "Khulna",
     "division_bn": "খুলনা",
+    "district_name": "Khulna",
+    "district_bn": "খুলনা",
+    "upazila_name": "Khulna Sadar",
+    "upazila_bn": "খুলনা সদর",
+    "union_name": "Khulna City Corporation",
+    "union_bn": "খুলনা সিটি কর্পোরেশন",
+    "business_id_id": 1
+  },
+  {
+    "division_name": "Khulna",
+    "division_bn": "খুলনা",
     "district_name": "Bagerhat",
     "district_bn": "বাগেরহাট",
     "upazila_name": "Fakirhat",

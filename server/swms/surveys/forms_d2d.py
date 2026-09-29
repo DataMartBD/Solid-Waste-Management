@@ -17,9 +17,15 @@ Transcription notes, so a later reader can check it against the paper:
 * Version 2 also stopped hard-coding "Sylhet" as the only district. District and
   thana are drawn from `catalog.GeoLocation`, which is the list the holding
   register offers, so a survey and the holding it is converted into agree.
-* Version 3 adds Khulna City Corporation to the survey area, first in the list,
-  and is the only change from v2. Sylhet is kept so the answers already given
-  against v1 and v2 still read.
+* Version 3 is the Khulna rollout: the survey area offers Khulna City
+  Corporation first, the partner list offers SNV Bangladesh first, and the five
+  questions of the survey section that are the same at every door in the city
+  carry a `default`. Sylhet and READO are kept on their lists so the answers
+  already given against v1 and v2 still read.
+* `default` is a suggestion the client prefills, never an answer: nothing is
+  recorded unless it comes back with the submission. On a date question the word
+  `today` is sent as it stands, because a device downloads the form once and may
+  answer on it days later.
 * Bangla is the source text; the English alongside is a translation for the
   English UI and for exports, not an alternative wording of the question.
 * `maps_to` marks the handful of answers that also belong in a column — the
@@ -82,6 +88,7 @@ QUESTIONS = [
     # code that no longer exists on the form makes those answers unreadable.
     q("survey_area", "2", SURVEY_META, "single", "Survey area", "জরিপ এলাকা",
       hint="Choose the survey area", hint_bn="জরিপ এলাকা নির্বাচন করুন", required=True,
+      default="kcc",
       options=opts(("kcc", "Khulna City Corporation", "খুলনা সিটি কর্পোরেশন"),
                    ("scc", "Sylhet City Corporation", "সিলেট সিটি কর্পোরেশন"))),
     # District and thana were one hard-coded option ("Sylhet") on the paper.
@@ -89,11 +96,15 @@ QUESTIONS = [
     # register offers, so a survey and the holding it becomes agree on where the
     # building is. Thana narrows to the district chosen above it.
     q("district", "3", SURVEY_META, "single", "District", "জেলা",
-      hint_bn="জেলা নির্বাচন করুন", required=True,
+      hint_bn="জেলা নির্বাচন করুন", required=True, default="Khulna",
       maps_to="district", options_source="district"),
+    # Khulna Sadar is the city corporation's own area. The national table lists
+    # the district's nine rural upazilas and did not carry it, so it was added
+    # to `geo_locations.json` — a default the dropdown does not offer prefills a
+    # blank, and `_check_geography` would refuse the survey on save.
     q("thana", "4", SURVEY_META, "single", "Thana / upazila", "থানা / উপজেলা",
       hint="Thanas of the district chosen above",
-      hint_bn="উপরে নির্বাচিত জেলার থানা",
+      hint_bn="উপরে নির্বাচিত জেলার থানা", default="Khulna Sadar",
       maps_to="thana", options_source="thana"),
     q("ward", "5", SURVEY_META, "single", "Ward no.", "ওয়ার্ড নং",
       hint_bn="ওয়ার্ড নং নির্বাচন করুন", required=True, maps_to="ward_id",
@@ -109,13 +120,21 @@ QUESTIONS = [
     q("surveyor", "8", SURVEY_META, "single", "Surveyor name", "জরিপকারীর নাম",
       hint="Full name, in Bangla", hint_bn="পূর্ণ নাম লিখুন (বাংলায়)", required=True,
       maps_to="surveyor_id", options_source="collector"),
+    # `today` rather than a date: the client resolves it as it draws the form,
+    # so a device that has been offline for a week still stamps the day the
+    # surveyor is actually standing at the door.
     q("surveyed_on", "09", SURVEY_META, "date", "Survey date", "জরিপের তারিখ",
-      hint_bn="তারিখ নির্বাচন করুন", required=True, maps_to="surveyed_on"),
+      hint_bn="তারিখ নির্বাচন করুন", required=True, default="today",
+      maps_to="surveyed_on"),
     q("partner", "10", SURVEY_META, "single",
       "Partner organisation collecting the data",
       "তথ্য সংগ্রহকারী সহযোগি ব্যাক্তি/ প্রতিষ্ঠানের ধরণ ও নাম",
-      hint_bn="প্রতিষ্ঠান এর ধরণ নির্বাচন করুন",
-      options=opts(("ngo_reado", "NGO (READO Bangladesh)", "এনজিও ( রিডো বাংলাদেশ )"))),
+      hint_bn="প্রতিষ্ঠান এর ধরণ নির্বাচন করুন", default="snv",
+      # READO printed the Sylhet paper; SNV is the partner on the Khulna work,
+      # so it leads and is the default. Both stay listed for the same reason
+      # both corporations do — an answer already given must still read.
+      options=opts(("snv", "SNV Bangladesh", "এসএনভি বাংলাদেশ"),
+                   ("ngo_reado", "NGO (READO Bangladesh)", "এনজিও ( রিডো বাংলাদেশ )"))),
 
     # ------------------------------------------------------------ respondent
     q("respondent_name", "11", RESPONDENT, "text", "Respondent name", "উত্তরদাতার নাম",

@@ -65,13 +65,16 @@ class QuestionSerializer(serializers.ModelSerializer):
     mapsTo = serializers.CharField(source="maps_to", read_only=True)
     minValue = serializers.IntegerField(source="min_value", read_only=True)
     maxValue = serializers.IntegerField(source="max_value", read_only=True)
+    #: Sent as stored, `today` included: the client resolves that token when it
+    #: draws the form, which on an offline device is days after it downloaded it.
+    defaultValue = serializers.CharField(source="default_value", read_only=True)
 
     class Meta:
         model = Question
         fields = [
             "code", "number", "section", "kind", "text", "textBn", "hint", "hintBn",
             "required", "width", "minValue", "maxValue", "mapsTo", "optionsSource",
-            "options", "rules",
+            "defaultValue", "options", "rules",
         ]
 
 

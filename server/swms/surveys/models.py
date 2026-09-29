@@ -27,6 +27,9 @@ knows anything about *this* questionnaire.
 
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal, InvalidOperation
+
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -122,6 +125,12 @@ MAPPABLE = {
 }
 
 
+#: `Question.default_value` on a date question, meaning "whatever today is when
+#: the client draws the form". Left as a word rather than resolved server-side
+#: so an offline device stamps the day of the survey, not the day it last synced.
+DEFAULT_TODAY = "today"
+
+
 class SurveyForm(TimeStampedModel):
     """One version of one questionnaire."""
 
@@ -192,6 +201,29 @@ class Question(TimeStampedModel):
     options_source = models.CharField(
         max_length=12, choices=OptionSource.choices, default=OptionSource.STATIC
     )
+    #: What the client should put in the field before the surveyor touches it.
+    #:
+    #: A suggestion, never an answer: nothing is recorded until the client sends
+    #: it back, so a question left on its default and a question genuinely
+    #: answered that way are the same thing, and a surveyor who disagrees simply
+    #: changes it. Empty means no default, which is most of the form.
+    #:
+    #: What the string holds depends on the question:
+    #:
+    #: * a static choice question — an option `code`, checked against that
+    #:   question's own options when the form is seeded;
+    #: * a sourced question — the value the answer would carry, which is a
+    #:   primary key for ward, block and collector and a *name* for district
+    #:   and thana (`SOURCE_TEXT_COLUMNS`);
+    #: * a date question — an ISO date, or `today`, which the client resolves
+    #:   when it renders. It stays a token rather than a date because a device
+    #:   downloads the form once and may not see the network again for days:
+    #:   resolving it here would stamp every survey with the download date.
+    #: * anything else — the literal text or number.
+    default_value = models.CharField(
+        max_length=120, blank=True,
+        help_text="Prefilled for the surveyor; an option code, a date, 'today', or a literal.",
+    )
 
     class Meta:
         db_table = "survey_question"
@@ -210,6 +242,26 @@ class Question(TimeStampedModel):
                 {"maps_to": f"'{self.maps_to}' is not an operational column. "
                             f"Choose one of: {', '.join(sorted(MAPPABLE))}."}
             )
+        if self.default_value:
+            if self.kind == QuestionKind.NOTE:
+                raise ValidationError(
+                    {"default_value": "A note is not answered, so it has no default."}
+                )
+            if self.kind == QuestionKind.DATE and self.default_value != DEFAULT_TODAY:
+                try:
+                    date.fromisoformat(self.default_value)
+                except ValueError:
+                    raise ValidationError(
+                        {"default_value": f"'{self.default_value}' is neither an ISO "
+                                          f"date nor '{DEFAULT_TODAY}'."}
+                    ) from None
+            if self.kind == QuestionKind.NUMBER:
+                try:
+                    Decimal(self.default_value)
+                except InvalidOperation:
+                    raise ValidationError(
+                        {"default_value": f"'{self.default_value}' is not a number."}
+                    ) from None
         if self.options_source != OptionSource.STATIC:
             if not self.takes_options:
                 raise ValidationError(

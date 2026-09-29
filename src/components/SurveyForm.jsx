@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PageHeader, Section } from './ui.jsx'
 import { surveys as api, holdings as holdingsApi } from '../api/endpoints.js'
 import { useData } from '../context/DataContext.jsx'
 import { useLang } from '../i18n/index.jsx'
+import { today } from '../utils/collection.js'
 
 // Renders whatever questionnaire the server sends.
 //
@@ -60,6 +61,10 @@ export default function SurveyForm({
   const [touched, setTouched] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // Which answers came from the form's own defaults rather than from the
+  // surveyor. What the register knows about a particular building beats a
+  // form-wide default, so the prefill below is allowed to overwrite these.
+  const defaulted = useRef(new Set())
 
   useEffect(() => {
     let live = true
@@ -79,6 +84,32 @@ export default function SurveyForm({
       .catch(() => { if (live) setHolding(null) })
     return () => { live = false }
   }, [holdingId])
+
+  // Prefill what the form itself says to prefill.
+  //
+  // Suggestions, not answers: every one of them is an ordinary editable field,
+  // and nothing is recorded until the surveyor submits. It saves five taps at
+  // every door on a form whose first questions have the same answer all day.
+  //
+  // `today` arrives as that word rather than as a date, so it is resolved here,
+  // when the form is drawn. An offline device may have downloaded the form days
+  // ago, and the survey date has to be the day of the survey.
+  useEffect(() => {
+    if (!form) return
+    setAnswers((prev) => {
+      const next = { ...prev }
+      for (const question of form.questions) {
+        if (!question.defaultValue) continue
+        if (next[question.code] !== undefined) continue
+        next[question.code] =
+          question.kind === 'date' && question.defaultValue === 'today'
+            ? today()
+            : question.defaultValue
+        defaulted.current.add(question.code)
+      }
+      return next
+    })
+  }, [form])
 
   // Fill in what the register already knows about this building.
   //
@@ -101,8 +132,15 @@ export default function SurveyForm({
       for (const question of form.questions) {
         const value = known[question.mapsTo]
         // Never over-write the surveyor: they are standing at the door and the
-        // register is what they are there to check.
-        if (value && next[question.code] === undefined) next[question.code] = value
+        // register is what they are there to check. A value this form put there
+        // as a default is not the surveyor's, and the register's own district
+        // for a known building beats a form-wide guess, so that one gives way.
+        const untouched =
+          next[question.code] === undefined || defaulted.current.has(question.code)
+        if (value && untouched) {
+          next[question.code] = value
+          defaulted.current.delete(question.code)
+        }
       }
       return next
     })
