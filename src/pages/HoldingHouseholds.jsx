@@ -105,8 +105,9 @@ export default function HoldingHouseholds() {
     total: rows.length,
     active: families.filter((h) => h.status === 'active').length,
     potential: potentials.length,
-    dues: families.reduce((sum, h) => sum + (h.dues || 0), 0),
-  }), [rows, families, potentials])
+    // Dues are the building's: one bill per holding.
+    dues: holding?.dues || 0,
+  }), [rows, families, potentials, holding])
 
   async function save(form) {
     setBusy(true)
@@ -184,18 +185,9 @@ export default function HoldingHouseholds() {
       ),
     },
     {
-      accessorKey: 'tier',
-      header: t('households.field.tier'),
-      cell: ({ row }) => optLabel(tiers, row.original.tier),
-    },
-    {
-      accessorKey: 'dues',
-      header: t('households.field.duesOutstanding'),
-      cell: ({ row }) => (row.original._type === 'potential'
-        ? <span className="tiny muted">—</span>
-        : <span style={{ color: row.original.dues ? 'var(--danger-fg)' : undefined, fontWeight: row.original.dues ? 600 : 400 }}>
-            {taka(row.original.dues || 0)}
-          </span>),
+      accessorKey: 'members',
+      header: t('households.field.membersCount'),
+      cell: ({ row }) => (row.original.members ? n(row.original.members) : '—'),
     },
     {
       accessorKey: 'status',
@@ -236,7 +228,7 @@ export default function HoldingHouseholds() {
       ),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t, taka, optLabel, tiers, canWrite, busy])
+  ], [t, n, canWrite, busy])
 
   const exportColumns = [
     { key: 'id', label: t('households.col.id') },
@@ -244,8 +236,7 @@ export default function HoldingHouseholds() {
     { key: 'head', label: t('households.field.name') },
     { key: 'phone', label: t('households.field.phone') },
     { key: '_type', label: t('households.col.type') },
-    { key: 'tier', label: t('households.field.tier') },
-    { key: 'dues', label: t('households.field.duesOutstanding') },
+    { key: 'members', label: t('households.field.membersCount') },
     { key: 'status', label: t('households.field.status') },
   ]
 
@@ -275,7 +266,7 @@ export default function HoldingHouseholds() {
               holding: id,
               _holdingRow: holding,
               address: holding ? addressFor(holding, '') : '',
-              head: '', phone: '', unit: '', status: 'active', dues: 0,
+              head: '', phone: '', unit: '', status: 'active',
               surveyedAt: TODAY,
             })}>
               <IconPlus size={16} /> {t('holdings.addFamily')}

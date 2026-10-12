@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.decorators import api_view, permission_classes
@@ -21,7 +22,7 @@ from rest_framework.response import Response
 
 from swms.common.exceptions import DomainError
 
-from . import aggregates, periods
+from . import aggregates, city as city_report, periods
 from .exports import FORMATS, Column, columns_from, export
 
 # --------------------------------------------------------------------------- #
@@ -206,8 +207,9 @@ def ward_collection(request):
             [
                 ("ward", "Ward"),
                 ("name", "Name"),
+                ("holdings", "Holdings"),
                 ("households", "Households"),
-                ("scheduled", "Scheduled stops"),
+                ("scheduled", "Scheduled holdings"),
                 ("served", "Served"),
                 ("billed", "Billed (BDT)"),
                 ("collected", "Collected (BDT)"),
@@ -294,7 +296,7 @@ def bill_status(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def customer_collection(request):
-    """Billed and received per household — the "who has not paid" list."""
+    """Billed and received per holding — the "who has not paid" list."""
     mode = _mode(request)
     rows = aggregates.customer_collection(
         mode=mode,
@@ -302,7 +304,7 @@ def customer_collection(request):
         agency_id=_agency_scope(request),
         period_from=request.query_params.get("from") or None,
         period_to=request.query_params.get("to") or None,
-        household=request.query_params.get("hh") or None,
+        holding=request.query_params.get("holding") or None,
     )
     return _respond(
         request,
@@ -310,11 +312,11 @@ def customer_collection(request):
         columns=columns_from(
             [
                 ("period", "Period"),
-                ("hh", "Household"),
-                ("head", "Head"),
+                ("holding", "Holding ID"),
+                ("holdingNo", "Holding"),
+                ("head", "Owner"),
                 ("ward", "Ward"),
                 ("road", "Road"),
-                ("holding", "Holding"),
                 ("bills", "Bills"),
                 ("billed", "Billed (BDT)"),
                 ("received", "Received (BDT)"),
@@ -340,11 +342,11 @@ def customer_bill_status(request):
         title="Customer bill status",
         columns=[
             Column("bill", "Bill"),
-            Column("hh", "Household"),
-            Column("head", "Head"),
+            Column("holding", "Holding ID"),
+            Column("holdingNo", "Holding"),
+            Column("head", "Owner"),
             Column("ward", "Ward"),
             Column("road", "Road"),
-            Column("holding", "Holding"),
             Column("collector", "Collector"),
             Column("billed", "Billed (BDT)"),
             Column("received", "Received (BDT)"),
@@ -471,4 +473,103 @@ def dashboard(request):
             ),
             "funnel": aggregates.customer_funnel(ward_ids=wards, agency_id=agency),
         }
+    )
+
+
+# --------------------------------------------------------------------------- #
+# City Corporation dashboard
+# --------------------------------------------------------------------------- #
+
+CITY_COLUMNS = columns_from(
+    [
+        ("period", "Period"),
+        ("due", "Due"),
+        ("confirmed", "Confirmed by agency"),
+        ("auto", "Auto at cut-off"),
+        ("missed", "Not collected (complaint)"),
+        ("skipped", "Skipped by collector"),
+        ("collectedPct", "Collected %"),
+        ("confirmedPct", "Confirmed %"),
+        ("complaints", "Complaints"),
+    ]
+)
+
+#: How far back each mode looks when no `from` is given.
+CITY_DEFAULT_SPAN = {
+    periods.DAILY: dt.timedelta(days=29),
+    periods.WEEKLY: dt.timedelta(weeks=12),
+    periods.MONTHLY: dt.timedelta(days=365),
+    periods.YEARLY: dt.timedelta(days=365 * 3),
+}
+
+
+def _city(request):
+    """The city to report on: the caller's own, or the one asked for if visible."""
+    from swms.catalog.models import City
+
+    own = request.user.city_id
+    if own:
+        return City.objects.get(pk=own)
+    cities = city_report.visible_cities(_ward_scope(request))
+    wanted = request.query_params.get("city")
+    city = cities.filter(pk=wanted).first() if wanted else cities.first()
+    if city is None:
+        raise DomainError(
+            "No city to report on." if not wanted else f"City {wanted} is not visible to you.",
+            code="no_city",
+        )
+    return city
+
+
+@extend_schema(
+    parameters=[
+        OpenApiParameter("city", str, description="City id, e.g. KCC"),
+        OpenApiParameter("mode", str, description="daily | weekly | monthly | yearly"),
+        OpenApiParameter("from", str, description="Start date, YYYY-MM-DD"),
+        OpenApiParameter("to", str, description="End date, YYYY-MM-DD"),
+        OpenApiParameter("format", str, description="csv | xlsx | pdf"),
+    ]
+)
+@extend_schema(responses=OpenApiTypes.OBJECT)
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def city_collection(request):
+    """One city's collection: confirmed, auto and missed, by period, agency and ward."""
+    city = _city(request)
+    mode = _mode(request, periods.DAILY)
+    date_to = _date(request, "to") or timezone.localdate()
+    date_from = _date(request, "from") or date_to - CITY_DEFAULT_SPAN[mode]
+    if date_from > date_to:
+        raise DomainError("`from` must not be after `to`.", code="bad_range")
+
+    ward_ids = _ward_scope(request)
+    agency_id = _agency_scope(request)
+    data = city_report.city_collection(
+        city, mode=mode, date_from=date_from, date_to=date_to,
+        ward_ids=ward_ids, agency_id=agency_id,
+    )
+    cities = [] if request.user.city_id else [
+        {"id": c.id, "name": c.name, "nameBn": c.name_bn}
+        for c in city_report.visible_cities(ward_ids)
+    ]
+    return _respond(
+        request,
+        title=f"City collection — {city.name}",
+        columns=CITY_COLUMNS,
+        rows=data.pop("series"),
+        extra={
+            "mode": mode,
+            "from": date_from.isoformat(),
+            "to": date_to.isoformat(),
+            "city": {
+                "id": city.id,
+                "name": city.name,
+                "nameBn": city.name_bn,
+                "cutoff": city.collection_cutoff.strftime("%H:%M"),
+                "complaintDeadline": city.complaint_deadline.strftime("%H:%M"),
+            },
+            "cities": cities,
+            "today": city_report.today_live(city, ward_ids=ward_ids, agency_id=agency_id),
+            **data,
+        },
     )

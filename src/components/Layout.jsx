@@ -19,6 +19,7 @@ const NAV_GROUPS = [
     label: 'nav.group.overview',
     items: [
       { to: '/app/dashboard', label: 'nav.dashboard', icon: IconDashboard },
+      { to: '/app/city', label: 'nav.city', icon: IconChart },
       { to: '/app/live', label: 'nav.live', icon: IconMap },
     ],
   },
@@ -61,6 +62,7 @@ const NAV_GROUPS = [
       // Only an agency admin can reach it, and `canAccess` filters the nav, so
       // nobody else is shown a link that would bounce them.
       { to: '/app/users', label: 'nav.users', icon: IconUsers },
+      { to: '/app/setup', label: 'nav.setup', icon: IconClipboard },
       { to: '/app/profile', label: 'nav.profile', icon: IconUser },
     ],
   },

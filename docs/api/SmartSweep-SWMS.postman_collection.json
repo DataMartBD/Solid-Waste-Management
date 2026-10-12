@@ -2,7 +2,7 @@
   "info": {
     "name": "Smart Sweep SWMS API",
     "_postman_id": "5a9d4c10-7e2b-4f66-9a31-swms0000001",
-    "description": "Smart Sweep — Solid Waste Management System for the Khulna City Corporation pilot.\n\nDjango 5.2 + DRF on PostgreSQL 18. Every endpoint under `/api/`.\n\n## Getting started\n\n1. Start the backend: `cd server && .venv\\Scripts\\python.exe manage.py runserver`\n2. Select the **Smart Sweep — Local** environment.\n3. Run **00 · Auth → 1 · Request login code**, then **2 · Verify code**. The test scripts capture the JWT pair, the role and the collector id into collection variables, so every other request is authorised automatically.\n4. Run **01 · Catalog → Catalog bundle** to see the real ids for wards, tiers and the option lists, then point the `wardId` / `tierId` variables at them.\n\n## Conventions\n\n- **Auth** — collection-level Bearer `{{accessToken}}`. Access tokens are short-lived; re-run **Refresh access token** when a request answers 401 with `code: \"token_invalid\"`.\n- **Errors** — every failure has one shape: `{\"detail\": \"…\", \"code\": \"stable_key\", \"fields\": {\"road\": [\"…\"]}}`. `code` is a stable key the UI maps to a translated string.\n- **Pagination** — list endpoints return `{count, page, pages, next, previous, results}`. Pass `?page_size=all` for a bare array (capped at 5000).\n- **Ward scoping** — applied on the server from the caller's role. It cannot be widened by a query parameter.\n- **Ids are text and meaningful** — `HH-KCC-0012840`, `RT-W-14-01`, `C-042` — because field staff read them off bin stickers.\n\nInteractive schema: `http://127.0.0.1:8000/api/docs/`",
+    "description": "Smart Sweep — Solid Waste Management System. Multi-city (City Corporation / Pourashova), with Khulna City Corporation as the pilot.\n\n**Every operation is holding-wise**: the service charge, the monthly bill, payments, the daily collection visit, the QR tag and complaints belong to the holding (the building). Households are occupant records.\n\nDjango 5.2 + DRF on PostgreSQL 18. Every endpoint under `/api/`.\n\n## Getting started\n\n1. Start the backend: `cd server && .venv\\Scripts\\python.exe manage.py runserver`\n2. Select the **Smart Sweep — Local** environment.\n3. Run **00 · Auth → 1 · Request login code**, then **2 · Verify code**. The test scripts capture the JWT pair, the role and the collector id into collection variables, so every other request is authorised automatically.\n4. Run **01 · Catalog & setup → Catalog bundle** to see the real ids for cities, wards, tiers and the option lists, then point the `cityId` / `wardId` / `tierId` / `holdingId` variables at them.\n\n## Conventions\n\n- **Auth** — collection-level Bearer `{{accessToken}}`. Access tokens are short-lived; re-run **Refresh access token** when a request answers 401 with `code: \"token_invalid\"`.\n- **Errors** — every failure has one shape: `{\"detail\": \"…\", \"code\": \"stable_key\", \"fields\": {\"road\": [\"…\"]}}`. `code` is a stable key the UI maps to a translated string.\n- **Pagination** — list endpoints return `{count, page, pages, next, previous, results}`. Pass `?page_size=all` for a bare array (capped at 5000).\n- **Scoping** — ward, agency and city scoping are applied on the server from the caller's account. They cannot be widened by a query parameter.\n- **Ids are text and meaningful** — `HLD-KCC-000001`, `RT-W-14-01`, `C-042` — because field staff read them off building tags.\n\nInteractive schema: `http://127.0.0.1:8000/api/docs/`",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -85,6 +85,66 @@
       "type": "string"
     },
     {
+      "key": "password",
+      "value": "demo-password",
+      "type": "string"
+    },
+    {
+      "key": "cityId",
+      "value": "KCC",
+      "type": "string"
+    },
+    {
+      "key": "cityTypeId",
+      "value": "city_corporation",
+      "type": "string"
+    },
+    {
+      "key": "agencyTypeId",
+      "value": "private",
+      "type": "string"
+    },
+    {
+      "key": "agencyId",
+      "value": "AGN-KCC-0001",
+      "type": "string"
+    },
+    {
+      "key": "holdingId",
+      "value": "HLD-KCC-000001",
+      "type": "string"
+    },
+    {
+      "key": "blockId",
+      "value": "W-14-A",
+      "type": "string"
+    },
+    {
+      "key": "dumpingPointId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "surveyFormId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "surveyId",
+      "value": "SRV-000001",
+      "type": "string"
+    },
+    {
+      "key": "remittanceId",
+      "value": "REM-2026-10-0001",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "1",
+      "type": "string"
+    },
+    {
       "key": "zoneId",
       "value": "Z-03",
       "type": "string"
@@ -101,7 +161,7 @@
     },
     {
       "key": "householdId",
-      "value": "HH-KCC-0012840",
+      "value": "HH-KCC-0000001",
       "type": "string"
     },
     {
@@ -136,7 +196,7 @@
     },
     {
       "key": "billId",
-      "value": "B-2026-07-0009050",
+      "value": "B-2026-10-0000001",
       "type": "string"
     },
     {
@@ -156,7 +216,7 @@
     },
     {
       "key": "qrTag",
-      "value": "SS-05003",
+      "value": "SS-000001",
       "type": "string"
     },
     {
@@ -374,6 +434,100 @@
               }
             }
           ]
+        },
+        {
+          "name": "Sign in with password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login",
+                ""
+              ]
+            },
+            "description": "Phone + password — the sign-in the web app offers. Returns the same `{access, refresh, user}` body as OTP verification. A wrong number and a wrong password fail identically, so it cannot enumerate accounts.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Store the JWT pair and the signed-in operator for every later request.",
+                  "const ok = pm.response.code === 200;",
+                  "pm.test('signed in', () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('accessToken', body.access);",
+                  "  pm.collectionVariables.set('refreshToken', body.refresh);",
+                  "  pm.collectionVariables.set('roleKey', body.user.roleKey);",
+                  "  if (body.user.collector) pm.collectionVariables.set('collectorId', body.user.collector);",
+                  "  console.log('Signed in as', body.user.name, '(' + body.user.role + ')');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Change my password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/password/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "password",
+                ""
+              ]
+            },
+            "description": "Runs the same password validators as account creation. Fails on a wrong `currentPassword`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"password\": \"a-new-long-passphrase\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
         },
         {
           "name": "Sign in with PIN",
@@ -673,8 +827,8 @@
       ]
     },
     {
-      "name": "01 · Catalog & reference data",
-      "description": "Zones, wards, roads, tiers and the eight option lists. `GET /api/catalog/` returns all of it in one call; the CRUD endpoints exist so an agency admin can maintain the lists.",
+      "name": "01 · Catalog & setup",
+      "description": "The geography — cities, zones, wards, blocks and roads — plus the setup lists (city types, agency types, dumping points, tiers). `GET /api/catalog/` returns all of it in one call; the CRUD endpoints are the Setup page's, writable by a super admin.",
       "item": [
         {
           "name": "Catalog bundle",
@@ -692,7 +846,502 @@
                 ""
               ]
             },
-            "description": "**Call this once after signing in.** Every dropdown the app needs in one round trip: zones, wards, `roadsByWard`, tiers, blood groups, and the eight option lists (customer types, holding types, storage types, suitable times, payment modes, potential reasons, time gaps, current practices).\n\nEvery option row carries both `key` (the i18n key the Bangla dictionary resolves) and `label` (the English fallback)."
+            "description": "**Call this once after signing in.** Every dropdown the app needs in one round trip: `cities`, `cityTypes`, `agencyTypes`, `zones`, `wards`, `roadsByWard`, `dumpingPoints`, tiers, blood groups, districts/thanas and the eight option lists.\n\nOption rows carry both `key` (the i18n key the Bangla dictionary resolves) and `label` (the English fallback). Cities, zones, wards and dumping points also carry `nameBn`. Only **active** rows are included — a hidden entry leaves the dropdowns but stays on the records already using it."
+          },
+          "response": []
+        },
+        {
+          "name": "List cities",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "city_type",
+                  "value": "city_corporation",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "City corporations and pourashovas — the top of the geography (City → Zone → Ward → Area/Road). Each carries its own collection-day times."
+          },
+          "response": []
+        },
+        {
+          "name": "Create city",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities",
+                ""
+              ]
+            },
+            "description": "**Super admin only.** `collectionCutoff` (default 21:00) is when every holding with no complaint counts as collected; `complaintDeadline` (default 12:00) is the next-day time until which a complaint can still mark that day not collected. `cityType` comes from **City types**.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"SCC\",\n  \"name\": \"Sylhet City Corporation\",\n  \"nameBn\": \"সিলেট সিটি কর্পোরেশন\",\n  \"cityType\": \"city_corporation\",\n  \"district\": \"Sylhet\",\n  \"lat\": 24.8949,\n  \"lng\": 91.8687,\n  \"collectionCutoff\": \"21:00\",\n  \"complaintDeadline\": \"12:00\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get city",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities/{{cityId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities",
+                "{{cityId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update city",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities/{{cityId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities",
+                "{{cityId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionCutoff\": \"20:30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete city",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities/{{cityId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities",
+                "{{cityId}}",
+                ""
+              ]
+            },
+            "description": "Refused while any zone or agency belongs to the city."
+          },
+          "response": []
+        },
+        {
+          "name": "List city types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/city-types/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "city-types",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Setup list behind the city form: City Corporation, Pourashova / Municipality, and anything an admin adds."
+          },
+          "response": []
+        },
+        {
+          "name": "Add a city type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/city-types/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "city-types",
+                ""
+              ]
+            },
+            "description": "**Super admin only.** Appears in the dropdown at once; a row without a dictionary entry shows its own `label`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"union_parishad\",\n  \"key\": \"opt.cityType.union_parishad\",\n  \"label\": \"Union Parishad\",\n  \"sortOrder\": 3,\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get city type",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/city-types/{{cityTypeId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "city-types",
+                "{{cityTypeId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update city type",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/city-types/{{cityTypeId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "city-types",
+                "{{cityTypeId}}",
+                ""
+              ]
+            },
+            "description": "`active: false` hides it from dropdowns; cities already using it keep it.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete city type",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/city-types/{{cityTypeId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "city-types",
+                "{{cityTypeId}}",
+                ""
+              ]
+            },
+            "description": "Refused while a city uses it."
+          },
+          "response": []
+        },
+        {
+          "name": "List agency types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agency-types/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agency-types",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Setup list behind the agency form: private company, NGO, CBO, cooperative, City Corporation (in-house), Pourashova (in-house)…"
+          },
+          "response": []
+        },
+        {
+          "name": "Add an agency type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/agency-types/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agency-types",
+                ""
+              ]
+            },
+            "description": "**Super admin only.**",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"trust\",\n  \"key\": \"opt.agencyType.trust\",\n  \"label\": \"Trust\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get agency type",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agency-types/{{agencyTypeId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agency-types",
+                "{{agencyTypeId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update agency type",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/agency-types/{{agencyTypeId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agency-types",
+                "{{agencyTypeId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Private limited company\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete agency type",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agency-types/{{agencyTypeId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agency-types",
+                "{{agencyTypeId}}",
+                ""
+              ]
+            },
+            "description": "Refused while an agency uses it."
           },
           "response": []
         },
@@ -712,6 +1361,12 @@
                 ""
               ],
               "query": [
+                {
+                  "key": "city",
+                  "value": "{{cityId}}",
+                  "description": "One city's zones.",
+                  "disabled": true
+                },
                 {
                   "key": "page",
                   "value": "1",
@@ -763,10 +1418,10 @@
                 ""
               ]
             },
-            "description": "Agency admin only. Ids are supplied, not generated — they appear on printed material.",
+            "description": "**Super admin only.** Ids are supplied, not generated, and shared by every city — prefix them with the city code.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": \"Z-07\",\n  \"key\": \"opt.zone.Z-07\",\n  \"name\": \"Boyra\"\n}",
+              "raw": "{\n  \"id\": \"SCC-Z1\",\n  \"key\": \"opt.zone.SCC-Z1\",\n  \"name\": \"Zindabazar\",\n  \"nameBn\": \"জিন্দাবাজার\",\n  \"city\": \"{{cityId}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -822,7 +1477,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Sonadanga\"\n}",
+              "raw": "{\n  \"nameBn\": \"সোনাডাঙ্গা\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -873,6 +1528,12 @@
                   "key": "zone",
                   "value": "{{zoneId}}",
                   "description": "Filter to one zone.",
+                  "disabled": true
+                },
+                {
+                  "key": "zone__city",
+                  "value": "{{cityId}}",
+                  "description": "Filter to one city.",
                   "disabled": true
                 },
                 {
@@ -932,10 +1593,10 @@
                 ""
               ]
             },
-            "description": "Agency admin only. `lat`/`lng` is the ward centre the live map centres on and generated households scatter around.",
+            "description": "**Super admin only.** `lat`/`lng` is the ward centre the live map opens on. `city` is read-only — a ward moves city by moving zone. `nameBn` is shown in Bangla mode for a ward with no dictionary entry.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": \"W-22\",\n  \"key\": \"opt.ward.W-22\",\n  \"name\": \"Ward 22 — Boyra\",\n  \"zone\": \"{{zoneId}}\",\n  \"lat\": 22.834,\n  \"lng\": 89.5002\n}",
+              "raw": "{\n  \"id\": \"SCC-W22\",\n  \"key\": \"opt.ward.SCC-W22\",\n  \"name\": \"Ward 22 — Zindabazar\",\n  \"nameBn\": \"ওয়ার্ড ২২ — জিন্দাবাজার\",\n  \"zone\": \"SCC-Z1\",\n  \"lat\": 24.8949,\n  \"lng\": 91.8687,\n  \"active\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -988,10 +1649,10 @@
                 ""
               ]
             },
-            "description": "",
+            "description": "A hidden ward leaves the dropdowns; records already in it keep it.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Ward 14 — Sonadanga\"\n}",
+              "raw": "{\n  \"active\": false\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1015,6 +1676,175 @@
                 "api",
                 "wards",
                 "{{wardId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "List blocks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/blocks/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "blocks",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "ward",
+                  "value": "{{wardId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Named divisions of a ward — the patch a surveyor is given to walk."
+          },
+          "response": []
+        },
+        {
+          "name": "Create block",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/blocks/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "blocks",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"W-14-E\",\n  \"ward\": \"{{wardId}}\",\n  \"name\": \"Block-E\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get block",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/blocks/{{blockId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "blocks",
+                "{{blockId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update block",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/blocks/{{blockId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "blocks",
+                "{{blockId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Block-E (North)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete block",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/blocks/{{blockId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "blocks",
+                "{{blockId}}",
                 ""
               ]
             },
@@ -1192,6 +2022,187 @@
           "response": []
         },
         {
+          "name": "List dumping points",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/dumping-points/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dumping-points",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "city",
+                  "value": "{{cityId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "kind",
+                  "value": "transfer_station",
+                  "description": "`dumping_area` | `disposal_site` | `transfer_station`.",
+                  "disabled": true
+                },
+                {
+                  "key": "wards",
+                  "value": "{{wardId}}",
+                  "description": "Points serving this ward.",
+                  "disabled": true
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Where each city's waste is taken, and the wards whose waste goes there."
+          },
+          "response": []
+        },
+        {
+          "name": "Add a dumping point",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/dumping-points/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dumping-points",
+                ""
+              ]
+            },
+            "description": "**Super admin only.** `wards` must all be in the point's `city`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rajbandh Landfill\",\n  \"nameBn\": \"রাজবাঁধ ল্যান্ডফিল\",\n  \"kind\": \"disposal_site\",\n  \"city\": \"KCC\",\n  \"wards\": [\n    \"{{wardId}}\"\n  ],\n  \"lat\": 22.7891,\n  \"lng\": 89.5012,\n  \"capacityTonnes\": 450,\n  \"notes\": \"\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get dumping point",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/dumping-points/{{dumpingPointId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dumping-points",
+                "{{dumpingPointId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update dumping point",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/dumping-points/{{dumpingPointId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dumping-points",
+                "{{dumpingPointId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"capacityTonnes\": 500\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete dumping point",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/dumping-points/{{dumpingPointId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dumping-points",
+                "{{dumpingPointId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
           "name": "List tiers",
           "request": {
             "method": "GET",
@@ -1233,7 +2244,7 @@
                 }
               ]
             },
-            "description": "Service tiers and the monthly charge each one carries. A household's `charge` defaults from its tier."
+            "description": "Service tiers and the standard monthly charge each one carries. A **holding's** charge defaults from its tier."
           },
           "response": []
         },
@@ -1351,22 +2362,22 @@
       ]
     },
     {
-      "name": "02 · Customers",
-      "description": "Households under service, and surveyed potential customers — the 'ghost homes' not yet paying. Converting a survey creates the household and keeps the survey, so the funnel has history.",
+      "name": "02 · Holdings & households",
+      "description": "The Holding Master — the unit every operation is done by, with its service charge and QR tag — its families (occupant records), bulk Excel/CSV upload, and potential customers not yet under service.",
       "item": [
         {
-          "name": "List households",
+          "name": "List holdings",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/households/?",
+              "raw": "{{baseUrl}}/api/holdings/?",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "households",
+                "holdings",
                 ""
               ],
               "query": [
@@ -1385,12 +2396,12 @@
                 {
                   "key": "road",
                   "value": "",
-                  "description": "",
+                  "description": "Road name.",
                   "disabled": true
                 },
                 {
-                  "key": "tier",
-                  "value": "{{tierId}}",
+                  "key": "holdingType",
+                  "value": "",
                   "description": "",
                   "disabled": true
                 },
@@ -1401,15 +2412,9 @@
                   "disabled": true
                 },
                 {
-                  "key": "customer_type",
-                  "value": "residential",
-                  "description": "",
-                  "disabled": true
-                },
-                {
                   "key": "verified",
                   "value": "true",
-                  "description": "GPS pin confirmed.",
+                  "description": "Location confirmed.",
                   "disabled": true
                 },
                 {
@@ -1419,15 +2424,15 @@
                   "disabled": true
                 },
                 {
-                  "key": "hasDues",
-                  "value": "true",
-                  "description": "Outstanding money on record.",
+                  "key": "serviceStatus",
+                  "value": "partial",
+                  "description": "`none` | `partial` | `full` (from its households).",
                   "disabled": true
                 },
                 {
-                  "key": "unplanned",
+                  "key": "unitsMismatch",
                   "value": "true",
-                  "description": "Not on any route.",
+                  "description": "Active households do not equal declared units.",
                   "disabled": true
                 },
                 {
@@ -1456,12 +2461,419 @@
                 }
               ]
             },
-            "description": "The customer register. Results are **ward-scoped server-side** to the caller: a supervisor's `?ward=` cannot widen past their own wards."
+            "description": "The Holding Master. **Every operation is holding-wise** — the service charge, the monthly bill, the daily visit and the QR tag belong to the building. Rows carry `qr`, `tier`, `charge`, `paymentMode`, `paymentDay`, read-only `effectiveCharge`, `dues`, `routeId`, `householdCount`, `activeHouseholdCount` and `unitsMatch` (households must equal units; `null` when no unit count is declared).\n\nWard- and agency-scoped server-side."
           },
           "response": []
         },
         {
-          "name": "Create household",
+          "name": "Register a holding (with its families)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/holdings/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "holdings",
+                ""
+              ]
+            },
+            "description": "The building and the families in it in **one save** — all or nothing. `households` rows without an `id` are created; rows with one update that family; a family left out is untouched (retire one with `status`).\n\nService terms are the holding's: `tier`, `charge` (0 = the tier's standard), `paymentMode`, `paymentDay`. The QR tag is issued automatically.\n\n**Households must equal units:** more active families than `unitsTotal` is refused (`unitsTotal` error); fewer saves and is flagged by `unitsMatch: false`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ward\": \"{{wardId}}\",\n  \"road\": \"KDA Avenue\",\n  \"holdingNo\": \"42/A\",\n  \"holdingType\": \"single_storey\",\n  \"ownerName\": \"Rahim Uddin\",\n  \"ownerPhone\": \"01711223344\",\n  \"district\": \"Khulna\",\n  \"thana\": \"Sonadanga\",\n  \"floors\": 2,\n  \"unitsTotal\": 2,\n  \"tier\": \"{{tierId}}\",\n  \"charge\": 0,\n  \"paymentMode\": \"cash\",\n  \"paymentDay\": 5,\n  \"agency\": \"{{agencyId}}\",\n  \"notes\": \"\",\n  \"households\": [\n    {\n      \"unit\": \"1A\",\n      \"head\": \"Rahim Uddin\",\n      \"phone\": \"01711223344\",\n      \"members\": 5\n    },\n    {\n      \"unit\": \"2A\",\n      \"head\": \"Shirin Akter\",\n      \"phone\": \"01911223344\",\n      \"members\": 3\n    }\n  ],\n  \"householdDefaults\": {\n    \"customerType\": \"residential\",\n    \"storage\": \"covered_bin\",\n    \"suitableTime\": \"morning\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get holding",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/holdings/{{holdingId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "holdings",
+                "{{holdingId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update holding",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/holdings/{{holdingId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "holdings",
+                "{{holdingId}}",
+                ""
+              ]
+            },
+            "description": "Change the building's service terms. Lowering `unitsTotal` below its active households is refused.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier\": \"{{tierId}}\",\n  \"charge\": 250,\n  \"paymentDay\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete holding",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/holdings/{{holdingId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "holdings",
+                "{{holdingId}}",
+                ""
+              ]
+            },
+            "description": "Its bills, payments, visits and complaints cascade with it."
+          },
+          "response": []
+        },
+        {
+          "name": "Families in a holding",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/holdings/{{holdingId}}/households/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "holdings",
+                "{{holdingId}}",
+                "households",
+                ""
+              ]
+            },
+            "description": "The occupant records for the editor's right-hand panel."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify the building's location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/holdings/{{holdingId}}/verify/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "holdings",
+                "{{holdingId}}",
+                "verify",
+                ""
+              ]
+            },
+            "description": "Confirms the building's pin. **This is the gate for routing** — the server refuses to put an unverified holding on a route.\n\n`placedByHand: true` records that an office user dropped the pin on a map rather than a collector standing at the door with GPS.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 22.8452,\n  \"lng\": 89.5405,\n  \"accuracy\": 8,\n  \"placedByHand\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Resolve a building QR tag",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/holdings/by-qr/{{qrTag}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "holdings",
+                "by-qr",
+                "{{qrTag}}",
+                ""
+              ]
+            },
+            "description": "Look up the holding behind a scanned building tag (or a holding id). Use `/api/collection/scan/` instead during a round — that one also answers *whether the stop belongs to this collector today*."
+          },
+          "response": []
+        },
+        {
+          "name": "Unplanned holdings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/holdings/unplanned/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "holdings",
+                "unplanned",
+                ""
+              ]
+            },
+            "description": "The route planner's to-do list: buildings that could be routed now, and buildings blocked because their location is unverified."
+          },
+          "response": []
+        },
+        {
+          "name": "Download the bulk-upload template",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/holdings/import-template/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "holdings",
+                "import-template",
+                ""
+              ]
+            },
+            "description": "**Admin only.** An `.xlsx` with the upload columns, an example row and a Notes sheet: Holding No · Name · Mobile · City · Ward · Area · Address · Route · GPS Location, plus optional Holding Type · Tier · Charge · Units · Agency."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk upload — preview",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/holdings/import/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "holdings",
+                "import",
+                ""
+              ]
+            },
+            "description": "**Admin only** (agency admin or super admin). Validates every row and returns `{dryRun, rows, summary}` — nothing is written.\n\nEach row reports `action` (`create` | `update`), `status`, `errors` and `warnings`. Checks: required columns and fields; city and ward (code, name or number); mobile `01XXXXXXXXX` (+880 accepted); GPS inside Bangladesh; route in the same ward and only with GPS; tier/agency exist; no duplicate rows; an agency admin uploads only for their own agency.\n\n`Name`/`Mobile` are the owner; `Area` is the road (a new one is added to the ward); GPS pins and verifies the building; a matching ward + area + holding no **updates** instead of duplicating. At most 5000 rows / 5 MB.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Excel (.xlsx) or CSV (.csv) — pick it in Postman."
+                },
+                {
+                  "key": "commit",
+                  "value": "false",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk upload — import",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/holdings/import/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "holdings",
+                "import",
+                ""
+              ]
+            },
+            "description": "Writes the **valid** rows in one transaction and skips the invalid ones; `summary.created` / `summary.updated` say what happened.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "The same file."
+                },
+                {
+                  "key": "commit",
+                  "value": "true",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List households",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/households/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "households",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "holding",
+                  "value": "{{holdingId}}",
+                  "description": "One building's families.",
+                  "disabled": true
+                },
+                {
+                  "key": "ward",
+                  "value": "{{wardId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "zone",
+                  "value": "{{zoneId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "road",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "active",
+                  "description": "`active` | `inactive`.",
+                  "disabled": true
+                },
+                {
+                  "key": "customer_type",
+                  "value": "residential",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "verified",
+                  "value": "true",
+                  "description": "The building's pin is confirmed.",
+                  "disabled": true
+                },
+                {
+                  "key": "located",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "unplanned",
+                  "value": "true",
+                  "description": "Its building is not on any route.",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "The families living in each holding — **occupant records only**: who lives there (name, phone, unit, members, profile). No charge, bill, visit or QR tag — those are the holding's."
+          },
+          "response": []
+        },
+        {
+          "name": "Add a household to a holding",
           "request": {
             "method": "POST",
             "header": [
@@ -1481,10 +2893,10 @@
                 ""
               ]
             },
-            "description": "`ward`, `road`, `holding`, `head`, `tier`, `paymentMode`, `customerType`, `storage`, `holdingType` and `suitableTime` are required. The id (`HH-KCC-…`) is allocated by the server.\n\n`charge` defaults from the tier when omitted.",
+            "description": "`holding`, `head`, `customerType`, `storage`, `holdingType` and `suitableTime` are required. Ward, road and holding number are copied from the holding. Refused when the holding already has as many active households as its `unitsTotal`.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"ward\": \"{{wardId}}\",\n  \"road\": \"KDA Avenue\",\n  \"holding\": \"42/A\",\n  \"head\": \"Rahim Uddin\",\n  \"phone\": \"01711223344\",\n  \"tier\": \"{{tierId}}\",\n  \"charge\": 100,\n  \"paymentMode\": \"cash\",\n  \"paymentDay\": 5,\n  \"status\": \"active\",\n  \"customerType\": \"residential\",\n  \"holdingType\": \"single_storey\",\n  \"storage\": \"covered_bin\",\n  \"suitableTime\": \"morning\",\n  \"floor\": \"Ground\",\n  \"members\": 5,\n  \"membersUnder5\": 1,\n  \"membersFemale\": 3,\n  \"profession\": \"Teacher\",\n  \"address\": \"42/A KDA Avenue, Sonadanga\",\n  \"lat\": 22.8452,\n  \"lng\": 89.5405,\n  \"accuracy\": 8,\n  \"qr\": \"\"\n}",
+              "raw": "{\n  \"holding\": \"{{holdingId}}\",\n  \"unit\": \"3B\",\n  \"head\": \"Salma Begum\",\n  \"phone\": \"01811223344\",\n  \"status\": \"active\",\n  \"customerType\": \"residential\",\n  \"holdingType\": \"single_storey\",\n  \"storage\": \"covered_bin\",\n  \"suitableTime\": \"morning\",\n  \"floor\": \"3rd\",\n  \"members\": 4,\n  \"membersUnder5\": 1,\n  \"membersFemale\": 2,\n  \"profession\": \"Tailor\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1511,7 +2923,7 @@
                 ""
               ]
             },
-            "description": "Also carries derived fields: `lastVisit` (computed from the visit log, never stored), `effectiveCharge`, `routable` and `routeId`."
+            "description": ""
           },
           "response": []
         },
@@ -1537,10 +2949,10 @@
                 ""
               ]
             },
-            "description": "",
+            "description": "A family that moved out is retired with `status: inactive`, which frees its unit.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"01711223355\",\n  \"suitableTime\": \"evening\"\n}",
+              "raw": "{\n  \"phone\": \"01711223355\",\n  \"status\": \"inactive\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1572,86 +2984,7 @@
           "response": []
         },
         {
-          "name": "Verify GPS location",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/households/{{householdId}}/verify/",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "households",
-                "{{householdId}}",
-                "verify",
-                ""
-              ]
-            },
-            "description": "Confirms the holding's pin. **This is the gate for routing** — the server refuses to put an unverified holding on a route.\n\n`placedByHand: true` records that an office user dropped the pin on a map rather than a collector standing at the door with GPS.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"lat\": 22.8452,\n  \"lng\": 89.5405,\n  \"accuracy\": 8,\n  \"placedByHand\": false\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Resolve a QR tag",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/households/by-qr/{{qrTag}}/",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "households",
-                "by-qr",
-                "{{qrTag}}",
-                ""
-              ]
-            },
-            "description": "Look up the household behind a scanned bin sticker. Use `/api/collection/scan/` instead when the scan happens during a round — that one also answers *whether the stop belongs to this collector today*."
-          },
-          "response": []
-        },
-        {
-          "name": "Unplanned holdings",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/households/unplanned/",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "households",
-                "unplanned",
-                ""
-              ]
-            },
-            "description": "The route planner's to-do list, split the way the planner presents it: holdings that could be routed now, and holdings blocked because their location is unverified."
-          },
-          "response": []
-        },
-        {
-          "name": "List potential customers (surveys)",
+          "name": "List potential customers",
           "request": {
             "method": "GET",
             "header": [],
@@ -1681,7 +3014,7 @@
                 {
                   "key": "converted",
                   "value": "false",
-                  "description": "Exclude surveys already signed up.",
+                  "description": "Exclude ones already signed up.",
                   "disabled": true
                 },
                 {
@@ -1734,12 +3067,12 @@
                 }
               ]
             },
-            "description": "Surveyed 'ghost homes' — holdings not yet paying for service. Kept separate from households so the conversion funnel has history."
+            "description": "Surveyed families not yet under service — 'ghost homes' — attached to a holding. Kept separate so the conversion funnel has history."
           },
           "response": []
         },
         {
-          "name": "Create survey",
+          "name": "Create potential customer",
           "request": {
             "method": "POST",
             "header": [
@@ -1762,7 +3095,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"ward\": \"{{wardId}}\",\n  \"road\": \"KDA Avenue\",\n  \"holding\": \"77/B\",\n  \"head\": \"Salma Begum\",\n  \"phone\": \"01911223344\",\n  \"estTier\": \"{{tierId}}\",\n  \"surveyedAt\": \"{{today}}\",\n  \"surveyor\": \"{{collectorId}}\",\n  \"reason\": \"never_approached\",\n  \"timeGap\": \"never\",\n  \"currentPractice\": \"roadside_dump\",\n  \"customerType\": \"residential\",\n  \"holdingType\": \"single_storey\",\n  \"storage\": \"open_bin\",\n  \"suitableTime\": \"morning\",\n  \"lat\": 22.8455,\n  \"lng\": 89.541,\n  \"accuracy\": 10,\n  \"notes\": \"Interested if the charge can be paid weekly.\"\n}",
+              "raw": "{\n  \"holding\": \"{{holdingId}}\",\n  \"unit\": \"\",\n  \"head\": \"Salma Begum\",\n  \"phone\": \"01911223344\",\n  \"estTier\": \"{{tierId}}\",\n  \"surveyedAt\": \"{{today}}\",\n  \"surveyor\": \"{{collectorId}}\",\n  \"reason\": \"never_approached\",\n  \"timeGap\": \"never\",\n  \"currentPractice\": \"roadside_dump\",\n  \"customerType\": \"residential\",\n  \"holdingType\": \"single_storey\",\n  \"storage\": \"open_bin\",\n  \"suitableTime\": \"morning\",\n  \"notes\": \"Interested if the charge can be paid weekly.\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1773,7 +3106,7 @@
           "response": []
         },
         {
-          "name": "Get survey",
+          "name": "Get potential customer",
           "request": {
             "method": "GET",
             "header": [],
@@ -1794,7 +3127,7 @@
           "response": []
         },
         {
-          "name": "Update survey",
+          "name": "Update potential customer",
           "request": {
             "method": "PATCH",
             "header": [
@@ -1829,7 +3162,7 @@
           "response": []
         },
         {
-          "name": "Delete survey",
+          "name": "Delete potential customer",
           "request": {
             "method": "DELETE",
             "header": [],
@@ -1850,43 +3183,7 @@
           "response": []
         },
         {
-          "name": "Verify survey location",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/potential-customers/{{potentialId}}/verify/",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "potential-customers",
-                "{{potentialId}}",
-                "verify",
-                ""
-              ]
-            },
-            "description": "",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"lat\": 22.8455,\n  \"lng\": 89.541,\n  \"accuracy\": 10,\n  \"placedByHand\": false\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Convert survey → household",
+          "name": "Bring under service",
           "request": {
             "method": "POST",
             "header": [
@@ -1908,10 +3205,10 @@
                 ""
               ]
             },
-            "description": "Signs the holding up for service. Returns `{household, potential}`: the new customer **and** the survey, which is closed rather than deleted so the conversion funnel keeps its history.\n\nEvery field is optional — omitted ones fall back to the survey's estimates (`estTier` becomes `tier`). Converting twice fails with `already_converted`.",
+            "description": "Creates the **household** in its holding and closes the survey (kept, not deleted). Returns `{household, potential}`.\n\nThe terms land on the **holding**: one with no tier yet takes these (or the survey's `estTier`); one already under service keeps its terms except for any sent here. Every field is optional. Converting twice fails with `already_converted`.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tier\": \"{{tierId}}\",\n  \"charge\": 100,\n  \"paymentMode\": \"cash\",\n  \"paymentDay\": 5,\n  \"qr\": \"\"\n}",
+              "raw": "{\n  \"tier\": \"{{tierId}}\",\n  \"charge\": 100,\n  \"paymentMode\": \"cash\",\n  \"paymentDay\": 5\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1924,7 +3221,970 @@
       ]
     },
     {
-      "name": "03 · Collectors",
+      "name": "03 · Surveys",
+      "description": "Door-to-door questionnaires: forms, recorded surveys, review and conversion into a holding.",
+      "item": [
+        {
+          "name": "List survey forms",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/survey-forms/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "survey-forms",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "The questionnaires (e.g. the door-to-door household form)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get survey form",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/survey-forms/{{surveyFormId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "survey-forms",
+                "{{surveyFormId}}",
+                ""
+              ]
+            },
+            "description": "With every question, option and show-if rule."
+          },
+          "response": []
+        },
+        {
+          "name": "Published form",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/survey-forms/published/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "survey-forms",
+                "published",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "d2d-household",
+                  "description": "The form's stable code.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "The current published version the field app renders."
+          },
+          "response": []
+        },
+        {
+          "name": "List surveys",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/surveys/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "surveys",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "form",
+                  "value": "{{surveyFormId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "submitted",
+                  "description": "`draft` | `submitted` | `reviewed` | `rejected` | `converted`.",
+                  "disabled": true
+                },
+                {
+                  "key": "surveyor",
+                  "value": "{{collectorId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "block",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "from_date",
+                  "value": "",
+                  "description": "YYYY-MM-DD.",
+                  "disabled": true
+                },
+                {
+                  "key": "converted",
+                  "value": "false",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "gives_to_van",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "synced",
+                  "value": "false",
+                  "description": "Still queued on a device.",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Record a survey",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/surveys/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "surveys",
+                ""
+              ]
+            },
+            "description": "`answers` is `{question_code: value}`; per-question validation runs against the form. `holding` may name the building it was started from.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"form\": \"{{surveyFormId}}\",\n  \"surveyor\": \"{{collectorId}}\",\n  \"answers\": {\n    \"ward\": \"{{wardId}}\",\n    \"holding_no\": \"77/B\",\n    \"respondent_name\": \"Salma Begum\",\n    \"respondent_phone\": \"01911223344\"\n  },\n  \"lat\": 22.8455,\n  \"lng\": 89.541,\n  \"accuracy\": 10,\n  \"notes\": \"\",\n  \"status\": \"submitted\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get survey",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/surveys/{{surveyId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "surveys",
+                "{{surveyId}}",
+                ""
+              ]
+            },
+            "description": "With answers and photos."
+          },
+          "response": []
+        },
+        {
+          "name": "Update survey",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/surveys/{{surveyId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "surveys",
+                "{{surveyId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Re-visit on Friday.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete survey",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/surveys/{{surveyId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "surveys",
+                "{{surveyId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Upload queued surveys",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/surveys/bulk/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "surveys",
+                "bulk",
+                ""
+              ]
+            },
+            "description": "The field app's offline queue. Answers per row; one bad row never rejects the batch.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rows\": [\n    {\n      \"form\": \"{{surveyFormId}}\",\n      \"answers\": {\n        \"holding_no\": \"80\"\n      }\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Acknowledge a synced survey",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/surveys/{{surveyId}}/sync/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "surveys",
+                "{{surveyId}}",
+                "sync",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Review a survey",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/surveys/{{surveyId}}/review/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "surveys",
+                "{{surveyId}}",
+                "review",
+                ""
+              ]
+            },
+            "description": "A supervisor marks it `reviewed` (good enough to act on) or `rejected`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"reviewed\",\n  \"notes\": \"Checked with the owner by phone.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Conversion preview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/surveys/{{surveyId}}/convert-preview/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "surveys",
+                "{{surveyId}}",
+                "convert-preview",
+                ""
+              ]
+            },
+            "description": "What converting would create, and whether a holding already matches."
+          },
+          "response": []
+        },
+        {
+          "name": "Convert survey → holding",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/surveys/{{surveyId}}/convert/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "surveys",
+                "{{surveyId}}",
+                "convert",
+                ""
+              ]
+            },
+            "description": "**Agency admin.** Puts the surveyed building on the register. Every field is optional — defaults come from the survey; `road` is a road id; `link` attaches to an existing holding instead of creating one.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"holdingType\": \"single_storey\",\n  \"holdingNo\": \"77/B\",\n  \"ownerName\": \"Salma Begum\",\n  \"ownerPhone\": \"01911223344\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 · Agencies & remittances",
+      "description": "The organisations that collect waste (the client's \"customers\"), their collectors, and the money they remit to the corporation.",
+      "item": [
+        {
+          "name": "List agencies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agencies/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agencies",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "city",
+                  "value": "{{cityId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "ward",
+                  "value": "{{wardId}}",
+                  "description": "Agencies serving this ward.",
+                  "disabled": true
+                },
+                {
+                  "key": "agencyType",
+                  "value": "private",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "active",
+                  "description": "`active` | `suspended` | `expired` | `terminated`.",
+                  "disabled": true
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "The client's \"customers\": whoever collects waste from holdings — a contractor, NGO, or the city's own in-house service. One city may have one or many; an agency serves many wards and runs many vans. Rows carry `collectorCount`, `holdingCount` and derived `contractExpired`."
+          },
+          "response": []
+        },
+        {
+          "name": "Register an agency",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/agencies/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agencies",
+                ""
+              ]
+            },
+            "description": "**Super admin only.** `agencyType` comes from **Agency types**. `serviceWards` must all be in the agency's `city`; moving an agency to another city while it still serves wards of the old one is refused.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Green Equipment Limited\",\n  \"nameBn\": \"গ্রিন ইকুইপমেন্ট লিমিটেড\",\n  \"shortCode\": \"GEL\",\n  \"agencyType\": \"private\",\n  \"city\": \"{{cityId}}\",\n  \"serviceWards\": [\n    \"{{wardId}}\"\n  ],\n  \"contactPerson\": \"Shahidul Islam\",\n  \"phone\": \"01711445566\",\n  \"contractNo\": \"KCC/SWM/2026/09\",\n  \"contractStart\": \"2026-01-01\",\n  \"contractEnd\": \"2027-12-31\",\n  \"status\": \"active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get agency",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agencies/{{agencyId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agencies",
+                "{{agencyId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update agency",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/agencies/{{agencyId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agencies",
+                "{{agencyId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contractEnd\": \"2028-06-30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete agency",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agencies/{{agencyId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agencies",
+                "{{agencyId}}",
+                ""
+              ]
+            },
+            "description": "Refused while collectors, vans or holdings belong to it."
+          },
+          "response": []
+        },
+        {
+          "name": "Agency's collectors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agencies/{{agencyId}}/collectors/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agencies",
+                "{{agencyId}}",
+                "collectors",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Agency's employment history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agencies/{{agencyId}}/employment-history/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agencies",
+                "{{agencyId}}",
+                "employment-history",
+                ""
+              ]
+            },
+            "description": "Who worked for this agency, and when. Rows carry `agencyName` and `agencyNameBn`."
+          },
+          "response": []
+        },
+        {
+          "name": "Transfer a collector to an agency",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/collectors/{{collectorId}}/transfer/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "collectors",
+                "{{collectorId}}",
+                "transfer",
+                ""
+              ]
+            },
+            "description": "Closes the current employment and opens one with the new agency. Past visits and payments stay credited to the agency that employed the collector then.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agency\": \"{{agencyId}}\",\n  \"onDate\": \"{{today}}\",\n  \"note\": \"Contract moved.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List remittances",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/remittances/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "remittances",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "agency",
+                  "value": "{{agencyId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "An agency's hand-overs of collected service charges to the corporation. Rows carry `agencyName` and `agencyNameBn`. An agency sees its own."
+          },
+          "response": []
+        },
+        {
+          "name": "Record a remittance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/remittances/record/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "remittances",
+                "record",
+                ""
+              ]
+            },
+            "description": "**Super admin only** — it is the corporation acknowledging money received.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agency\": \"{{agencyId}}\",\n  \"period\": \"{{period}}\",\n  \"method\": \"bank\",\n  \"amount\": 125000,\n  \"at\": \"{{nowIso}}\",\n  \"ref\": \"TRX-88231\",\n  \"note\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create remittance (plain)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/remittances/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "remittances",
+                ""
+              ]
+            },
+            "description": "Equivalent to `/record/`; super admin only.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agency\": \"{{agencyId}}\",\n  \"period\": \"{{period}}\",\n  \"method\": \"bank\",\n  \"amount\": 1000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get remittance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/remittances/{{remittanceId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "remittances",
+                "{{remittanceId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update remittance",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/remittances/{{remittanceId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "remittances",
+                "{{remittanceId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ref\": \"TRX-88232\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete remittance",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/remittances/{{remittanceId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "remittances",
+                "{{remittanceId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Agency cash position",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/remittances/cash-position/?period={{period}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "remittances",
+                "cash-position",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "Required. YYYY-MM."
+                }
+              ]
+            },
+            "description": "Collected → deposited → remitted, per agency, for one month."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05 · Collectors",
       "description": "DSP field staff: licensing, attendance, van assignment and performance.",
       "item": [
         {
@@ -2194,8 +4454,8 @@
       ]
     },
     {
-      "name": "04 · Routes & assignments",
-      "description": "Building the walk, ordering its stops, and deciding who walks it. Only a household with a verified GPS pin can be put on a route.",
+      "name": "06 · Routes & assignments",
+      "description": "Building the walk, ordering its stops, and deciding who walks it. A stop is a holding, and only a holding with a verified pin can be put on a route.",
       "item": [
         {
           "name": "List routes",
@@ -2294,10 +4554,10 @@
                 ""
               ]
             },
-            "description": "`stops` is the ordered walk. Every household in it must have a **verified** location or the request fails.\n\nThe id (`RT-W-14-01`) is allocated per ward.",
+            "description": "`stops` is the ordered walk of **holding** ids. Every holding in it must have a **verified** location and sit in the route's ward.\n\nThe id (`RT-W-14-01`) is allocated per ward.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"KDA Avenue morning\",\n  \"ward\": \"{{wardId}}\",\n  \"windowStart\": \"06:30\",\n  \"windowEnd\": \"09:30\",\n  \"stops\": [\n    \"{{householdId}}\"\n  ],\n  \"active\": true\n}",
+              "raw": "{\n  \"name\": \"KDA Avenue morning\",\n  \"ward\": \"{{wardId}}\",\n  \"windowStart\": \"06:30\",\n  \"windowEnd\": \"09:30\",\n  \"stops\": [\n    \"{{holdingId}}\"\n  ],\n  \"active\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2410,7 +4670,7 @@
             "description": "Sets the ordered walk in one call, so a drag-reorder on the planner is **atomic** — the route is never briefly half-ordered. Prefer this over a sequence of add/remove calls when the user reorders.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"stops\": [\n    \"HH-KCC-0012840\",\n    \"HH-KCC-0012841\",\n    \"HH-KCC-0012842\"\n  ]\n}",
+              "raw": "{\n  \"stops\": [\n    \"HLD-KCC-000001\",\n    \"HLD-KCC-000002\",\n    \"HLD-KCC-000003\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2443,10 +4703,10 @@
                 ""
               ]
             },
-            "description": "Adds the holding to the end of the walk. A holding already on another route **moves** here rather than being refused — that is what dragging it across routes on the planner means.",
+            "description": "`hh` here is a **holding** id (the field keeps its old name). Adds the holding to the end of the walk. A holding already on another route **moves** here rather than being refused — that is what dragging it across routes on the planner means.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"hh\": \"{{householdId}}\"\n}",
+              "raw": "{\n  \"hh\": \"{{holdingId}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2482,7 +4742,7 @@
             "description": "Takes the holding off the walk and closes the gap in the numbering.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"hh\": \"{{householdId}}\"\n}",
+              "raw": "{\n  \"hh\": \"{{holdingId}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2706,8 +4966,8 @@
       ]
     },
     {
-      "name": "05 · Collection round & visits",
-      "description": "What a collector's device talks to: the day's round, QR scanning, recording collections and skips, and flushing the offline queue.",
+      "name": "07 · Collection round & visits",
+      "description": "What a collector's device talks to: the day's round, QR scanning, recording collections and skips per holding, and flushing the offline queue. Unconfirmed holdings are assumed collected at the city's cut-off unless a complaint says otherwise.",
       "item": [
         {
           "name": "My round today",
@@ -2738,7 +4998,7 @@
                 }
               ]
             },
-            "description": "Everything the round screen renders in one call: `stops` in walking order, the three `counts` its tabs show, and the `routes` behind them for the headings.\n\nA **collector-role** caller is pinned to their own round whatever they pass — a round names households and phone numbers. Supervisors and admins may look in on anyone, which is how a round gets reviewed from a desk."
+            "description": "Everything the round screen renders in one call: `stops` in walking order (one per **holding**: `holding`, `holdingNo`, owner `head`, `units` = active families, `qr`, `dues`, `visitStatus`), the three `counts` its tabs show, and the `routes` behind them.\n\nA **collector-role** caller is pinned to their own round whatever they pass — a round names owners and phone numbers. Supervisors and admins may look in on anyone, which is how a round gets reviewed from a desk."
           },
           "response": []
         },
@@ -2764,7 +5024,7 @@
                 ""
               ]
             },
-            "description": "Answers **200 in every case** — a wrong-round or worn-label scan is something the collector acts on, not a failed request.\n\n`{ok: true, stop}` — scan is a stop on this round.\n`{ok: false, reason: 'alreadyCollected', stop}` — stops a double entry.\n`{ok: false, reason: 'otherRoute', ...}` — a wrong-round mistake the collector can fix on the spot.\n`{ok: false, reason: 'unknown'}` — unregistered or damaged tag; needs the office.\n`{ok: false, reason: 'unreadable'}` — the camera got nothing.",
+            "description": "Answers **200 in every case** — a wrong-round or worn-label scan is something the collector acts on, not a failed request.\n\n`{ok: true, stop}` — scan is a stop on this round.\n`{ok: false, reason: 'alreadyCollected', stop}` — stops a double entry.\n`{ok: false, reason: 'otherRoute', holding}` — a wrong-round mistake the collector can fix on the spot.\n`{ok: false, reason: 'unknown'}` — unregistered or damaged tag; needs the office.\n`{ok: false, reason: 'unreadable'}` — the camera got nothing.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"raw\": \"{{qrTag}}\",\n  \"collector\": \"{{collectorId}}\",\n  \"day\": \"{{today}}\"\n}",
@@ -2800,8 +5060,8 @@
                   "disabled": true
                 },
                 {
-                  "key": "hh",
-                  "value": "{{householdId}}",
+                  "key": "holding",
+                  "value": "{{holdingId}}",
                   "description": "",
                   "disabled": true
                 },
@@ -2844,7 +5104,7 @@
                 {
                   "key": "source",
                   "value": "scan",
-                  "description": "`scan` | `manual`.",
+                  "description": "`scan` | `manual` | `auto` (written at the city's cut-off).",
                   "disabled": true
                 },
                 {
@@ -2904,10 +5164,10 @@
                 ""
               ]
             },
-            "description": "**One visit per household per day**, enforced by a unique constraint on `(household, served_on)`. Re-posting for the same day updates that row rather than inserting a second one — which is exactly what correcting a skip to a collection, and the offline queue, rely on.\n\nThe tag and route are taken from the plan, not the request, and the live map is notified.",
+            "description": "**One visit per holding per day**, enforced by a unique constraint on `(holding, served_on)`. Collection is holding-wise: one scan of the building's tag covers every family in it. Re-posting for the same day updates that row rather than inserting a second one — which is exactly what correcting a skip to a collection, and the offline queue, rely on.\n\nThe tag and route are taken from the plan, not the request, and the live map is notified.\n\nConfirming is optional: at the city's `collectionCutoff` every due holding with no visit is written an `auto` visit — collected, or skipped with reason `complaint` if a missed-collection complaint names that day (`manage.py close_collection_day`).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"hh\": \"{{householdId}}\",\n  \"collector\": \"{{collectorId}}\",\n  \"status\": \"collected\",\n  \"at\": \"{{nowIso}}\",\n  \"source\": \"scan\",\n  \"lat\": 22.8452,\n  \"lng\": 89.5405,\n  \"accuracy\": 6,\n  \"note\": \"\"\n}",
+              "raw": "{\n  \"holding\": \"{{holdingId}}\",\n  \"collector\": \"{{collectorId}}\",\n  \"status\": \"collected\",\n  \"at\": \"{{nowIso}}\",\n  \"source\": \"scan\",\n  \"lat\": 22.8452,\n  \"lng\": 89.5405,\n  \"accuracy\": 6,\n  \"note\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2941,7 +5201,7 @@
             "description": "A skip needs a `reason`: `noOne` | `noWaste` | `locked` | `access` | `refused`. Correcting it later to `collected` updates the same row.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"hh\": \"{{householdId}}\",\n  \"collector\": \"{{collectorId}}\",\n  \"status\": \"skipped\",\n  \"at\": \"{{nowIso}}\",\n  \"source\": \"manual\",\n  \"reason\": \"locked\",\n  \"note\": \"Nobody home; gate padlocked.\"\n}",
+              "raw": "{\n  \"holding\": \"{{holdingId}}\",\n  \"collector\": \"{{collectorId}}\",\n  \"status\": \"skipped\",\n  \"at\": \"{{nowIso}}\",\n  \"source\": \"manual\",\n  \"reason\": \"locked\",\n  \"note\": \"Nobody home; gate padlocked.\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3053,7 +5313,7 @@
             "description": "What a device flushes when it regains connectivity.\n\n**Answers with per-row outcomes rather than one status code** — the device has to know which rows it may drop and which to keep retrying. A single bad row never rejects the batch.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"rows\": [\n    {\n      \"hh\": \"HH-KCC-0012840\",\n      \"collector\": \"{{collectorId}}\",\n      \"status\": \"collected\",\n      \"at\": \"{{nowIso}}\",\n      \"source\": \"scan\",\n      \"lat\": 22.8452,\n      \"lng\": 89.5405,\n      \"accuracy\": 6\n    },\n    {\n      \"hh\": \"HH-KCC-0012841\",\n      \"collector\": \"{{collectorId}}\",\n      \"status\": \"skipped\",\n      \"at\": \"{{nowIso}}\",\n      \"source\": \"manual\",\n      \"reason\": \"locked\",\n      \"note\": \"Gate locked\"\n    }\n  ]\n}",
+              "raw": "{\n  \"rows\": [\n    {\n      \"holding\": \"HLD-KCC-000001\",\n      \"collector\": \"{{collectorId}}\",\n      \"status\": \"collected\",\n      \"at\": \"{{nowIso}}\",\n      \"source\": \"scan\",\n      \"lat\": 22.8452,\n      \"lng\": 89.5405,\n      \"accuracy\": 6\n    },\n    {\n      \"holding\": \"HLD-KCC-000002\",\n      \"collector\": \"{{collectorId}}\",\n      \"status\": \"skipped\",\n      \"at\": \"{{nowIso}}\",\n      \"source\": \"manual\",\n      \"reason\": \"locked\",\n      \"note\": \"Gate locked\"\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3088,8 +5348,8 @@
       ]
     },
     {
-      "name": "06 · Complaints",
-      "description": "Ticket lifecycle with SLA timers, an immutable audit trail and photo evidence. Status is never a plain field write — each move is its own action endpoint.",
+      "name": "08 · Complaints",
+      "description": "Ticket lifecycle against a holding, with SLA timers, an immutable audit trail and photo evidence. Status is never a plain field write — each move is its own action endpoint.",
       "item": [
         {
           "name": "List complaints",
@@ -3138,9 +5398,15 @@
                   "disabled": true
                 },
                 {
-                  "key": "hh",
-                  "value": "{{householdId}}",
+                  "key": "holding",
+                  "value": "{{holdingId}}",
                   "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "household",
+                  "value": "{{householdId}}",
+                  "description": "The family that reported it.",
                   "disabled": true
                 },
                 {
@@ -3205,7 +5471,7 @@
                 }
               ]
             },
-            "description": "Rows carry the derived `slaState`, `priorityRank` and `nextStatus`, plus the household's `head`, `holding`, `road` and `phone` so the list needs no second lookup."
+            "description": "Rows carry the derived `slaState`, `priorityRank` and `nextStatus`, plus `holding`, `holdingNo`, `road`, and `head`/`phone` (the reporting family's, else the owner's) so the list needs no second lookup."
           },
           "response": []
         },
@@ -3230,10 +5496,10 @@
                 ""
               ]
             },
-            "description": "`type`: `missed_collection` | `overflow` | `billing_dispute` | `staff_behaviour` | `other`.\n\n`note` is write-only — it becomes the first entry in the audit trail. `sla` defaults from the priority.",
+            "description": "A complaint names a **holding**; `household` (optional) is the family in it that reported it — or send only `household` and the holding is taken from it. A household from another holding is refused.\n\n`type`: `missed_collection` | `overflow` | `billing_dispute` | `staff_behaviour` | `other`. A missed collection carries `missedOn`: today (default), or yesterday until the city's `complaintDeadline`; after the cut-off it turns that day's auto visit into *not collected*.\n\n`note` is write-only — it becomes the first entry in the audit trail. `sla` defaults from the priority.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"hh\": \"{{householdId}}\",\n  \"type\": \"missed_collection\",\n  \"channel\": \"phone\",\n  \"priority\": \"high\",\n  \"description\": \"Bin not emptied for three days.\",\n  \"assigned\": \"{{collectorId}}\",\n  \"note\": \"Caller says this is the second time this month.\"\n}",
+              "raw": "{\n  \"holding\": \"{{holdingId}}\",\n  \"household\": \"{{householdId}}\",\n  \"type\": \"missed_collection\",\n  \"missedOn\": \"{{today}}\",\n  \"channel\": \"phone\",\n  \"priority\": \"high\",\n  \"description\": \"Bin not emptied for three days.\",\n  \"assigned\": \"{{collectorId}}\",\n  \"note\": \"Caller says this is the second time this month.\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3618,8 +5884,8 @@
       ]
     },
     {
-      "name": "07 · Billing, payments & cash",
-      "description": "Monthly billing runs, payments including partials, collector cash hand-ins and the reconciliation they feed. Recording a payment is the only way a bill's status changes.",
+      "name": "09 · Billing, payments & cash",
+      "description": "Monthly billing runs (one bill per holding), payments including partials, collector cash hand-ins and the reconciliation they feed. Recording a payment is the only way a bill's status changes.",
       "item": [
         {
           "name": "List bills",
@@ -3644,8 +5910,8 @@
                   "disabled": true
                 },
                 {
-                  "key": "hh",
-                  "value": "{{householdId}}",
+                  "key": "holding",
+                  "value": "{{holdingId}}",
                   "description": "",
                   "disabled": true
                 },
@@ -3711,7 +5977,7 @@
                 }
               ]
             },
-            "description": "Each row carries `received`, `outstanding` and `settlement`, computed from the payments that actually exist.\n\nFilter on **`settlement`**, not `status`: `status` is only ever as fresh as the last `recalculate()`, while `settlement` is derived in SQL and can never disagree with the figures shown."
+            "description": "**One bill per holding per month.** Rows carry `holding`, `holdingNo`, `head` (the owner), and `received`, `outstanding` and `settlement`, computed from the payments that actually exist.\n\nFilter on **`settlement`**, not `status`: `status` is only ever as fresh as the last `recalculate()`, while `settlement` is derived in SQL and can never disagree with the figures shown."
           },
           "response": []
         },
@@ -3772,7 +6038,7 @@
                 ""
               ]
             },
-            "description": "**Agency admin only.** Issues one bill per active household for the period and writes a `BillingRun` audit row. Answers 201.\n\nRe-running the same period does not double-charge — existing bills for the month are respected.",
+            "description": "**Agency admin only.** Issues one bill per **active, routed holding with a charge** (its tier's rate, or its agreed `charge`) for the period and writes a `BillingRun` audit row. Answers 201.\n\nRe-running the same period does not double-charge — existing bills for the month are respected.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"period\": \"{{period}}\",\n  \"issuedOn\": \"{{today}}\",\n  \"dueDays\": 10,\n  \"dryRun\": false\n}",
@@ -3841,6 +6107,62 @@
           "response": []
         },
         {
+          "name": "Edit a bill",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/bills/{{billId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "{{billId}}",
+                ""
+              ]
+            },
+            "description": "**Agency admin only.** `holding` and `period` are fixed at issue time; `status` and `method` are caches and not writable.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 120\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete a bill",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bills/{{billId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "{{billId}}",
+                ""
+              ]
+            },
+            "description": "**Agency admin only.** Its payments go with it and the holding's dues are restated."
+          },
+          "response": []
+        },
+        {
           "name": "Record a payment against a bill",
           "request": {
             "method": "POST",
@@ -3863,7 +6185,7 @@
                 ""
               ]
             },
-            "description": "**The only way a bill's status changes.** `Bill.status` is a cache that `recalculate()` derives from the payments that exist, and `Household.dues` follows from that.\n\nPartial payments are normal — post several and the bill moves unpaid → partial → paid on its own.\n\nOpen to **collectors** as well as office roles: the collector at the door is the person the cash is handed to. `collector` defaults to the signed-in collector; leave it out at the office counter, and that difference is what makes the cash reconciliation meaningful.\n\nReturns the restated bill.",
+            "description": "**The only way a bill's status changes.** `Bill.status` is a cache that `recalculate()` derives from the payments that exist, and `Holding.dues` follows from that.\n\nPartial payments are normal — post several and the bill moves unpaid → partial → paid on its own.\n\nOpen to **collectors** as well as office roles: the collector at the door is the person the cash is handed to. `collector` defaults to the signed-in collector; leave it out at the office counter, and that difference is what makes the cash reconciliation meaningful.\n\nReturns the restated bill.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"amount\": 100,\n  \"method\": \"cash\",\n  \"collector\": \"{{collectorId}}\",\n  \"at\": \"{{nowIso}}\",\n  \"reference\": \"\",\n  \"note\": \"\"\n}",
@@ -3897,10 +6219,10 @@
                 ""
               ]
             },
-            "description": "**Fails with `use_billing_run` for everyone but a superuser.** A hand-made bill would have no `run`, so the month's totals would stop describing the month and a household could quietly be charged twice. Use `POST /api/bills/generate/`.\n\nKept in the collection to document the refusal.",
+            "description": "**Fails with `use_billing_run` for everyone but a superuser.** A hand-made bill would have no `run`, so the month's totals would stop describing the month and a holding could quietly be charged twice. Use `POST /api/bills/generate/`.\n\nKept in the collection to document the refusal.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"hh\": \"{{householdId}}\",\n  \"period\": \"{{period}}\",\n  \"issuedAt\": \"{{today}}\",\n  \"amount\": 100,\n  \"ward\": \"{{wardId}}\"\n}",
+              "raw": "{\n  \"holding\": \"{{holdingId}}\",\n  \"period\": \"{{period}}\",\n  \"issuedAt\": \"{{today}}\",\n  \"amount\": 100,\n  \"ward\": \"{{wardId}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3939,8 +6261,8 @@
                   "disabled": true
                 },
                 {
-                  "key": "hh",
-                  "value": "{{householdId}}",
+                  "key": "holding",
+                  "value": "{{holdingId}}",
                   "description": "",
                   "disabled": true
                 },
@@ -4060,6 +6382,62 @@
           "response": []
         },
         {
+          "name": "Edit a payment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/{{paymentId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "{{paymentId}}",
+                ""
+              ]
+            },
+            "description": "Payments are effectively immutable — correct the amount by voiding and re-recording. The bill cannot be changed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reference\": \"BK-77812\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete a payment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/{{paymentId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "{{paymentId}}",
+                ""
+              ]
+            },
+            "description": "Prefer **Void a payment**, which restates the bill and returns it."
+          },
+          "response": []
+        },
+        {
           "name": "Void a payment",
           "request": {
             "method": "POST",
@@ -4168,6 +6546,40 @@
               ]
             },
             "description": "Upserts this collector's hand-in for the month and links the payments it covers. Posting again for the same collector and month updates the existing row rather than adding a second one.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collector\": \"{{collectorId}}\",\n  \"period\": \"{{period}}\",\n  \"method\": \"cash\",\n  \"amount\": 4500,\n  \"at\": \"{{nowIso}}\",\n  \"ref\": \"Depot slip 2291\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create deposit (plain)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/deposits/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "deposits",
+                ""
+              ]
+            },
+            "description": "Prefer **Record a hand-in**, which also links the payments it covers.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"collector\": \"{{collectorId}}\",\n  \"period\": \"{{period}}\",\n  \"method\": \"cash\",\n  \"amount\": 4500,\n  \"at\": \"{{nowIso}}\",\n  \"ref\": \"Depot slip 2291\"\n}",
@@ -4338,6 +6750,40 @@
           "response": []
         },
         {
+          "name": "Create billing run directly (blocked)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/billing-runs/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "billing-runs",
+                ""
+              ]
+            },
+            "description": "Fails with `use_billing_run` — runs are written by `POST /bills/generate/`. Kept to document the refusal.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"period\": \"{{period}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Get billing run",
           "request": {
             "method": "GET",
@@ -4357,12 +6803,68 @@
             "description": ""
           },
           "response": []
+        },
+        {
+          "name": "Update billing run",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/billing-runs/{{billingRunId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "billing-runs",
+                "{{billingRunId}}",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"issuedOn\": \"{{today}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete billing run",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/billing-runs/{{billingRunId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "billing-runs",
+                "{{billingRunId}}",
+                ""
+              ]
+            },
+            "description": "Its bills keep existing with `run: null`."
+          },
+          "response": []
         }
       ]
     },
     {
-      "name": "08 · Fleet",
-      "description": "Vans, document expiry, workshop jobs, fuel logs and GPS telemetry.",
+      "name": "10 · Fleet",
+      "description": "Vans (with their ward and dumping point), document expiry, workshop jobs, fuel logs and GPS telemetry.",
       "item": [
         {
           "name": "List vans",
@@ -4467,10 +6969,10 @@
                 ""
               ]
             },
-            "description": "",
+            "description": "`ward` is the ward the van works; `dumpingPoint` is where it unloads and must be in that ward's city.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"plate\": \"KHULNA-METRO-TA-11-4520\",\n  \"type\": \"compactor\",\n  \"capacity\": 3000,\n  \"fuel\": \"diesel\",\n  \"ownership\": \"owned\",\n  \"gps\": \"GPS-7781\",\n  \"odometer\": 48210,\n  \"status\": \"active\",\n  \"driver\": \"{{collectorId}}\",\n  \"fitnessExp\": \"2026-11-30\",\n  \"taxExp\": \"2026-09-15\",\n  \"insuranceExp\": \"2026-12-01\",\n  \"permitExp\": \"2027-01-20\",\n  \"nextServiceKm\": 53000,\n  \"kmpl\": 6.1\n}",
+              "raw": "{\n  \"plate\": \"KHULNA-METRO-TA-11-4520\",\n  \"type\": \"compactor\",\n  \"capacity\": 3000,\n  \"fuel\": \"diesel\",\n  \"ownership\": \"owned\",\n  \"gps\": \"GPS-7781\",\n  \"odometer\": 48210,\n  \"status\": \"active\",\n  \"driver\": \"{{collectorId}}\",\n  \"ward\": \"{{wardId}}\",\n  \"dumpingPoint\": \"{{dumpingPointId}}\",\n  \"fitnessExp\": \"2026-11-30\",\n  \"taxExp\": \"2026-09-15\",\n  \"insuranceExp\": \"2026-12-01\",\n  \"permitExp\": \"2027-01-20\",\n  \"nextServiceKm\": 53000,\n  \"kmpl\": 6.1\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -5101,7 +7603,7 @@
       ]
     },
     {
-      "name": "09 · Live map",
+      "name": "11 · Live map",
       "description": "The first-paint snapshot behind the live map. Incremental frames arrive over the websocket at `/ws/live/`.",
       "item": [
         {
@@ -5120,15 +7622,15 @@
                 ""
               ]
             },
-            "description": "Everything the map draws on first paint: current vehicle positions, collector states and today's progress.\n\nAfter this, open the websocket at `ws://127.0.0.1:8000/ws/live/` for incremental frames. Postman can connect to it as a WebSocket request — see the **Realtime** section of the API reference. Clients that cannot use websockets fall back to polling this endpoint."
+            "description": "Everything the map draws on first paint: current vehicle positions, collector states, today's route progress (in holdings) and `holdings` — one pin per located active holding with its `dues`.\n\nAfter this, open the websocket at `ws://127.0.0.1:8000/ws/live/` for incremental frames. Postman can connect to it as a WebSocket request — see the **Realtime** section of the API reference. Clients that cannot use websockets fall back to polling this endpoint."
           },
           "response": []
         }
       ]
     },
     {
-      "name": "10 · Reports & exports",
-      "description": "Service delivery, revenue, bill status and reconciliation. Each returns JSON, or a CSV/XLSX/PDF file when `?format=` is set.",
+      "name": "12 · Reports & exports",
+      "description": "Service delivery, revenue, bill status, reconciliation and the City Corporation dashboard. Each returns JSON, or a CSV/XLSX/PDF file when `?format=` is set.",
       "item": [
         {
           "name": "Dashboard bundle",
@@ -5188,7 +7690,7 @@
                 }
               ]
             },
-            "description": "The six-figure scorecard, every number derived rather than stored."
+            "description": "The six-figure scorecard, every number derived rather than stored. Coverage is `coveredHoldings` of `activeHoldings` (holdings on a round)."
           },
           "response": []
         },
@@ -5446,9 +7948,9 @@
                   "disabled": true
                 },
                 {
-                  "key": "hh",
-                  "value": "{{householdId}}",
-                  "description": "One household.",
+                  "key": "holding",
+                  "value": "{{holdingId}}",
+                  "description": "One holding.",
                   "disabled": true
                 },
                 {
@@ -5459,7 +7961,7 @@
                 }
               ]
             },
-            "description": "Billed and received per household — the *'who has not paid'* list.\n\nEvery report is ward-scoped **to the caller**, applied on the server rather than trusted from a query parameter: a ward supervisor gets their wards, an agency admin or KCC viewer gets the city. Add `?format=csv|xlsx|pdf` to download the same rows as a file — an exported sheet can never disagree with the screen it came from."
+            "description": "Billed and received per **holding** — the *'who has not paid'* list. Rows carry `holding`, `holdingNo` and `head` (the owner).\n\nEvery report is ward-scoped **to the caller**, applied on the server rather than trusted from a query parameter: a ward supervisor gets their wards, an agency admin or KCC viewer gets the city. Add `?format=csv|xlsx|pdf` to download the same rows as a file — an exported sheet can never disagree with the screen it came from."
           },
           "response": []
         },
@@ -5590,6 +8092,58 @@
           "response": []
         },
         {
+          "name": "City collection (City dashboard)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/city-collection/?mode=daily",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "city-collection",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "city",
+                  "value": "{{cityId}}",
+                  "description": "City id. Ignored for a City Viewer bound to one city.",
+                  "disabled": true
+                },
+                {
+                  "key": "mode",
+                  "value": "daily",
+                  "description": "`daily` | `weekly` | `monthly` | `yearly`."
+                },
+                {
+                  "key": "from",
+                  "value": "",
+                  "description": "YYYY-MM-DD. Defaults to a span that suits the mode.",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "",
+                  "description": "YYYY-MM-DD. Defaults to today.",
+                  "disabled": true
+                },
+                {
+                  "key": "format",
+                  "value": "",
+                  "description": "Omit for JSON; `csv`, `xlsx` or `pdf` returns a file.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "One city's collection for the City Corporation dashboard: `today` (live until the cut-off: due, confirmed, pending, complaints, closed), `totals`, `rows` (one per period), `byAgency` and `byWard` — each keeping **confirmed** (by the agency), **auto** (assumed at the cut-off) and **missed** (by complaint) apart. Closed days come from the daily summary `close_collection_day` writes; `cities` lists what the caller may pick.\n\nEvery report is ward-scoped **to the caller**, applied on the server rather than trusted from a query parameter: a ward supervisor gets their wards, an agency admin or KCC viewer gets the city. Add `?format=csv|xlsx|pdf` to download the same rows as a file — an exported sheet can never disagree with the screen it came from."
+          },
+          "response": []
+        },
+        {
           "name": "Customer funnel",
           "request": {
             "method": "GET",
@@ -5613,8 +8167,212 @@
       ]
     },
     {
-      "name": "11 · Sweep AI",
-      "description": "The floating assistant: answers from a live ward-scoped snapshot of the database, and the snapshot itself.",
+      "name": "13 · Users",
+      "description": "Operator accounts, roles and scopes — including the City Viewer confined to one city.",
+      "item": [
+        {
+          "name": "List operators",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "supervisor",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "agency",
+                  "value": "{{agencyId}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "is_active",
+                  "value": "true",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "50",
+                  "description": "Rows per page. `all` returns a bare array, unpaginated.",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Free-text search over this resource's search fields.",
+                  "disabled": true
+                },
+                {
+                  "key": "ordering",
+                  "value": "",
+                  "description": "Field to sort by; prefix with `-` to reverse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "**Admin only** on reading too — the list is every operator's phone, NID and next of kin. An agency admin sees their own agency's operators."
+          },
+          "response": []
+        },
+        {
+          "name": "Create an operator",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                ""
+              ]
+            },
+            "description": "`role`: `collector` | `supervisor` | `agency_admin` | `super_admin` | `kcc_viewer` (shown as **City Viewer**). `scopeKind`: `ward` (with `scopeWards`) | `zone` (with `scopeZone`) | `agency` | `city`. With `scopeKind: city`, `city` confines the account to one city — a City Viewer then sees only that city's dashboard; leave it null for every city. Only a super admin may grant `super_admin`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"01711000099\",\n  \"name\": \"Khulna City Monitor\",\n  \"role\": \"kcc_viewer\",\n  \"scopeKind\": \"city\",\n  \"city\": \"{{cityId}}\",\n  \"password\": \"a-long-passphrase-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get operator",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{userId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{userId}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update operator",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{userId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{userId}}",
+                ""
+              ]
+            },
+            "description": "An admin may not change their own role, scope, city, agency or active flag.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scopeKind\": \"ward\",\n  \"scopeWards\": [\n    \"{{wardId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate operator",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{userId}}/deactivate/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{userId}}",
+                "deactivate",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Activate operator",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{userId}}/activate/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{userId}}",
+                "activate",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "14 · Sweep AI",
+      "description": "The floating assistant: answers from a live, scoped snapshot of the database, and the snapshot itself.",
       "item": [
         {
           "name": "Ask Sweep AI",
@@ -5641,7 +8399,7 @@
             "description": "Answers an operational question from a live, **ward-scoped** snapshot of the database.\n\nWith `ANTHROPIC_API_KEY` set it reasons over that snapshot with the Claude API; without one it falls back to rule-based answers, so the panel works either way.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"question\": \"Which households in my ward have not been collected this week?\"\n}",
+              "raw": "{\n  \"question\": \"Which holdings in my ward have not been collected this week?\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

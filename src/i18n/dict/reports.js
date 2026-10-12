@@ -160,7 +160,7 @@ export default {
     'reports.group.wards': 'wards',
     'reports.group.roads': 'roads',
 
-    'reports.customers.col.households': 'Households',
+    'reports.customers.col.households': 'Holdings',
     'reports.customers.col.active': 'Active',
     'reports.customers.col.serviced': 'Serviced',
     'reports.customers.col.coverage': 'Coverage %',
@@ -384,7 +384,7 @@ export default {
     'reports.group.wards': 'ওয়ার্ড',
     'reports.group.roads': 'রাস্তা',
 
-    'reports.customers.col.households': 'খানা',
+    'reports.customers.col.households': 'হোল্ডিং',
     'reports.customers.col.active': 'একটিভ',
     'reports.customers.col.serviced': 'সেবাপ্রাপ্ত',
     'reports.customers.col.coverage': 'আওতা %',

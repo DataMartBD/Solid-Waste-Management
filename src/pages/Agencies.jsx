@@ -14,9 +14,9 @@ const STATUS_TONES = { active: 'ok', suspended: 'warn', expired: 'muted', termin
 const THIS_PERIOD = new Date().toISOString().slice(0, 7)
 
 export default function Agencies() {
-  const { t, n, taka } = useLang()
+  const { t, n, taka, optLabel: typeLabel } = useLang()
   const { canWrite } = useAuth()
-  const { wards, paymentModes, optLabel } = useData()
+  const { wards, paymentModes, optLabel, agencyTypes } = useData()
 
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -67,7 +67,7 @@ export default function Agencies() {
     { key: 'id', label: t('agencies.col.id') },
     { key: 'shortCode', label: t('agencies.col.code') },
     { key: 'name', label: t('agencies.col.name') },
-    { key: 'agencyType', label: t('agencies.col.type') },
+    { key: 'agencyType', label: t('agencies.col.type'), get: (r) => typeLabel(agencyTypes, r.agencyType) },
     { key: 'contactPerson', label: t('agencies.col.contact') },
     { key: 'phone', label: t('agencies.col.phone') },
     { key: 'collectorCount', label: t('agencies.col.collectors') },
@@ -186,15 +186,17 @@ export default function Agencies() {
 }
 
 function AgencyRow({ row, open, staff, onToggle, onEdit, onRemit, t, n }) {
+  const { optLabel: typeLabel, localName } = useLang()
+  const { agencyTypes } = useData()
   return (
     <>
       <tr>
         <td className="mono">{row.id}</td>
         <td style={{ fontWeight: 600 }}>
-          {row.name}
+          {localName(row)}
           <div className="tiny muted-3 mono" style={{ fontWeight: 500 }}>{row.shortCode}</div>
         </td>
-        <td className="small">{t(`opt.agencyType.${row.agencyType}`)}</td>
+        <td className="small">{typeLabel(agencyTypes, row.agencyType)}</td>
         <td>
           <div>{row.contactPerson || '—'}</div>
           {row.phone && <div className="tiny muted-3 mono">{row.phone}</div>}
@@ -252,10 +254,14 @@ function AgencyRow({ row, open, staff, onToggle, onEdit, onRemit, t, n }) {
 }
 
 function AgencyForm({ agency, wards, onClose, onSaved }) {
-  const { t } = useLang()
+  const { t, optLabel: typeLabel, localName } = useLang()
+  // From setup (/api/agency-types/), so a type added there appears here.
+  const { agencyTypes, cities, zones } = useData()
   const isNew = !agency?.id
   const [form, setForm] = useState({
+    city: agency?.city || (cities.length === 1 ? cities[0].id : ''),
     name: agency?.name || '',
+    nameBn: agency?.nameBn || '',
     shortCode: agency?.shortCode || '',
     agencyType: agency?.agencyType || 'private',
     tradeLicenceNo: agency?.tradeLicenceNo || '',
@@ -278,6 +284,22 @@ function AgencyForm({ agency, wards, onClose, onSaved }) {
 
   const set = (k) => (e) => { setForm((f) => ({ ...f, [k]: e.target.value })); setError('') }
 
+  // An agency only serves wards of its own city; the server refuses the rest.
+  const cityOfZone = useMemo(() => new Map((zones || []).map((z) => [z.id, z.city])), [zones])
+  const cityWards = (wards || []).filter((w) => !form.city || cityOfZone.get(w.zone) === form.city)
+  const setCity = (e) => {
+    const city = e.target.value
+    setForm((f) => ({
+      ...f,
+      city,
+      serviceWards: f.serviceWards.filter((id) => {
+        const ward = (wards || []).find((w) => w.id === id)
+        return !city || (ward && cityOfZone.get(ward.zone) === city)
+      }),
+    }))
+    setError('')
+  }
+
   function toggleWard(id) {
     setForm((f) => ({
       ...f,
@@ -295,6 +317,7 @@ function AgencyForm({ agency, wards, onClose, onSaved }) {
 
     const body = {
       ...form,
+      city: form.city || null,
       contractStart: form.contractStart || null,
       contractEnd: form.contractEnd || null,
     }
@@ -306,7 +329,7 @@ function AgencyForm({ agency, wards, onClose, onSaved }) {
     } catch (err) {
       // The short code is unique server-side; surface what it says rather than
       // guessing, so a clash reads as a clash.
-      setError(err?.fieldError?.('shortCode') || err?.detail || t('common.requestFailed'))
+      setError(err?.fieldError?.('shortCode') || err?.fieldError?.('serviceWards') || err?.detail || t('common.requestFailed'))
     } finally {
       setBusy(false)
     }
@@ -326,11 +349,18 @@ function AgencyForm({ agency, wards, onClose, onSaved }) {
             <Field half label={t('agencies.shortCode')} value={form.shortCode} onChange={set('shortCode')}
               hint={t('agencies.shortCodeHint')} disabled={busy} />
           </FormRow>
+          <Field label={t('agencies.nameBn')} value={form.nameBn} onChange={set('nameBn')} disabled={busy}
+            hint={t('agencies.nameBnHint')} />
           <FormRow>
             <Field half as="select" label={t('agencies.col.type')} value={form.agencyType} onChange={set('agencyType')} disabled={busy}
-              options={['private', 'ngo', 'cbo', 'cooperative'].map((v) => ({ value: v, label: t(`opt.agencyType.${v}`) }))} />
+              options={agencyTypes.map((v) => ({ value: v.id, label: typeLabel(agencyTypes, v.id) }))} />
             <Field half as="select" label={t('agencies.col.status')} value={form.status} onChange={set('status')} disabled={busy}
               options={['active', 'suspended', 'expired', 'terminated'].map((v) => ({ value: v, label: t(`opt.agencyStatus.${v}`) }))} />
+          </FormRow>
+          <FormRow>
+            <Field half as="select" label={t('agencies.city')} value={form.city} onChange={setCity} disabled={busy}
+              hint={t('agencies.cityHint')}
+              options={[{ value: '', label: '—' }, ...cities.map((c) => ({ value: c.id, label: localName(c) }))]} />
           </FormRow>
         </FormSection>
 
@@ -363,7 +393,7 @@ function AgencyForm({ agency, wards, onClose, onSaved }) {
           <div className="field">
             <label>{t('agencies.serviceWards')}</label>
             <div className="row gap-8 wrap">
-              {(wards || []).map((w) => (
+              {cityWards.map((w) => (
                 <button
                   key={w.id} type="button" disabled={busy}
                   className={`btn btn-sm ${form.serviceWards.includes(w.id) ? 'btn-primary' : 'btn-ghost'}`}
@@ -395,7 +425,7 @@ function AgencyForm({ agency, wards, onClose, onSaved }) {
 // Collected → deposited → remitted; agencies remit in full, so a settled month
 // leaves both gaps at zero.
 function RemittanceModal({ agency, paymentModes, optLabel, taka, onClose, onSaved }) {
-  const { t, n } = useLang()
+  const { t, n, localName } = useLang()
   const [period, setPeriod] = useState(THIS_PERIOD)
   const [position, setPosition] = useState(null)
   const [form, setForm] = useState({ method: '', amount: '', ref: '', note: '' })
@@ -439,7 +469,7 @@ function RemittanceModal({ agency, paymentModes, optLabel, taka, onClose, onSave
   )
 
   return (
-    <Modal title={t('agencies.remitTitle')} subtitle={agency.name} onClose={onClose} width={620}>
+    <Modal title={t('agencies.remitTitle')} subtitle={localName(agency)} onClose={onClose} width={620}>
       <form onSubmit={submit}>
         <Field as="select" label={t('agencies.period')} value={period} onChange={(e) => setPeriod(e.target.value)}
           options={Array.from({ length: 12 }, (_, i) => {

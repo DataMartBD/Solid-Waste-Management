@@ -683,7 +683,7 @@ export const operators = [
   { phone: '01711000042', name: 'Rafiqul Islam', role: 'Collector',    scope: 'Ward 14' },
   { phone: '01700112233', name: 'Tanvir Ahmed',  role: 'Supervisor',   scope: 'Zone 03' },
   { phone: '01900445566', name: 'Farhana Haque',  role: 'Agency Admin', scope: 'All zones' },
-  { phone: '01800778899', name: 'KCC Cell',       role: 'KCC Viewer',   scope: 'City-wide' },
+  { phone: '01800778899', name: 'KCC Cell',       role: 'City Viewer',  scope: 'City-wide' },
 ]
 
 // The seed bundle DataContext hydrates from.

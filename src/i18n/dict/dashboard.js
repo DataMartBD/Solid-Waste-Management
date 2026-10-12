@@ -16,7 +16,7 @@ export default {
     'dashboard.kpi.chargeRateOf': '{received} of {billed} billed',
     'dashboard.kpi.coverage': 'Coverage',
     'dashboard.kpi.coverageSub': 'Verified visits ÷ registered',
-    'dashboard.kpi.coverageOf': '{covered} of {total} households on a round',
+    'dashboard.kpi.coverageOf': '{covered} of {total} holdings on a round',
     'dashboard.kpi.fleet': 'Fleet availability',
     'dashboard.kpi.fleetSub': '{active} of {total} vans active',
 
@@ -31,10 +31,10 @@ export default {
     'dashboard.efficiency.medianComplaint': 'Median complaint',
     'dashboard.hours': '{h}h',
 
-    'dashboard.households.title': '🏆 Top {n} household performers — {year}',
+    'dashboard.households.title': '🏆 Top {n} holdings — {year}',
     'dashboard.households.sub': 'Payment punctuality · dues · service',
     'dashboard.households.rank': 'Rank',
-    'dashboard.households.household': 'Household',
+    'dashboard.households.household': 'Holding',
     'dashboard.households.ward': 'Ward',
     'dashboard.households.onTimePay': 'On-time pay',
     'dashboard.households.dues': 'Dues',
@@ -89,7 +89,7 @@ export default {
     'dashboard.kpi.chargeRateOf': 'বিলকৃত {billed}-এর মধ্যে {received} আদায়',
     'dashboard.kpi.coverage': 'সেবার আওতা',
     'dashboard.kpi.coverageSub': 'যাচাইকৃত পরিদর্শন ÷ নিবন্ধিত',
-    'dashboard.kpi.coverageOf': '{total}টি খানার মধ্যে {covered}টি রাউন্ডে অন্তর্ভুক্ত',
+    'dashboard.kpi.coverageOf': '{total}টি হোল্ডিংয়ের মধ্যে {covered}টি রাউন্ডে অন্তর্ভুক্ত',
     'dashboard.kpi.fleet': 'গাড়ির প্রস্তুতি',
     'dashboard.kpi.fleetSub': '{total}টির মধ্যে {active}টি ভ্যান একটিভ',
 
@@ -104,10 +104,10 @@ export default {
     'dashboard.efficiency.medianComplaint': 'অভিযোগ নিষ্পত্তির মধ্যক',
     'dashboard.hours': '{h} ঘণ্টা',
 
-    'dashboard.households.title': '🏆 সেরা {n} পরিবার — {year}',
+    'dashboard.households.title': '🏆 সেরা {n} হোল্ডিং — {year}',
     'dashboard.households.sub': 'পেমেন্টে সময়ানুবর্তিতা · বকেয়া · সেবা',
     'dashboard.households.rank': 'ক্রম',
-    'dashboard.households.household': 'পরিবার',
+    'dashboard.households.household': 'হোল্ডিং',
     'dashboard.households.ward': 'ওয়ার্ড',
     'dashboard.households.onTimePay': 'সময়মতো পেমেন্ট',
     'dashboard.households.dues': 'বকেয়া',

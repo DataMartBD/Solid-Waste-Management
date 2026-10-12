@@ -53,10 +53,13 @@ def convert_potential(
     charge: int | None = None,
     payment_mode=None,
     payment_day: int | None = None,
-    qr: str | None = None,
     user=None,
 ) -> Household:
-    """Sign a surveyed holding up for service.
+    """Sign a surveyed family up: a household in the holding, terms on the holding.
+
+    The service charge is holding-wise. A holding with no tier yet is signed up
+    on the terms given, or the survey's estimated tier; a holding already under
+    service keeps its terms, except for any sent explicitly.
 
     Unlike the mock — which deleted the survey row — the `PotentialCustomer` is
     kept and stamped with `converted_at`. That preserves the survey history
@@ -71,23 +74,38 @@ def convert_potential(
         )
 
     payload = {field: getattr(potential, field) for field in _CARRIED_OVER}
-    resolved_tier = tier or potential.est_tier
 
-    if payment_mode is None:
-        from swms.catalog.models import PaymentMode
+    holding = potential.holding
+    changed = []
+    if tier is not None or holding.tier_id is None:
+        holding.tier = tier or potential.est_tier
+        changed.append("tier")
+    if charge is not None:
+        holding.charge = charge
+        changed.append("charge")
+    if payment_mode is not None or holding.payment_mode_id is None:
+        if payment_mode is None:
+            from swms.catalog.models import PaymentMode
 
-        payment_mode = PaymentMode.objects.filter(pk="cash").first() or PaymentMode.objects.first()
-    if payment_mode is None:
-        raise DomainError("No payment modes are configured.", code="no_payment_modes")
+            payment_mode = (
+                PaymentMode.objects.filter(pk="cash").first() or PaymentMode.objects.first()
+            )
+        if payment_mode is None:
+            raise DomainError("No payment modes are configured.", code="no_payment_modes")
+        holding.payment_mode = payment_mode
+        changed.append("payment_mode")
+    if payment_day is not None:
+        holding.payment_day = payment_day
+        changed.append("payment_day")
+    if holding.status != HoldingStatus.ACTIVE:
+        holding.status = HoldingStatus.ACTIVE
+        changed.append("status")
+    if changed:
+        holding.save(update_fields=[*changed, "updated_at"])
 
     household = Household(
         **payload,
-        tier=resolved_tier,
         status=HoldingStatus.ACTIVE,
-        charge=charge if charge is not None else 0,
-        payment_mode=payment_mode,
-        payment_day=payment_day or 5,
-        qr=qr or None,
         converted_from=potential.id,
     )
     household.save()

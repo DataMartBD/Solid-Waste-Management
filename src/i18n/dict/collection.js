@@ -61,9 +61,12 @@ export default {
     'collection.skip.locked': 'Gate or bin locked',
     'collection.skip.access': 'Road not accessible',
     'collection.skip.refused': 'Household refused',
+    // Written by the day's cut-off, never offered in the skip dialog.
+    'collection.skip.complaint': 'Reported not collected',
     'collection.confirmSkip': 'Mark as skipped',
 
-    'collection.col.household': 'Household',
+    'collection.col.household': 'Holding owner',
+    'collection.units': '{count} families',
     'collection.col.holding': 'Holding',
     'collection.col.tag': 'QR tag',
     'collection.col.time': 'Collected at',
@@ -134,9 +137,11 @@ export default {
     'collection.skip.locked': 'গেট বা বিন তালাবদ্ধ',
     'collection.skip.access': 'রাস্তায় যাওয়া যায়নি',
     'collection.skip.refused': 'হাউসহোল্ড দিতে রাজি হয়নি',
+    'collection.skip.complaint': 'সংগ্রহ হয়নি বলে অভিযোগ',
     'collection.confirmSkip': 'বাদ পড়া হিসেবে চিহ্নিত করুন',
 
-    'collection.col.household': 'হাউসহোল্ডস',
+    'collection.col.household': 'হোল্ডিং মালিক',
+    'collection.units': '{count}টি পরিবার',
     'collection.col.holding': 'হোল্ডিং',
     'collection.col.tag': 'কিউআর ট্যাগ',
     'collection.col.time': 'সংগ্রহের সময়',

@@ -45,7 +45,7 @@ function SlaMeter({ complaint, wide }) {
 }
 
 export default function Complaints() {
-  const { complaints, collectors, households, ready, create, act, api, collectorName } = useData()
+  const { complaints, collectors, holdings, households, ready, create, act, api, collectorName } = useData()
   const { t, n, dateTime } = useLang()
 
   const [status, setStatus] = useState('all') // all | active | done
@@ -101,7 +101,7 @@ export default function Complaints() {
         const s = q.toLowerCase()
         // `head`, `holding` and `road` are denormalised onto every row, so the
         // search no longer needs a household lookup per ticket.
-        const hay = [c.id, c.type, c.ward, c.description, c.head, c.holding, collectorName(c.assigned)]
+        const hay = [c.id, c.type, c.ward, c.description, c.head, c.holding, c.holdingNo, collectorName(c.assigned)]
         if (!hay.some((v) => String(v || '').toLowerCase().includes(s))) return false
       }
       return true
@@ -113,7 +113,7 @@ export default function Complaints() {
     { key: 'id', label: t('complaints.col.ticket') },
     { key: 'type', label: t('complaints.col.type'), get: (r) => t(typeLabelKey(r.type)) },
     { key: 'priority', label: t('complaints.col.priority'), get: (r) => t(priorityLabelKey(r.priority)) },
-    { key: 'hh', label: t('complaints.col.household'), get: (r) => r.head || r.hh },
+    { key: 'holding', label: t('complaints.col.household'), get: (r) => `${r.head || ''} · ${r.holdingNo || r.holding}` },
     { key: 'ward', label: t('complaints.col.ward') },
     { key: 'channel', label: t('complaints.col.channel'), get: (r) => t(`complaints.channelBadge.${r.channel}`) },
     { key: 'assigned', label: t('complaints.col.assigned'), get: (r) => collectorName(r.assigned) },
@@ -234,7 +234,8 @@ export default function Complaints() {
                   <td className="mono">{c.id}</td>
                   <td style={{ fontWeight: 600 }}>{t(typeLabelKey(c.type))}</td>
                   <td>
-                    <div className="small">{c.head || c.hh}</div>
+                    <div className="small">{c.head || c.holding}</div>
+                    <div className="tiny muted-3 mono">{c.holdingNo}</div>
                     <div className="tiny muted-3 mono">{c.ward}</div>
                   </td>
                   <td><PriorityBadge value={c.priority} /></td>
@@ -276,22 +277,28 @@ export default function Complaints() {
       )}
 
       {showForm && (
-        <ComplaintForm collectors={collectors} households={households} onClose={() => setShowForm(false)}
+        <ComplaintForm collectors={collectors} holdings={holdings} households={households} onClose={() => setShowForm(false)}
           onSave={async (data, assignTo) => {
             setError(null)
             // `id`, `status`, `sla`, `ward` and `activity` are all the server's to
             // assign — `sla` follows the priority and `ward` follows the holding.
             // `note` is the write-only text of the `created` audit entry.
             const created = await create('complaints', {
-              hh: data.hh,
+              holding: data.holding,
+              // Optional: which family in the holding reported it.
+              household: data.household || null,
               type: data.type,
               channel: data.channel,
               priority: data.priority,
               description: data.description,
+              // Only a missed collection names a day; the server checks it is
+              // today, or yesterday before the city's complaint deadline.
+              ...(data.type === 'missed_collection' ? { missedOn: data.missedOn } : {}),
               note: t('complaints.note.logged'),
             })
             if (!created.ok) {
-              setError(created.error?.fieldError?.('hh') || created.error?.detail || t('complaints.error.generic'))
+              setError(created.error?.fieldError?.('holding') || created.error?.fieldError?.('household')
+                || created.error?.detail || t('complaints.error.generic'))
               return
             }
             // Routing the ticket is a separate audited act (it also moves
@@ -371,7 +378,7 @@ function ComplaintDrawer({ complaint: c, collectors, collectorName, onClose, bus
 
           {/* head / holding / road / phone travel on the ticket itself. */}
           <dl className="kv">
-            <dt>{t('complaints.col.household')}</dt><dd>{c.head || c.hh}</dd>
+            <dt>{t('complaints.col.household')}</dt><dd>{c.head || c.holding} <span className="muted-3 mono">({c.holdingNo})</span></dd>
             <dt>{t('complaints.detail.wardRoad')}</dt><dd>{c.ward}{c.road ? ` · ${c.road}` : ''}</dd>
             {c.phone && <><dt>{t('complaints.detail.contact')}</dt><dd className="mono row gap-8"><IconPhone size={13} /> {digits(c.phone)}</dd></>}
             <dt>{t('complaints.col.opened')}</dt><dd>{dateTime(c.opened)}</dd>
@@ -447,17 +454,28 @@ function ComplaintDrawer({ complaint: c, collectors, collectorName, onClose, bus
   )
 }
 
-function ComplaintForm({ collectors, households, onClose, onSave }) {
-  const { t, n, wardName } = useLang()
+// Local calendar dates, as the server's `missed_on` expects them.
+const localDay = (offset = 0) => {
+  const d = new Date()
+  d.setDate(d.getDate() + offset)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function ComplaintForm({ collectors, holdings, households, onClose, onSave }) {
+  const { t, n, wardName, date } = useLang()
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
-    hh: households[0]?.id || '', type: 'missed_collection', channel: 'app',
+    holding: holdings[0]?.id || '', household: '', type: 'missed_collection', channel: 'app',
     assigned: collectors[0]?.id || '', priority: 'medium', description: '',
+    missedOn: localDay(0),
   })
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
   // The ward is not an input any more: Complaint.save() copies it off the
   // holding, so a ticket can never be filed against a ward its holding is not in.
-  const ward = households.find((h) => h.id === form.hh)?.ward
+  const ward = holdings.find((h) => h.id === form.holding)?.ward
+  // The families living in the chosen holding — one of them may have reported it.
+  const families = households.filter((h) => h.holding === form.holding)
+  const setHolding = (e) => setForm((f) => ({ ...f, holding: e.target.value, household: '' }))
 
   async function submit(e) {
     e.preventDefault()
@@ -469,8 +487,14 @@ function ComplaintForm({ collectors, households, onClose, onSave }) {
   return (
     <Modal title={t('complaints.form.title')} subtitle={t('complaints.form.subtitle')} onClose={onClose} width={560}>
       <form onSubmit={submit}>
-        <Field as="select" label={t('complaints.col.household')} value={form.hh} onChange={set('hh')}
-          options={households.map((h) => ({ value: h.id, label: `${h.head} · ${h.id}` }))} />
+        <FormRow>
+          <Field half as="select" label={t('complaints.form.holding')} value={form.holding} onChange={setHolding}
+            options={holdings.map((h) => ({ value: h.id, label: `${h.holdingNo} · ${h.ownerName}` }))} />
+          <Field half as="select" label={t('complaints.form.reportedBy')} value={form.household} onChange={set('household')}
+            hint={t('complaints.form.reportedByHint')}
+            options={[{ value: '', label: t('complaints.form.reportedByOwner') },
+              ...families.map((h) => ({ value: h.id, label: h.unit ? `${h.unit} · ${h.head}` : h.head }))]} />
+        </FormRow>
         <FormRow>
           <Field half as="select" label={t('complaints.col.type')} value={form.type} onChange={set('type')}
             options={COMPLAINT_TYPES.map((ct) => ({ value: ct, label: t(typeLabelKey(ct)) }))} />
@@ -483,8 +507,18 @@ function ComplaintForm({ collectors, households, onClose, onSave }) {
           <Field half as="select" label={t('complaints.form.assignTo')} value={form.assigned} onChange={set('assigned')}
             options={[{ value: '', label: t('complaints.unassigned') }, ...collectors.map((c) => ({ value: c.id, label: c.name }))]} />
         </FormRow>
-        <Field half label={t('complaints.col.ward')} value={ward ? wardName(ward) : '—'} readOnly
-          hint={t('complaints.form.wardHint')} />
+        <FormRow>
+          <Field half label={t('complaints.col.ward')} value={ward ? wardName(ward) : '—'} readOnly
+            hint={t('complaints.form.wardHint')} />
+          {form.type === 'missed_collection' && (
+            <Field half as="select" label={t('complaints.form.missedOn')} value={form.missedOn} onChange={set('missedOn')}
+              hint={t('complaints.form.missedOnHint')}
+              options={[
+                { value: localDay(0), label: t('complaints.form.missedToday', { date: date(localDay(0)) }) },
+                { value: localDay(-1), label: t('complaints.form.missedYesterday', { date: date(localDay(-1)) }) },
+              ]} />
+          )}
+        </FormRow>
         <Field as="textarea" label={t('complaints.col.description')} value={form.description} onChange={set('description')} placeholder={t('complaints.form.descriptionPlaceholder')} />
         <ModalActions>
           <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>{t('common.cancel')}</button>

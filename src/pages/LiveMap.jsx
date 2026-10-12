@@ -62,7 +62,7 @@ const countsFor = (vans, households) => ({
   vans: vans.length,
   tracked: vans.filter((v) => v.lat != null).length,
   live: vans.filter((v) => v.lat != null && !v.stale).length,
-  households,
+  holdings: households,
 })
 
 // A teardrop pin with the driver's initials. A stale fix is dimmed rather than
@@ -90,7 +90,7 @@ function FlyTo({ target }) {
 }
 
 export default function LiveMap() {
-  const { api, householdById } = useData()
+  const { api, holdingById } = useData()
   const { theme } = useTheme()
   const { t, n, taka, percent, time } = useLang()
   const [active, setActive] = useState(null)
@@ -168,7 +168,7 @@ export default function LiveMap() {
           heading: payload.heading, ignition: payload.ignition,
           at: payload.at || at, stale: false,
         }
-        return { ...prev, at: at || prev.at, vans, counts: countsFor(vans, prev.households.length) }
+        return { ...prev, at: at || prev.at, vans, counts: countsFor(vans, (prev.holdings || []).length) }
       })
       return
     }
@@ -292,8 +292,9 @@ export default function LiveMap() {
 
   const pinned = useMemo(() => vans.filter((v) => v.tracked), [vans])
   const activeVan = pinned.find((v) => v.id === active)
-  const households = snapshot?.households || []
-  const counts = snapshot?.counts || { vans: 0, tracked: 0, live: 0, households: 0 }
+  // Pins are holdings: collection and dues are holding-wise.
+  const households = snapshot?.holdings || []
+  const counts = snapshot?.counts || { vans: 0, tracked: 0, live: 0, holdings: 0 }
   // The server picks the viewport from the caller's visible wards; the fallbacks
   // only decide where an empty map opens, never what it claims to show.
   const centre = snapshot?.centre || households[0] || CITY_CENTRE
@@ -356,15 +357,15 @@ export default function LiveMap() {
         <FlyTo target={activeVan} />
         <MapResizer watch={fs} />
         {households.map((h) => {
-          // The snapshot carries only what the map plots; the address for the
-          // popup comes from the household already in memory.
-          const record = householdById(h.id)
+          // The snapshot carries only what the map plots; the owner and road
+          // for the popup come from the holding already in memory.
+          const record = holdingById(h.id)
           return (
             <CircleMarker key={h.id} center={[h.lat, h.lng]} radius={6}
               pathOptions={{ color: '#ffffff', weight: 1.5, fillColor: h.dues > 0 ? '#d97706' : '#0f7b4e', fillOpacity: 0.9 }}>
               <Popup>
-                <b>{record?.head || h.id}</b><br />{h.id}<br />
-                {t('liveMap.popup.holding', { holding: record?.holding || '—', road: record?.road || '—' })}<br />
+                <b>{record?.ownerName || h.id}</b><br />{h.id}<br />
+                {t('liveMap.popup.holding', { holding: h.holdingNo || record?.holdingNo || '—', road: record?.road || '—' })}<br />
                 {h.dues > 0 ? t('liveMap.popup.due', { amount: taka(h.dues) }) : t('liveMap.popup.noDues')}
               </Popup>
             </CircleMarker>
@@ -418,7 +419,7 @@ export default function LiveMap() {
       <div className="two-col">
         <Section title={t('liveMap.section.positions')} pad={false}
           actions={<span className="tiny muted">{t('liveMap.counts', {
-            tracked: n(counts.tracked), vans: n(counts.vans), households: n(counts.households),
+            tracked: n(counts.tracked), vans: n(counts.vans), households: n(counts.holdings),
           })}</span>}>
           <div style={{ padding: 12 }}>
             {fs

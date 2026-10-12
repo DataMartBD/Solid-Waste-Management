@@ -90,25 +90,26 @@ class FieldOpsData(TestCase):
     def make_household(cls, holding, *, verified=True, ward=None, road=None, dues=0, unit=""):
         """A family, and the building it sits in if that does not exist yet.
 
-        Address and pin are no longer passed here: they belong to the holding
-        and are mirrored down on save, so setting them on the household would
-        be overwritten and mask a real mismatch.
+        The building is signed up for service on the way: tier, payment mode
+        and dues are the holding's, since every operation is holding-wise.
+        Address and pin belong to the holding and are mirrored down on save.
         """
         parent = Holding.objects.filter(
             ward=ward or cls.ward, road=road or cls.road, holding_no=holding
         ).first() or cls.make_holding(holding, verified=verified, ward=ward, road=road)
+        parent.tier = cls.tier
+        parent.payment_mode = cls.payment_mode
+        parent.dues = dues
+        parent.save(update_fields=["tier", "payment_mode", "dues"])
         return Household.objects.create(
             holding=parent,
             unit=unit,
             head=f"Head {holding}{unit}",
             phone="01711000000",
-            dues=dues,
-            tier=cls.tier,
             customer_type=cls.customer_type,
             storage=cls.storage,
             holding_type=cls.holding_type,
             suitable_time=cls.suitable_time,
-            payment_mode=cls.payment_mode,
         )
 
     @classmethod
@@ -188,7 +189,7 @@ class RoutePlanningTests(FieldOpsData):
 
 
 class RecordVisitTests(FieldOpsData):
-    """One row per household per day, and a skip that explains itself."""
+    """One row per holding per day, and a skip that explains itself."""
 
     def setUp(self):
         self.household = self.make_household("142/B")
@@ -197,42 +198,42 @@ class RecordVisitTests(FieldOpsData):
 
     def test_second_visit_on_the_same_day_updates_the_first(self):
         skipped = record_visit(
-            self.household,
+            self.household.holding,
             collector=self.collector,
             status=VisitStatus.SKIPPED,
             reason="noOne",
         )
         corrected = record_visit(
-            self.household, collector=self.collector, status=VisitStatus.COLLECTED
+            self.household.holding, collector=self.collector, status=VisitStatus.COLLECTED
         )
 
-        self.assertEqual(Visit.objects.filter(household=self.household).count(), 1)
+        self.assertEqual(Visit.objects.filter(holding=self.household.holding).count(), 1)
         self.assertEqual(corrected.id, skipped.id)
         self.assertEqual(corrected.status, VisitStatus.COLLECTED)
         # Correcting a skip must not leave the old reason behind on the row.
         self.assertEqual(corrected.reason, "")
 
     def test_visit_takes_its_tag_and_route_from_the_plan(self):
-        visit = record_visit(self.household, collector=self.collector)
+        visit = record_visit(self.household.holding, collector=self.collector)
 
-        self.assertEqual(visit.qr, self.household.qr)
+        self.assertEqual(visit.qr, self.household.holding.qr)
         self.assertEqual(visit.route_id, self.route.id)
 
     def test_a_skip_without_a_reason_is_rejected(self):
         with self.assertRaises(DomainError):
             record_visit(
-                self.household, collector=self.collector, status=VisitStatus.SKIPPED
+                self.household.holding, collector=self.collector, status=VisitStatus.SKIPPED
             )
         self.assertEqual(Visit.objects.count(), 0)
 
     def test_yesterdays_visit_does_not_settle_today(self):
         yesterday = timezone.now() - timedelta(days=1)
-        record_visit(self.household, collector=self.collector, at=yesterday)
+        record_visit(self.household.holding, collector=self.collector, at=yesterday)
 
-        record_visit(self.household, collector=self.collector, status=VisitStatus.SKIPPED,
+        record_visit(self.household.holding, collector=self.collector, status=VisitStatus.SKIPPED,
                      reason="locked")
 
-        self.assertEqual(Visit.objects.filter(household=self.household).count(), 2)
+        self.assertEqual(Visit.objects.filter(holding=self.household.holding).count(), 2)
 
 
 class RoundTests(FieldOpsData):
@@ -251,9 +252,10 @@ class RoundTests(FieldOpsData):
         stops = round_for_collector(self.collector.id, timezone.localdate())
 
         self.assertEqual(
-            [stop["hh"] for stop in stops], [self.second.id, self.first.id, self.third.id]
+            [stop["holding"] for stop in stops],
+            [self.second.holding_id, self.first.holding_id, self.third.holding_id],
         )
-        self.assertEqual(len({stop["hh"] for stop in stops}), len(stops))
+        self.assertEqual(len({stop["holding"] for stop in stops}), len(stops))
         self.assertEqual(
             [stop["routeId"] for stop in stops],
             [self.morning.id, self.morning.id, self.afternoon.id],
@@ -261,25 +263,27 @@ class RoundTests(FieldOpsData):
         self.assertEqual([stop["seq"] for stop in stops], [1, 2, 1])
 
     def test_visit_status_reflects_todays_work_only(self):
-        record_visit(self.first, collector=self.collector)
+        record_visit(self.first.holding, collector=self.collector)
         record_visit(
-            self.second, collector=self.collector, status=VisitStatus.SKIPPED, reason="noWaste"
+            self.second.holding, collector=self.collector, status=VisitStatus.SKIPPED, reason="noWaste"
         )
         record_visit(
-            self.third, collector=self.collector, at=timezone.now() - timedelta(days=1)
+            self.third.holding, collector=self.collector, at=timezone.now() - timedelta(days=1)
         )
 
-        by_id = {stop["hh"]: stop for stop in round_for_collector(self.collector.id)}
+        by_id = {
+            stop["holding"]: stop for stop in round_for_collector(self.collector.id)
+        }
 
-        self.assertEqual(by_id[self.first.id]["visitStatus"], "collected")
-        self.assertEqual(by_id[self.second.id]["visitStatus"], "skipped")
+        self.assertEqual(by_id[self.first.holding_id]["visitStatus"], "collected")
+        self.assertEqual(by_id[self.second.holding_id]["visitStatus"], "skipped")
         # Yesterday's collection leaves today's stop to be worked.
-        self.assertEqual(by_id[self.third.id]["visitStatus"], "pending")
-        self.assertIsNone(by_id[self.third.id]["at"])
-        self.assertEqual(by_id[self.first.id]["by"], self.collector.id)
-        self.assertEqual(by_id[self.first.id]["dues"], 300)
-        self.assertEqual(by_id[self.first.id]["road"], self.road.name)
-        self.assertIsInstance(by_id[self.first.id]["lat"], float)
+        self.assertEqual(by_id[self.third.holding_id]["visitStatus"], "pending")
+        self.assertIsNone(by_id[self.third.holding_id]["at"])
+        self.assertEqual(by_id[self.first.holding_id]["by"], self.collector.id)
+        self.assertEqual(by_id[self.first.holding_id]["dues"], 300)
+        self.assertEqual(by_id[self.first.holding_id]["road"], self.road.name)
+        self.assertIsInstance(by_id[self.first.holding_id]["lat"], float)
 
     def test_a_collector_with_no_assignment_has_no_round(self):
         self.assertEqual(round_for_collector(self.make_collector("Nobody").id), [])
@@ -300,25 +304,25 @@ class ScanTests(FieldOpsData):
         self.assertEqual(result, {"ok": False, "reason": "unreadable"})
 
     def test_tag_on_the_round_matches(self):
-        result = match_scan(self.on_round.scan_payload, self.collector.id)
+        result = match_scan(self.on_round.holding.scan_payload, self.collector.id)
         self.assertTrue(result["ok"])
-        self.assertEqual(result["stop"]["hh"], self.on_round.id)
+        self.assertEqual(result["stop"]["holding"], self.on_round.holding_id)
 
     def test_a_second_scan_reports_already_collected(self):
-        record_visit(self.on_round, collector=self.collector)
+        record_visit(self.on_round.holding, collector=self.collector)
 
-        result = match_scan(self.on_round.qr, self.collector.id)
+        result = match_scan(self.on_round.holding.qr, self.collector.id)
 
         self.assertFalse(result["ok"])
         self.assertEqual(result["reason"], "alreadyCollected")
-        self.assertEqual(result["stop"]["hh"], self.on_round.id)
+        self.assertEqual(result["stop"]["holding"], self.on_round.holding_id)
 
     def test_a_known_holding_off_the_round_reports_other_route(self):
-        result = match_scan(self.elsewhere.id, self.collector.id)
+        result = match_scan(self.elsewhere.holding_id, self.collector.id)
 
         self.assertFalse(result["ok"])
         self.assertEqual(result["reason"], "otherRoute")
-        self.assertEqual(result["household"]["hh"], self.elsewhere.id)
+        self.assertEqual(result["holding"]["holding"], self.elsewhere.holding_id)
 
     def test_an_unregistered_tag_is_unknown(self):
         result = match_scan("SS-ZZZZZZ", self.collector.id)
@@ -339,7 +343,7 @@ class MetricsTests(FieldOpsData):
         self.assign(self.collector, [self.route])
 
     def test_half_the_stops_worked_is_half_coverage(self):
-        record_visit(self.household, collector=self.collector)
+        record_visit(self.household.holding, collector=self.collector)
 
         refresh_collector_metrics(self.collector)
         self.collector.refresh_from_db()
@@ -352,8 +356,8 @@ class MetricsTests(FieldOpsData):
         today = timezone.localdate()
         inside = timezone.make_aware(datetime.combine(today, time(7, 30)))
         outside = timezone.make_aware(datetime.combine(today, time(14, 0)))
-        record_visit(self.household, collector=self.collector, at=inside)
-        record_visit(self.other, collector=self.collector, at=outside)
+        record_visit(self.household.holding, collector=self.collector, at=inside)
+        record_visit(self.other.holding, collector=self.collector, at=outside)
 
         refresh_collector_metrics(self.collector)
         self.collector.refresh_from_db()
@@ -391,7 +395,9 @@ class RoundAccessTests(FieldOpsData):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["collector"], self.me.id)
-        self.assertEqual([stop["hh"] for stop in response.data["stops"]], [self.mine.id])
+        self.assertEqual(
+            [stop["holding"] for stop in response.data["stops"]], [self.mine.holding_id]
+        )
         self.assertEqual(response.data["counts"], {"all": 1, "collected": 0, "skipped": 0, "pending": 1})
 
     def test_a_collector_login_with_no_staff_record_is_refused(self):
@@ -419,7 +425,9 @@ class RoundAccessTests(FieldOpsData):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["collector"], self.them.id)
-        self.assertEqual([stop["hh"] for stop in response.data["stops"]], [self.theirs.id])
+        self.assertEqual(
+            [stop["holding"] for stop in response.data["stops"]], [self.theirs.holding_id]
+        )
 
 
 @override_settings(ROOT_URLCONF="swms.fieldops.urls")
@@ -446,13 +454,13 @@ class OfflineQueueTests(FieldOpsData):
             {
                 "rows": [
                     {
-                        "hh": self.household.id,
+                        "holding": self.household.holding_id,
                         "collector": self.collector.id,
                         "status": "collected",
                         "source": "scan",
                     },
-                    {"hh": "HH-KCC-9999999", "status": "collected"},
-                    {"hh": self.household.id, "status": "skipped"},
+                    {"holding": "HLD-KCC-999999", "status": "collected"},
+                    {"holding": self.household.holding_id, "status": "skipped"},
                 ]
             },
             format="json",
@@ -461,5 +469,5 @@ class OfflineQueueTests(FieldOpsData):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data["saved"]), 1)
         self.assertEqual([row["index"] for row in response.data["failed"]], [1, 2])
-        visit = Visit.objects.get(household=self.household)
+        visit = Visit.objects.get(holding=self.household.holding)
         self.assertTrue(visit.synced)

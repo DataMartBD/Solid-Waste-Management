@@ -47,10 +47,10 @@ class BillingRun(TimeStampedModel):
 
 
 class Bill(TextKeyModel):
-    """A household's charge for one month. Id: 'B-2026-07-0012840'."""
+    """A holding's charge for one month. Id: 'B-2026-07-0000123'."""
 
-    household = models.ForeignKey(
-        "customers.Household", on_delete=models.CASCADE, related_name="bills"
+    holding = models.ForeignKey(
+        "customers.Holding", on_delete=models.CASCADE, related_name="bills"
     )
     #: Denormalised so ward-level billing reports avoid a join on a large table.
     ward = models.ForeignKey("catalog.Ward", on_delete=models.PROTECT, related_name="bills")
@@ -74,15 +74,15 @@ class Bill(TextKeyModel):
 
     class Meta:
         db_table = "bill"
-        ordering = ["-period", "household_id"]
+        ordering = ["-period", "holding_id"]
         indexes = [
             models.Index(fields=["period", "status"]),
-            models.Index(fields=["household", "-period"]),
+            models.Index(fields=["holding", "-period"], name="bill_holding_period_idx"),
             models.Index(fields=["ward", "period"]),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["household", "period"], name="bill_one_per_household_per_period"
+                fields=["holding", "period"], name="bill_one_per_holding_per_period"
             )
         ]
 
@@ -91,8 +91,8 @@ class Bill(TextKeyModel):
 
     @property
     def head(self) -> str:
-        """The mock carried a copy of the householder's name on each bill."""
-        return self.household.head
+        """Who the bill is addressed to: the holding's owner."""
+        return self.holding.owner_name
 
     @property
     def received(self) -> int:
@@ -115,14 +115,14 @@ class Bill(TextKeyModel):
         return BillStatus.UNPAID
 
     def recalculate(self, *, save: bool = True) -> str:
-        """Refresh the cached status and the household's dues balance."""
+        """Refresh the cached status and the holding's dues balance."""
         state = self.settlement()
         latest = self.payments.order_by("-at").first()
         self.status = state
         self.method_id = latest.method_id if latest else None
         if save:
             self.save(update_fields=["status", "method", "updated_at"])
-            refresh_household_dues(self.household_id)
+            refresh_holding_dues(self.holding_id)
         return state
 
 
@@ -130,8 +130,8 @@ class Payment(TextKeyModel):
     """Money received against a bill. Id: 'PAY-2026-07-00042'."""
 
     bill = models.ForeignKey(Bill, on_delete=models.CASCADE, related_name="payments")
-    household = models.ForeignKey(
-        "customers.Household", on_delete=models.CASCADE, related_name="payments"
+    holding = models.ForeignKey(
+        "customers.Holding", on_delete=models.CASCADE, related_name="payments"
     )
     collector = models.ForeignKey(
         "fieldops.Collector",
@@ -174,7 +174,7 @@ class Payment(TextKeyModel):
         db_table = "payment"
         ordering = ["-at"]
         indexes = [
-            models.Index(fields=["household", "-at"]),
+            models.Index(fields=["holding", "-at"], name="payment_holding_at_idx"),
             models.Index(fields=["collector", "-at"]),
             models.Index(fields=["bill"]),
         ]
@@ -183,8 +183,8 @@ class Payment(TextKeyModel):
         return f"{self.id} — {self.amount} BDT"
 
     def save(self, *args, **kwargs):
-        if not self.household_id:
-            self.household_id = self.bill.household_id
+        if not self.holding_id:
+            self.holding_id = self.bill.holding_id
         if not self.id:
             self.id = payment_id(self.bill.period)
         if self.agency_id is None and self.collector_id is not None:
@@ -258,7 +258,7 @@ class Deposit(TextKeyModel):
 class Remittance(TextKeyModel):
     """An agency handing collected service charges to KCC. Id: 'REM-2026-07-0003'.
 
-    The second hop of the money. A household pays a collector (`Payment`), the
+    The second hop of the money. A holding pays a collector (`Payment`), the
     collector hands the cash to their agency (`Deposit`), and the agency remits
     it to the corporation — this row. Agencies remit in full, so what KCC should
     receive is simply what was collected.
@@ -310,17 +310,17 @@ class Remittance(TextKeyModel):
         super().save(*args, **kwargs)
 
 
-def refresh_household_dues(household_id: str) -> int:
-    """Recompute a household's outstanding balance from its bills.
+def refresh_holding_dues(holding_id: str) -> int:
+    """Recompute a holding's outstanding balance from its bills.
 
-    `Household.dues` is a cache the UI reads on every list; keeping it correct
+    `Holding.dues` is a cache the UI reads on every list; keeping it correct
     here means no report has to sum bills on the fly.
     """
-    from swms.customers.models import Household
+    from swms.customers.models import Holding
 
-    rows = Bill.objects.filter(household_id=household_id).annotate(
+    rows = Bill.objects.filter(holding_id=holding_id).annotate(
         paid=Coalesce(Sum("payments__amount"), 0)
     )
     dues = sum(max(row.amount - row.paid, 0) for row in rows)
-    Household.objects.filter(pk=household_id).update(dues=dues)
+    Holding.objects.filter(pk=holding_id).update(dues=dues)
     return dues

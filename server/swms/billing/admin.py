@@ -40,7 +40,7 @@ class BillingRunAdmin(admin.ModelAdmin):
 class BillAdmin(admin.ModelAdmin):
     list_display = (
         "id",
-        "household",
+        "holding",
         "ward",
         "period",
         "amount",
@@ -51,10 +51,10 @@ class BillAdmin(admin.ModelAdmin):
         "due_on",
     )
     list_filter = ("period", "status", "ward", "method")
-    search_fields = ("id", "household__id", "household__head", "household__holding")
+    search_fields = ("id", "holding__id", "holding__owner_name", "holding__holding_no")
     date_hierarchy = "issued_at"
-    ordering = ("-period", "household_id")
-    raw_id_fields = ("household", "ward", "method")
+    ordering = ("-period", "holding_id")
+    raw_id_fields = ("holding", "ward", "method")
     # `status` and `method` are caches of the payments below, so they are shown
     # but never typed. Correcting a settlement means adding or voiding a payment.
     readonly_fields = ("id", "status", "method", "run", "created_at", "updated_at")
@@ -75,12 +75,12 @@ class BillAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ("id", "bill", "household", "collector", "amount", "method", "at", "deposit")
+    list_display = ("id", "bill", "holding", "collector", "amount", "method", "at", "deposit")
     list_filter = ("method", "collector", "at")
-    search_fields = ("id", "bill__id", "household__id", "household__head", "reference")
+    search_fields = ("id", "bill__id", "holding__id", "holding__owner_name", "reference")
     date_hierarchy = "at"
     ordering = ("-at",)
-    raw_id_fields = ("bill", "household", "collector", "method", "deposit")
+    raw_id_fields = ("bill", "holding", "collector", "method", "deposit")
     readonly_fields = ("id", "created_at", "updated_at")
 
 

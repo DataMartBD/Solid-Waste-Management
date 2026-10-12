@@ -92,7 +92,7 @@ export default function Billing() {
   async function recordPayment(bill, body) {
     setBusy(true)
     setError(null)
-    const result = await act(api.bills.pay(bill.id, body), { refresh: ['bills', 'payments', 'households'] })
+    const result = await act(api.bills.pay(bill.id, body), { refresh: ['bills', 'payments', 'holdings'] })
     setBusy(false)
     if (!result.ok) return result.error
     setPaying(null)
@@ -108,7 +108,7 @@ export default function Billing() {
     setError(null)
     const result = await act(
       api.bills.generate({ period, dryRun }),
-      dryRun ? {} : { refresh: ['bills', 'households'] },
+      dryRun ? {} : { refresh: ['bills', 'holdings'] },
     )
     setBusy(false)
     if (!result.ok) {
@@ -284,7 +284,7 @@ function PaymentForm({ bill, paymentModes, busy, onClose, onSave }) {
     <Modal title={t('billing.recordPayment')} subtitle={`${bill.id} · ${bill.head}`} onClose={onClose} width={460}>
       <form onSubmit={submit}>
         <dl className="kv" style={{ marginBottom: 16 }}>
-          <dt>{t('billing.col.household')}</dt><dd>{bill.head} <span className="muted-3 mono">({bill.hh})</span></dd>
+          <dt>{t('billing.col.household')}</dt><dd>{bill.head} <span className="muted-3 mono">({bill.holdingNo})</span></dd>
           <dt>{t('billing.col.period')}</dt><dd className="mono">{period(bill.period)}</dd>
           <dt>{t('billing.col.amount')}</dt><dd>{taka(bill.amount)}</dd>
           <dt>{t('billing.received')}</dt><dd>{taka(bill.received)}</dd>

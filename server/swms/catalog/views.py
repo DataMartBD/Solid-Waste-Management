@@ -28,7 +28,11 @@ from swms.common.roles import SUPER_ADMINS
 from swms.common.views import SwmsModelViewSet
 
 from .models import (
+    AgencyType,
     Block,
+    City,
+    CityType,
+    DumpingPoint,
     BLOOD_GROUPS,
     CurrentPractice,
     CustomerType,
@@ -45,7 +49,11 @@ from .models import (
     Zone,
 )
 from .serializers import (
+    AgencyTypeSerializer,
     BlockSerializer,
+    CitySerializer,
+    CityTypeSerializer,
+    DumpingPointSerializer,
     CurrentPracticeSerializer,
     CustomerTypeSerializer,
     HoldingTypeSerializer,
@@ -70,6 +78,9 @@ OPTION_LISTS = {
     "potentialReasons": (PotentialReason, PotentialReasonSerializer),
     "timeGaps": (TimeGap, TimeGapSerializer),
     "currentPractices": (CurrentPractice, CurrentPracticeSerializer),
+    # Setup lists behind the City and Agency forms' type dropdowns.
+    "cityTypes": (CityType, CityTypeSerializer),
+    "agencyTypes": (AgencyType, AgencyTypeSerializer),
 }
 
 
@@ -113,6 +124,10 @@ def catalog_bundle(request):
     districts, thanas_by_district = geography()
 
     payload = {
+        "cities": CitySerializer(City.objects.filter(active=True), many=True).data,
+        "dumpingPoints": DumpingPointSerializer(
+            DumpingPoint.objects.filter(active=True).prefetch_related("wards"), many=True
+        ).data,
         "zones": ZoneSerializer(Zone.objects.all(), many=True).data,
         "wards": WardSerializer(ward_rows, many=True).data,
         # The Households form indexes roads by ward, exactly as roadsByWard did.
@@ -129,17 +144,29 @@ def catalog_bundle(request):
     return Response(payload)
 
 
+class CityViewSet(SwmsModelViewSet):
+    """City corporations and pourashovas, and each one's collection-day times."""
+
+    queryset = City.objects.all()
+    serializer_class = CitySerializer
+    write_roles = SUPER_ADMINS
+    filterset_fields = ["city_type", "active"]
+    search_fields = ["id", "name", "name_bn"]
+
+
 class ZoneViewSet(SwmsModelViewSet):
     queryset = Zone.objects.all()
     serializer_class = ZoneSerializer
     write_roles = SUPER_ADMINS
+    filterset_fields = ["city"]
 
 
 class WardViewSet(SwmsModelViewSet):
     queryset = Ward.objects.select_related("zone").all()
     serializer_class = WardSerializer
     write_roles = SUPER_ADMINS
-    filterset_fields = ["zone", "active"]
+    #: `?zone__city=SCC` lists one city's wards, for the Setup page.
+    filterset_fields = ["zone", "zone__city", "active"]
     search_fields = ["id", "name"]
 
 
@@ -169,3 +196,31 @@ class TierViewSet(SwmsModelViewSet):
     queryset = Tier.objects.all()
     serializer_class = TierSerializer
     write_roles = SUPER_ADMINS
+
+
+class DumpingPointViewSet(SwmsModelViewSet):
+    """Setup list: where each city's waste is taken."""
+
+    queryset = DumpingPoint.objects.select_related("city").prefetch_related("wards")
+    serializer_class = DumpingPointSerializer
+    write_roles = SUPER_ADMINS
+    filterset_fields = ["city", "kind", "active", "wards"]
+    search_fields = ["name", "name_bn"]
+
+
+class CityTypeViewSet(SwmsModelViewSet):
+    """Setup list: kinds of city (City Corporation, Pourashova…)."""
+
+    queryset = CityType.objects.all()
+    serializer_class = CityTypeSerializer
+    write_roles = SUPER_ADMINS
+    filterset_fields = ["active"]
+
+
+class AgencyTypeViewSet(SwmsModelViewSet):
+    """Setup list: kinds of agency (private company, NGO, in-house…)."""
+
+    queryset = AgencyType.objects.all()
+    serializer_class = AgencyTypeSerializer
+    write_roles = SUPER_ADMINS
+    filterset_fields = ["active"]

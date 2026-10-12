@@ -67,10 +67,6 @@ class FullFieldEditorTests(HoldingData):
             "membersFemale": 3,
             "storage": self.storage.id,
             "suitableTime": self.suitable_time.id,
-            "tier": self.tier.id,
-            "charge": 175,
-            "paymentMode": self.payment_mode.id,
-            "paymentDay": 10,
             "status": "active",
         }
         row.update(overrides)
@@ -92,17 +88,24 @@ class FullFieldEditorTests(HoldingData):
         self.assertEqual(h.members, 5)
         self.assertEqual(h.members_under5, 1)
         self.assertEqual(h.members_female, 3)
-        self.assertEqual(h.charge, 175)
-        self.assertEqual(h.payment_day, 10)
-        self.assertEqual(h.tier_id, self.tier.id)
         self.assertEqual(h.storage_id, self.storage.id)
         self.assertEqual(h.suitable_time_id, self.suitable_time.id)
-        self.assertEqual(h.payment_mode_id, self.payment_mode.id)
         self.assertEqual(h.customer_type_id, self.customer_type.id)
 
-    def test_an_explicit_charge_overrides_the_tier(self):
-        self.create_holding([self.full_family(charge=175)])
-        self.assertEqual(Household.objects.get(unit="1A").effective_charge, 175)
+    def test_the_service_charge_terms_land_on_the_holding(self):
+        holding_id = self.create_holding([self.full_family()])
+        response = self.patch(holding_id, {
+            "tier": self.tier.id, "charge": 175,
+            "paymentMode": self.payment_mode.id, "paymentDay": 10,
+        })
+        self.assertEqual(response.status_code, 200, response.data)
+        holding = Holding.objects.get(pk=holding_id)
+        self.assertEqual(
+            (holding.tier_id, holding.charge, holding.payment_mode_id, holding.payment_day),
+            (self.tier.id, 175, self.payment_mode.id, 10),
+        )
+        self.assertEqual(response.data["effectiveCharge"], 175)
+        self.assertTrue(response.data["qr"].startswith("SS-"))
 
     def test_a_family_can_be_created_inactive(self):
         self.create_holding([self.full_family(status="inactive")])
@@ -115,12 +118,11 @@ class FullFieldEditorTests(HoldingData):
         existing = Household.objects.get(unit="1A")
         response = self.patch(holding, {"households": [
             {"id": existing.id, "head": "Shirin Akter Khatun", "unit": "1A",
-             "tier": self.premium.id, "phone": "01799999999"},
+             "phone": "01799999999"},
         ]})
         self.assertEqual(response.status_code, 200, response.data)
         existing.refresh_from_db()
         self.assertEqual(existing.head, "Shirin Akter Khatun")
-        self.assertEqual(existing.tier_id, "premium")
         self.assertEqual(existing.phone, "01799999999")
         self.assertEqual(Household.objects.count(), 1)
 
@@ -129,7 +131,7 @@ class FullFieldEditorTests(HoldingData):
         holding = self.create_holding([self.full_family()])
         existing = Household.objects.get(unit="1A")
         self.patch(holding, {"households": [
-            {"id": existing.id, "head": "Renamed", "unit": "1A", "tier": self.tier.id},
+            {"id": existing.id, "head": "Renamed", "unit": "1A"},
         ]})
         existing.refresh_from_db()
         self.assertEqual(existing.profession, "Teacher")
@@ -141,7 +143,7 @@ class FullFieldEditorTests(HoldingData):
         holding = self.create_holding([self.full_family(status="inactive")])
         existing = Household.objects.get(unit="1A")
         self.patch(holding, {"households": [
-            {"id": existing.id, "head": "Still Gone", "unit": "1A", "tier": self.tier.id},
+            {"id": existing.id, "head": "Still Gone", "unit": "1A"},
         ]})
         existing.refresh_from_db()
         self.assertEqual(existing.status, "inactive")
@@ -151,7 +153,7 @@ class FullFieldEditorTests(HoldingData):
         existing = Household.objects.get(unit="1A")
         self.patch(holding, {"households": [
             {"id": existing.id, "head": existing.head, "unit": "1A",
-             "tier": self.tier.id, "status": "inactive"},
+             "status": "inactive"},
         ]})
         existing.refresh_from_db()
         self.assertEqual(existing.status, "inactive")
@@ -162,8 +164,8 @@ class FullFieldEditorTests(HoldingData):
         holding = self.create_holding([self.full_family()])
         existing = Household.objects.get(unit="1A")
         response = self.patch(holding, {"households": [
-            {"id": existing.id, "head": "Edited", "unit": "1A", "tier": self.tier.id},
-            {"head": "Brand New", "unit": "2B", "tier": self.tier.id},
+            {"id": existing.id, "head": "Edited", "unit": "1A"},
+            {"head": "Brand New", "unit": "2B"},
         ]})
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(Household.objects.count(), 2)
@@ -176,7 +178,7 @@ class FullFieldEditorTests(HoldingData):
         holding = self.create_holding([self.full_family()])
         existing = Household.objects.get(unit="1A")
         response = self.patch(holding, {"households": [
-            {"id": existing.id, "head": "Same Flat", "unit": "1A", "tier": self.tier.id},
+            {"id": existing.id, "head": "Same Flat", "unit": "1A"},
         ]})
         self.assertEqual(response.status_code, 200, response.data)
 
@@ -197,7 +199,7 @@ class FullFieldEditorTests(HoldingData):
         other = self.create_holding(number="66/B")
         theirs = Household.objects.get(holding_id=first)
         response = self.patch(other, {"households": [
-            {"id": theirs.id, "head": "Stolen", "unit": "9Z", "tier": self.tier.id},
+            {"id": theirs.id, "head": "Stolen", "unit": "9Z"},
         ]})
         self.assertEqual(response.status_code, 400)
         self.assertIn("not a family of this building", str(response.data))
@@ -207,7 +209,7 @@ class FullFieldEditorTests(HoldingData):
     def test_an_unknown_family_id_is_refused(self):
         holding = self.create_holding([self.full_family()])
         response = self.patch(holding, {"households": [
-            {"id": "HH-KCC-9999999", "head": "Ghost", "unit": "3C", "tier": self.tier.id},
+            {"id": "HH-KCC-9999999", "head": "Ghost", "unit": "3C"},
         ]})
         self.assertEqual(response.status_code, 400)
         self.assertIn("not a family of this building", str(response.data))
@@ -217,7 +219,7 @@ class FullFieldEditorTests(HoldingData):
         response = self.client.post(reverse("holding-list"), {
             "ward": self.ward.id, "road": self.road.name, "holdingNo": "70/Q",
             "holdingType": self.holding_type.id, "ownerName": "Owner",
-            "households": [{"id": "HH-KCC-0000001", "head": "X", "tier": self.tier.id}],
+            "households": [{"id": "HH-KCC-0000001", "head": "X"}],
         }, format="json")
         self.assertEqual(response.status_code, 400)
         self.assertFalse(Holding.objects.filter(holding_no="70/Q").exists())
@@ -238,7 +240,7 @@ class FullFieldEditorTests(HoldingData):
         self.patch(holding, {
             "road": moved.name, "holdingNo": "55/B",
             "households": [{"id": existing.id, "head": existing.head,
-                            "unit": "1A", "tier": self.tier.id}],
+                            "unit": "1A"}],
         })
         existing.refresh_from_db()
         self.assertEqual(existing.road_id, moved.id)

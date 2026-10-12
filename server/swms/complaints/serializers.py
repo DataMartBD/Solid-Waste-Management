@@ -1,14 +1,15 @@
 """Complaint serializers.
 
-The React pages bind to the mock's key names, so those names are the contract:
-`hh` for the household, `assigned` for the collector, and `activity` for the
-audit trail — whose entries carry **`by`**, not the model's `actor`.
+The React pages bind to these key names, so they are the contract: `holding`
+for the building complained about, `household` for the family that reported it
+(optional), `assigned` for the collector, and `activity` for the audit trail —
+whose entries carry **`by`**, not the model's `actor`.
 
 Three translations happen here:
 
-* foreign keys travel as their string ids (`hh`, `assigned`, `ward`), which is
-  what the UI already puts in `<select>` values;
-* `ward` is read-only. `Complaint.save()` copies it off the household, so a
+* foreign keys travel as their string ids (`holding`, `household`, `assigned`,
+  `ward`), which is what the UI already puts in `<select>` values;
+* `ward` is read-only. `Complaint.save()` copies it off the holding, so a
   ticket can never be filed against a ward its holding does not sit in;
 * the SLA / priority / lifecycle arithmetic that `utils/complaints.js` did in
   the browser is served pre-computed as `slaState`, `priorityRank` and
@@ -25,7 +26,7 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from swms.common.serializers import SwmsModelSerializer
-from swms.customers.models import Household
+from swms.customers.models import Holding, Household
 from swms.fieldops.models import Collector
 
 from .models import (
@@ -75,13 +76,16 @@ class ComplaintPhotoSerializer(serializers.ModelSerializer):
 class ComplaintSerializer(SwmsModelSerializer):
     """A ticket as the Complaints page, Dashboard and Reports read it."""
 
-    hh = serializers.PrimaryKeyRelatedField(
-        source="household", queryset=Household.objects.all()
+    #: Required, unless `household` is given — then it is that family's holding.
+    holding = serializers.PrimaryKeyRelatedField(queryset=Holding.objects.all(), required=False)
+    #: Optional: which family or unit in the holding reported it.
+    household = serializers.PrimaryKeyRelatedField(
+        queryset=Household.objects.all(), allow_null=True, required=False
     )
     assigned = serializers.PrimaryKeyRelatedField(
         queryset=Collector.objects.all(), allow_null=True, required=False
     )
-    # Derived from the household in Complaint.save(); see the module docstring.
+    # Derived from the holding in Complaint.save(); see the module docstring.
     ward = serializers.CharField(source="ward_id", read_only=True)
     # The model has no default: an unset SLA is filled from the priority by
     # services.open_complaint(), so the client may omit it or override it.
@@ -89,6 +93,8 @@ class ComplaintSerializer(SwmsModelSerializer):
     opened = serializers.DateTimeField(required=False)
     resolvedAt = serializers.DateTimeField(source="resolved_at", read_only=True)
     closedAt = serializers.DateTimeField(source="closed_at", read_only=True)
+    #: Missed collections only: the day missed. Defaults to today.
+    missedOn = serializers.DateField(source="missed_on", required=False, allow_null=True)
 
     activity = ComplaintActivitySerializer(many=True, read_only=True)
     photos = ComplaintPhotoSerializer(many=True, read_only=True)
@@ -98,23 +104,26 @@ class ComplaintSerializer(SwmsModelSerializer):
     priorityRank = serializers.IntegerField(source="priority_rank", read_only=True)
     nextStatus = serializers.SerializerMethodField()
 
-    # --- denormalised household columns ------------------------------------ #
-    # The list view renders the head of household, the holding and the phone
-    # next to every row. Shipping them inline keeps the table one request
-    # instead of a second lookup per ticket.
-    head = serializers.CharField(source="household.head", read_only=True)
-    holding = serializers.CharField(source="household.holding_no", read_only=True)
-    road = serializers.CharField(source="household.road.name", read_only=True)
-    phone = serializers.CharField(source="household.phone", read_only=True)
+    # --- denormalised columns ----------------------------------------------- #
+    # The list view renders who reported it, the holding number and a phone next
+    # to every row. Shipping them inline keeps the table one request instead of
+    # a second lookup per ticket. The reporting household's name and phone when
+    # there is one, else the holding owner's.
+    holdingNo = serializers.CharField(source="holding.holding_no", read_only=True)
+    head = serializers.SerializerMethodField()
+    road = serializers.CharField(source="holding.road.name", read_only=True)
+    phone = serializers.SerializerMethodField()
 
-    #: Moving a ticket to another holding would strand its denormalised ward.
-    write_once_fields = ("household",)
+    #: Moving a ticket to another holding would strand its denormalised ward,
+    #: and re-dating a missed collection would dodge the deadline check.
+    write_once_fields = ("holding", "household", "missed_on")
 
     class Meta:
         model = Complaint
         fields = [
             "id",
-            "hh",
+            "holding",
+            "household",
             "type",
             "channel",
             "status",
@@ -129,14 +138,35 @@ class ComplaintSerializer(SwmsModelSerializer):
             "slaState",
             "priorityRank",
             "nextStatus",
+            "holdingNo",
             "head",
-            "holding",
             "road",
             "phone",
             "resolvedAt",
             "closedAt",
+            "missedOn",
         ]
         read_only_fields = ["id", "status"]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        holding = attrs.get("holding", getattr(self.instance, "holding", None))
+        household = attrs.get("household")
+        if holding is None and household is not None:
+            attrs["holding"] = holding = household.holding
+        if holding is None:
+            raise serializers.ValidationError({"holding": "Choose the holding complained about."})
+        if household is not None and household.holding_id != holding.pk:
+            raise serializers.ValidationError(
+                {"household": f"{household.pk} does not live in holding {holding.pk}."}
+            )
+        return attrs
+
+    def get_head(self, obj) -> str:
+        return obj.household.head if obj.household_id else obj.holding.owner_name
+
+    def get_phone(self, obj) -> str:
+        return obj.household.phone if obj.household_id else obj.holding.owner_phone
 
     def get_slaState(self, obj) -> dict:
         return obj.sla_state()

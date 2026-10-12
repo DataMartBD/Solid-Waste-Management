@@ -17,17 +17,21 @@ class HoldingAdmin(admin.ModelAdmin):
         "road",
         "ward",
         "owner_name",
+        "tier",
+        "charge",
+        "dues",
         "service_status",
         "status",
         "verified",
     ]
-    list_filter = ["ward", "status", "verified", "holding_type"]
+    list_filter = ["ward", "status", "verified", "holding_type", "tier"]
     # Required for autocomplete_fields = ["holding"] on the models below.
-    search_fields = ["id", "holding_no", "owner_name", "owner_phone", "road__name"]
+    search_fields = ["id", "qr", "holding_no", "owner_name", "owner_phone", "road__name"]
     autocomplete_fields = ["road"]
-    readonly_fields = ["id", "created_at", "updated_at"]
+    readonly_fields = ["id", "qr", "dues", "created_at", "updated_at"]
     fieldsets = (
         (None, {"fields": ("id", "status", "holding_type", "notes")}),
+        ("Service charge", {"fields": ("qr", "tier", "charge", "payment_mode", "payment_day", "dues")}),
         ("Address", {"fields": ("ward", "road", "holding_no", "address", "floors", "units_total")}),
         ("Owner", {"fields": ("owner_name", "owner_phone", "owner_alt_phone", "owner_email")}),
         (
@@ -51,17 +55,14 @@ class HouseholdAdmin(admin.ModelAdmin):
         "unit",
         "road",
         "ward",
-        "tier",
         "status",
-        "dues",
-        "qr",
     ]
-    list_filter = ["ward", "status", "tier", "customer_type"]
-    search_fields = ["id", "qr", "head", "holding_no", "unit", "phone", "road__name"]
+    list_filter = ["ward", "status", "customer_type"]
+    search_fields = ["id", "head", "holding_no", "unit", "phone", "road__name"]
     autocomplete_fields = ["holding"]
-    readonly_fields = ["id", "dues", "created_at", "updated_at", *MIRRORED]
+    readonly_fields = ["id", "created_at", "updated_at", *MIRRORED]
     fieldsets = (
-        (None, {"fields": ("id", "qr", "status", "tier", "charge", "payment_mode", "payment_day", "dues")}),
+        (None, {"fields": ("id", "status")}),
         ("Holding", {"fields": ("holding", "unit", "floor", "address")}),
         ("Address (from holding)", {"fields": ("ward", "road", "holding_no"), "classes": ["collapse"]}),
         ("Contact", {"fields": ("head", "phone", "alt_phone", "email", "contact_person", "profession", "blood_group")}),

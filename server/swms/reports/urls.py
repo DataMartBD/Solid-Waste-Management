@@ -21,4 +21,6 @@ urlpatterns = [
     path("complaint-summary/", views.complaint_summary, name="report-complaint-summary"),
     path("customer-funnel/", views.customer_funnel, name="report-customer-funnel"),
     path("dashboard/", views.dashboard, name="report-dashboard"),
+    # City Corporation oversight
+    path("city-collection/", views.city_collection, name="report-city-collection"),
 ]

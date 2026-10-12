@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react'
-import { QRCodeSVG } from 'qrcode.react'
 import { Status } from './ui.jsx'
 import { Modal, Field, FormRow, FormSection, ModalActions } from './Modal.jsx'
 import { IconSearch, IconHome } from './Icons.jsx'
@@ -58,9 +57,8 @@ function profileOf(d) {
   }
 }
 
-// What an under-service household sends. Location, dues, the QR tag and
-// `lastVisit` are all server-owned: the tag is minted on create, dues come from
-// billing, `lastVisit` is derived from the visit log, and coordinates only ever
+// What an under-service household sends: who the family is. The service
+// charge, dues, QR tag and visits are the holding's, and coordinates only ever
 // change through the verify action.
 export function underPayload(d) {
   return {
@@ -69,8 +67,7 @@ export function underPayload(d) {
     // read-only on this endpoint, so posting them was at best ignored and at
     // worst implied they could be edited here.
     head: d.head.trim(), phone: d.phone || '', holding: d.holding, unit: d.unit || '',
-    tier: d.tier, status: d.status,
-    charge: num(d.charge), paymentMode: d.paymentMode, paymentDay: num(d.paymentDay) || 5,
+    status: d.status,
   }
 }
 
@@ -367,32 +364,15 @@ export function HouseholdForm({
           </FormRow>
         </FormSection>
 
-        {/* Charge and payment terms only exist once a holding is actually billed. */}
+        {/* The service charge, bill and dues are the building's, set on the
+            Holding editor — a family only says whether it still lives here. */}
         {!isPotential && (
-          <FormSection title={t('households.group.charge')}>
-            <FormRow>
-              <Field half as="select" label={t('households.field.tier')} value={form.tier} onChange={set('tier')} disabled={busy}
-                options={tierOptions} />
-              <Field half type="number" min="0" label={t('households.field.serviceChargeMonthly')} value={form.charge} onChange={set('charge')} disabled={busy}
-                placeholder={digits(String(tierCharge(form.tier)))} hint={t('households.hint.charge', { amount: taka(tierCharge(form.tier)) })} />
-            </FormRow>
-            <FieldError>{fieldError('tier') || fieldError('charge')}</FieldError>
-            <FormRow>
-              <Field half as="select" label={t('households.field.paymentMode')} value={form.paymentMode} onChange={set('paymentMode')} disabled={busy}
-                options={paymentModes.map((p) => ({ value: p.id, label: optLabel(paymentModes, p.id) }))} />
-              <Field half type="number" min="1" max="28" label={t('households.field.paymentDate')} value={form.paymentDay} onChange={set('paymentDay')} disabled={busy}
-                hint={t('households.hint.paymentDay')} />
-            </FormRow>
-            <FieldError>{fieldError('paymentDay') || fieldError('paymentMode')}</FieldError>
+          <FormSection title={t('households.field.status')} hint={t('households.hint.chargeOnHolding')}>
             <FormRow>
               {/* status labels come from the shared status.* keys so the dropdown
                   matches the badge it produces on the list */}
               <Field half as="select" label={t('households.field.status')} value={form.status} onChange={set('status')} disabled={busy}
                 options={[{ value: 'active', label: t('status.active') }, { value: 'inactive', label: t('status.inactive') }]} />
-              {/* Dues are a billing figure now: they move when a bill is raised or
-                  a payment is recorded, so they are shown, not typed. */}
-              <Field half label={t('households.field.duesOutstanding')} value={form.dues ?? 0} disabled readOnly
-                hint={t('households.hint.dues')} />
             </FormRow>
           </FormSection>
         )}
@@ -476,22 +456,6 @@ export function HouseholdDrawer({ hh, collectorName, lists, tierCharge, effectiv
           <button className="icon-btn" onClick={onClose}>✕</button>
         </div>
         <div className="drawer-body">
-          {!potential && hh.qr && (
-            <div className="center" style={{ marginBottom: 22 }}>
-              <div style={{ display: 'inline-flex', padding: 16, background: '#fff', borderRadius: 14, border: '1px solid var(--border)' }}>
-                <QRCodeSVG
-                  value={`SWMS|${hh.id}|${hh.qr}`}
-                  size={148}
-                  level="M"
-                  marginSize={0}
-                  fgColor="#0b2a1e"
-                  bgColor="#ffffff"
-                />
-              </div>
-              <div className="mono small mt-8" style={{ fontWeight: 600 }}>{hh.qr}</div>
-              <div className="tiny muted-3 mt-4">{t('households.scanHint', { id: hh.id })}</div>
-            </div>
-          )}
           <KvGroup title={t('households.group.customer')}>
             <dt>{t('households.field.serviceType')}</dt><dd>{t(TYPE_META[hh._type].key)}</dd>
             <dt>{t('households.field.customerType')}</dt><dd>{optLabel(customerTypes, hh.customerType)}</dd>
@@ -552,17 +516,10 @@ export function HouseholdDrawer({ hh, collectorName, lists, tierCharge, effectiv
           </KvGroup>
 
           {!potential && (
-            <KvGroup title={t('households.group.charge')}>
-              <dt>{t('households.field.tier')}</dt>
-              <dd>{optLabel(tiers, hh.tier)} <span className="muted-3">({taka(tierCharge(hh.tier))})</span></dd>
-              <dt>{t('households.field.serviceCharge')}</dt>
-              <dd>{taka(charge)}{t('common.perMonth')} {charge !== tierCharge(hh.tier) && <span className="muted-3">{t('households.agreedRate')}</span>}</dd>
-              <dt>{t('households.field.paymentMode')}</dt><dd>{optLabel(paymentModes, hh.paymentMode)}</dd>
-              <dt>{t('households.field.expectedPayment')}</dt><dd>{hh.paymentDay ? t('households.dayOfMonth', { day: n(hh.paymentDay) }) : '—'}</dd>
+            <KvGroup title={t('households.field.status')}>
               <dt>{t('households.field.status')}</dt><dd><Status value={hh.status} /></dd>
-              {/* Derived from the visit log, so it can no longer go stale. */}
-              <dt>{t('households.field.lastVisit')}</dt><dd>{hh.lastVisit ? dateTime(hh.lastVisit) : <span className="badge badge-warn"><span className="dot" />{t('common.never')}</span>}</dd>
-              <dt>{t('households.field.outstanding')}</dt><dd>{hh.dues > 0 ? <b style={{ color: 'var(--danger)' }}>{taka(hh.dues)}</b> : t('households.duesClear', { amount: taka(0) })}</dd>
+              {/* Charge, bill, dues and collection are the building's. */}
+              <dt>{t('households.group.charge')}</dt><dd className="muted-3">{t('households.hint.chargeOnHolding')}</dd>
             </KvGroup>
           )}
 

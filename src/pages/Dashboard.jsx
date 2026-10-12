@@ -38,10 +38,10 @@ const timeAgo = (iso, t, n) => {
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const { t, n, taka, percent, date, day, digits } = useLang()
+  const { t, n, taka, percent, date, day, digits, lang } = useLang()
   const {
-    api, visits, complaints, households, collectors, bills, payments, vans,
-    householdById, collectorName,
+    api, visits, complaints, holdings, collectors, bills, payments, vans,
+    holdingById, collectorName,
   } = useData()
 
   // One fetch, three states. A failed request renders its message rather than a
@@ -81,31 +81,29 @@ export default function Dashboard() {
     return { active: serviceable.filter((v) => v.status === 'active').length, total: serviceable.length }
   }, [vans])
 
-  // Top household performers — punctuality is the share of that household's
-  // bills that were settled in full, counted from the payments on record. The
-  // previous version hashed the household id into a plausible-looking number.
+  // Top holdings — billing and collection are holding-wise, so punctuality is
+  // the share of that holding's bills settled in full, counted from the
+  // payments on record.
   const topHouseholds = useMemo(() => {
     const receivedByBill = new Map()
     payments.forEach((p) => {
       if (!p.bill) return
       receivedByBill.set(p.bill, (receivedByBill.get(p.bill) || 0) + (Number(p.amount) || 0))
     })
-    const servedHouseholds = new Set(visits.filter((v) => v.status === 'collected').map((v) => v.hh))
+    const servedHoldings = new Set(visits.filter((v) => v.status === 'collected').map((v) => v.holding))
 
-    return households.map((h) => {
-      const own = bills.filter((b) => b.hh === h.id)
+    return holdings.filter((h) => h.status === 'active').map((h) => {
+      const own = bills.filter((b) => b.holding === h.id)
       const settled = own.filter((b) => (receivedByBill.get(b.id) || 0) >= (Number(b.amount) || 0) && b.amount > 0)
       const punctual = pct(settled.length, own.length)
-      // `visits` is the live record of service; households.lastVisit is a seed
-      // field that collecting never updates, so every household registered
-      // through the app scored as never served.
-      const served = servedHouseholds.has(h.id) ? 1 : 0
+      // `visits` is the live record of service.
+      const served = servedHoldings.has(h.id) ? 1 : 0
       const score = Math.min(100, Math.round(
         punctual * 0.85 + (h.dues > 0 ? 0 : 8) + served * 7 + (own.length && settled.length === own.length ? 4 : 0),
       ))
-      return { ...h, onTime: settled.length, billCount: own.length, punctual, served, score }
+      return { ...h, head: h.ownerName, onTime: settled.length, billCount: own.length, punctual, served, score }
     }).sort((a, b) => b.score - a.score || a.dues - b.dues).slice(0, 10)
-  }, [households, bills, payments, visits])
+  }, [holdings, bills, payments, visits])
 
   // Collector ranking — coverage, on-time and complaint counts are all fields the
   // server maintains on the collector record.
@@ -176,7 +174,7 @@ export default function Dashboard() {
           progress={kpis.chargeRate} />
         <StatCard icon={<IconHome size={18} />} tone="brand" label={t('dashboard.kpi.coverage')}
           value={percent(kpis.coverage)}
-          sub={t('dashboard.kpi.coverageOf', { covered: n(kpis.coveredHouseholds), total: n(kpis.activeHouseholds) })}
+          sub={t('dashboard.kpi.coverageOf', { covered: n(kpis.coveredHoldings), total: n(kpis.activeHoldings) })}
           progress={kpis.coverage} />
         <StatCard icon={<IconTruck size={18} />} tone="info" label={t('dashboard.kpi.fleet')}
           value={percent(kpis.fleetAvailability)}
@@ -248,7 +246,7 @@ export default function Dashboard() {
                     <td><span className={`rank-badge ${i < 3 ? 'medal' : ''}`}>{medal(i, rank)}</span></td>
                     <td>
                       <div style={{ fontWeight: 600 }}>{h.head}</div>
-                      <div className="tiny muted-3 mono">{h.id}</div>
+                      <div className="tiny muted-3 mono">{h.holdingNo} · {h.id}</div>
                     </td>
                     <td>{h.ward}</td>
                     <td className="mono">{t('dashboard.households.onTimeOf', { paid: n(h.onTime), total: n(h.billCount) })}</td>
@@ -306,12 +304,12 @@ export default function Dashboard() {
               </thead>
               <tbody>
                 {recentVisits.map((v) => {
-                  const hh = householdById(v.hh)
+                  const holding = holdingById(v.holding)
                   return (
                     <tr key={v.id}>
                       <td>
-                        <div style={{ fontWeight: 600 }}>{hh?.head || v.hh}</div>
-                        <div className="tiny muted-3 mono">{v.hh}</div>
+                        <div style={{ fontWeight: 600 }}>{holding?.ownerName || v.holding}</div>
+                        <div className="tiny muted-3 mono">{holding?.holdingNo || ''} · {v.holding}</div>
                       </td>
                       <td>{collectorName(v.collector)}</td>
                       <td><Status value={v.status} /></td>
@@ -336,9 +334,11 @@ export default function Dashboard() {
               ? <span className="badge badge-muted">{t('common.estimated')}</span>
               : undefined}>
             <ResponsiveContainer width="100%" height={150}>
-              <BarChart data={wasteByZone} margin={{ left: -22, right: 8 }}>
+              {/* The zone's Bangla name in Bangla mode, when it has one. */}
+              <BarChart data={wasteByZone.map((row) => ({ ...row, label: (lang === 'bn' && row.zoneBn) || row.zone }))}
+                margin={{ left: -22, right: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="zone" tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={(v) => n(v)} tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={CHART_TOOLTIP}
                   cursor={{ fill: 'var(--surface-2)' }} formatter={(value, name) => [n(value), name]} />

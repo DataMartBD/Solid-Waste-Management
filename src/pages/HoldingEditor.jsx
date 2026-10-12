@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useData } from '../context/DataContext.jsx'
 import { useLang } from '../i18n/index.jsx'
 import { IconPlus, IconHome, IconTrash } from '../components/Icons.jsx'
+import { QRCodeSVG } from 'qrcode.react'
 
 // Registering a building and the families in it, on one page.
 //
@@ -19,12 +20,18 @@ import { IconPlus, IconHome, IconTrash } from '../components/Icons.jsx'
 // The whole page is one save. A form that half-succeeded would leave a building
 // registered with some of its flats missing and nothing to say which, and the
 // operator standing at the door has no way to tell.
+//
+// Everything is holding-wise: the service charge, the bill, the collection and
+// the QR tag belong to the building, so the charge is set on the left. The
+// families on the right are a record of who lives there.
 
 const BLANK_HOLDING = {
   agency: '',
   district: '', thana: '', ward: '', road: '', holdingNo: '', holdingType: '',
   ownerName: '', ownerPhone: '', ownerAltPhone: '', ownerEmail: '',
   floors: '', unitsTotal: '', notes: '',
+  // Service charge — one per building.
+  tier: '', charge: '', paymentMode: '', paymentDay: 5,
 }
 
 // A family row as the form holds it. `id` is absent until it has been saved,
@@ -38,8 +45,6 @@ function blankFamily(catalog) {
     members: '', membersUnder5: '', membersFemale: '',
     storage: catalog?.storageTypes?.[0]?.id || '',
     suitableTime: catalog?.suitableTimes?.[0]?.id || '',
-    tier: catalog?.tiers?.[0]?.id || '', charge: '',
-    paymentMode: catalog?.paymentModes?.[0]?.id || '', paymentDay: 5,
   }
 }
 
@@ -57,16 +62,10 @@ function familyFromRecord(row) {
     members: row.members ?? '', membersUnder5: row.membersUnder5 ?? '',
     membersFemale: row.membersFemale ?? '',
     storage: row.storage || '', suitableTime: row.suitableTime || '',
-    tier: row.tier || '', charge: row.charge ?? '',
-    paymentMode: row.paymentMode || '', paymentDay: row.paymentDay ?? 5,
     // Read for the badge only. The editor does not send a status, so an
     // inactive family stays inactive rather than being flipped back by an
     // edit that was about something else.
     status: row.status || 'active',
-    // Read-only, shown so the operator can see what a family owes without
-    // leaving the page. Never sent back.
-    dues: row.dues ?? 0,
-    qr: row.qr || null,
   }
 }
 
@@ -90,7 +89,7 @@ const dateToDay = (value) => {
 export default function HoldingEditor() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { t, taka, lang } = useLang()
+  const { t, taka, lang, localName } = useLang()
   const { canWrite, user } = useAuth()
   // An agency of their own means the server will stamp it; there is nothing to ask.
   const myAgency = user?.agency || null
@@ -98,6 +97,8 @@ export default function HoldingEditor() {
   const isNew = !id
 
   const [form, setForm] = useState(BLANK_HOLDING)
+  // Read-only facts about a saved building: its QR tag and what it owes.
+  const [service, setService] = useState({ qr: null, dues: 0, effectiveCharge: 0 })
   const [families, setFamilies] = useState([])
   const [open, setOpen] = useState(null)      // which family is expanded
   const [loading, setLoading] = useState(!isNew)
@@ -119,6 +120,12 @@ export default function HoldingEditor() {
         ownerAltPhone: holding.ownerAltPhone || '', ownerEmail: holding.ownerEmail || '',
         floors: holding.floors ?? '', unitsTotal: holding.unitsTotal ?? '',
         notes: holding.notes || '',
+        tier: holding.tier || '', charge: holding.charge || '',
+        paymentMode: holding.paymentMode || '', paymentDay: holding.paymentDay ?? 5,
+      })
+      setService({
+        qr: holding.qr || null, dues: holding.dues ?? 0,
+        effectiveCharge: holding.effectiveCharge ?? 0,
       })
       const rows = Array.isArray(members) ? members : members.results || []
       setFamilies(rows.map(familyFromRecord))
@@ -135,7 +142,12 @@ export default function HoldingEditor() {
   // Defaults for a brand-new building, once the catalog has arrived.
   useEffect(() => {
     if (!isNew || !catalog?.holdingTypes?.length) return
-    setForm((f) => (f.holdingType ? f : { ...f, holdingType: catalog.holdingTypes[0].id }))
+    setForm((f) => ({
+      ...f,
+      holdingType: f.holdingType || catalog.holdingTypes[0].id,
+      tier: f.tier || catalog.tiers?.[0]?.id || '',
+      paymentMode: f.paymentMode || catalog.paymentModes?.[0]?.id || '',
+    }))
   }, [isNew, catalog])
 
   const set = (k) => (e) => { setForm((f) => ({ ...f, [k]: e.target.value })); setError('') }
@@ -167,8 +179,8 @@ export default function HoldingEditor() {
   }
 
   // Only a row that has never been saved can leave the page this way. A family
-  // already on the register is retired by setting it inactive, because its
-  // bills, payments and collection history hang off it.
+  // already on the register is retired by setting it inactive, because
+  // complaints may name it.
   function dropFamily(index) {
     setFamilies((rows) => rows.filter((_, i) => i !== index))
     setRowErrors({})
@@ -181,6 +193,11 @@ export default function HoldingEditor() {
     agency: form.agency || undefined,
     floors: form.floors === '' ? null : Number(form.floors),
     unitsTotal: form.unitsTotal === '' ? null : Number(form.unitsTotal),
+    tier: form.tier || null,
+    // Blank means "the tier's standard charge", which the server stores as 0.
+    charge: num(form.charge) ?? 0,
+    paymentMode: form.paymentMode || null,
+    paymentDay: num(form.paymentDay),
     households: families.map((r) => ({
       ...(r.id ? { id: r.id } : {}),
       head: r.head.trim(), customerType: r.customerType || undefined,
@@ -191,8 +208,6 @@ export default function HoldingEditor() {
       members: num(r.members), membersUnder5: num(r.membersUnder5),
       membersFemale: num(r.membersFemale),
       storage: r.storage || undefined, suitableTime: r.suitableTime || undefined,
-      tier: r.tier, charge: num(r.charge),
-      paymentMode: r.paymentMode || undefined, paymentDay: num(r.paymentDay),
     })),
   }), [form, families])
 
@@ -230,7 +245,8 @@ export default function HoldingEditor() {
         setOpen(families[first]?._key ?? null)
         setError(t('holdings.family.fixRows'))
       } else {
-        setError(err?.fieldError?.('holdingNo') || err?.detail || t('common.requestFailed'))
+        setError(err?.fieldError?.('unitsTotal') || err?.fieldError?.('holdingNo') || err?.fieldError?.('paymentDay')
+          || err?.fieldError?.('charge') || err?.detail || t('common.requestFailed'))
       }
     } finally {
       setBusy(false)
@@ -324,7 +340,7 @@ export default function HoldingEditor() {
                   onChange={set('agency')} disabled={busy}
                   hint={t('holdings.agencyHint')}
                   options={[{ value: '', label: t('holdings.agencyNone') },
-                    ...(agencies || []).map((a) => ({ value: a.id, label: a.name }))]} />
+                    ...(agencies || []).map((a) => ({ value: a.id, label: localName(a) }))]} />
               </FormRow>
             )}
 
@@ -341,6 +357,48 @@ export default function HoldingEditor() {
                 <Field half label={t('holdings.editor.ownerEmail')} type="email"
                   value={form.ownerEmail} onChange={set('ownerEmail')} disabled={busy} />
               </FormRow>
+            </FormSection>
+
+            <FormSection title={t('households.group.charge')}>
+              <FormRow>
+                <Field half as="select" label={t('households.field.tier')} value={form.tier}
+                  onChange={set('tier')} disabled={busy}
+                  options={[{ value: '', label: '—' }, ...(catalog?.tiers || []).map((ti) => ({
+                    value: ti.id, label: `${t(ti.key)} (${taka(ti.charge)})`,
+                  }))]} />
+                <Field half type="number" min="0" label={t('households.field.serviceChargeMonthly')}
+                  value={form.charge} onChange={set('charge')} disabled={busy}
+                  hint={t('holdings.editor.chargeHint')} />
+              </FormRow>
+              <FormRow>
+                <Field half as="select" label={t('households.field.paymentMode')}
+                  value={form.paymentMode} onChange={set('paymentMode')} disabled={busy}
+                  options={[{ value: '', label: '—' }, ...opt('paymentModes')]} />
+                <Field half type="date" label={t('households.field.paymentDate')}
+                  min={`${thisMonth()}-01`} max={`${thisMonth()}-28`}
+                  value={dayToDate(form.paymentDay)}
+                  onChange={(e) => { setForm((f) => ({ ...f, paymentDay: dateToDay(e.target.value) })); setError('') }}
+                  hint={t('holdings.editor.paymentDayHint')} disabled={busy} />
+              </FormRow>
+              {!isNew && (
+                <FormRow>
+                  <Field half label={t('households.field.duesOutstanding')}
+                    value={taka(service.dues || 0)} readOnly disabled />
+                </FormRow>
+              )}
+              {!isNew && service.qr && (
+                <div className="row gap-16" style={{ alignItems: 'center', marginTop: 8 }}>
+                  <div style={{ display: 'inline-flex', padding: 10, background: '#fff', borderRadius: 12, border: '1px solid var(--border)' }}>
+                    <QRCodeSVG value={`SWMS|${id}|${service.qr}`} size={104} level="M"
+                      marginSize={0} fgColor="#0b2a1e" bgColor="#ffffff" />
+                  </div>
+                  <div>
+                    <div className="tiny muted">{t('holdings.qr')}</div>
+                    <div className="mono" style={{ fontWeight: 700 }}>{service.qr}</div>
+                    <div className="tiny muted-3 mt-4">{t('holdings.qrHint')}</div>
+                  </div>
+                </div>
+              )}
             </FormSection>
 
             {/* No status picker. A building being registered is in service, and
@@ -369,6 +427,13 @@ export default function HoldingEditor() {
             )}
             pad={false}
           >
+            {/* Households must equal units: a reminder while they do not. */}
+            {form.unitsTotal !== '' && Number(form.unitsTotal) !== activeCount && (
+              <div className={`app-banner ${activeCount > Number(form.unitsTotal) ? 'error' : 'info'}`} style={{ margin: 12 }}>
+                {t(activeCount > Number(form.unitsTotal) ? 'holdings.units.tooMany' : 'holdings.units.tooFew',
+                  { active: activeCount, units: Number(form.unitsTotal) })}
+              </div>
+            )}
             {families.length === 0 && (
               <EmptyState>{t('holdings.family.none')}</EmptyState>
             )}
@@ -384,7 +449,6 @@ export default function HoldingEditor() {
                   busy={busy}
                   catalog={catalog}
                   t={t}
-                  taka={taka}
                   opt={opt}
                   onToggle={() => setOpen(open === row._key ? null : row._key)}
                   onChange={(key, value) => setFamily(index, key, value)}
@@ -403,7 +467,7 @@ export default function HoldingEditor() {
 // underneath when it is open. Collapsed by default so a twelve-flat building is
 // a list you can read rather than twelve forms stacked on top of each other.
 function FamilyCard({
-  row, index, expanded, errors, busy, catalog, t, taka, opt, onToggle, onChange, onDrop,
+  row, index, expanded, errors, busy, catalog, t, opt, onToggle, onChange, onDrop,
 }) {
   const set = (key) => (e) => onChange(key, e.target.value)
   const isSaved = Boolean(row.id)
@@ -509,34 +573,6 @@ function FamilyCard({
             </FormRow>
           </FormSection>
 
-          <FormSection title={t('households.group.charge')}>
-            <FormRow>
-              <Field half as="select" label={t('households.field.tier')} value={row.tier}
-                onChange={set('tier')} disabled={busy}
-                options={(catalog?.tiers || []).map((ti) => ({
-                  value: ti.id, label: `${t(ti.key)} (${taka(ti.charge)})`,
-                }))} />
-              <Field half type="number" min="0" label={t('households.field.serviceChargeMonthly')}
-                value={row.charge} onChange={set('charge')} disabled={busy}
-                hint={t('holdings.editor.chargeHint')} />
-            </FormRow>
-            <FormRow>
-              <Field half as="select" label={t('households.field.paymentMode')}
-                value={row.paymentMode} onChange={set('paymentMode')} disabled={busy}
-                options={opt('paymentModes')} />
-              <Field half type="date" label={t('households.field.paymentDate')}
-                min={`${thisMonth()}-01`} max={`${thisMonth()}-28`}
-                value={dayToDate(row.paymentDay)}
-                onChange={(e) => onChange('paymentDay', dateToDay(e.target.value))}
-                hint={t('holdings.editor.paymentDayHint')} disabled={busy} />
-            </FormRow>
-            {isSaved && (
-              <FormRow>
-                <Field half label={t('households.field.duesOutstanding')}
-                  value={taka(row.dues || 0)} readOnly disabled />
-              </FormRow>
-            )}
-          </FormSection>
         </div>
       )}
     </div>

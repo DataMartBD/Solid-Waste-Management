@@ -57,13 +57,19 @@ class SingleAgencyBackfillTests(TransactionTestCase):
             )
 
     def tearDown(self):
-        self._migrate(AFTER)
+        # Back to the newest migration, not just AFTER: later agencies
+        # migrations add columns (0006 adds `city`) the rest of the suite reads.
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes("agencies"))
 
     def test_everything_is_attached_to_one_agency(self):
         self._migrate(AFTER)
 
         self.assertEqual(Agency.objects.count(), 1)
-        agency = Agency.objects.get()
+        # `only("id")`: the real model has columns added after AFTER (city,
+        # from 0006), which do not exist in the schema this test is parked at.
+        agency = Agency.objects.only("id").get()
         self.assertEqual(Collector.objects.filter(agency__isnull=True).count(), 0)
         self.assertEqual(Holding.objects.filter(agency__isnull=True).count(), 0)
         self.assertTrue(all(c.agency_id == agency.id for c in Collector.objects.all()))

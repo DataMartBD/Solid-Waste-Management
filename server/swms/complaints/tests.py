@@ -79,15 +79,11 @@ class ComplaintTestCase(TestCase):
             holding=_holding("142/B"),
             head="Rahima Begum",
             phone="01711000001",
-            tier=cls.tier,
-            payment_mode=cls.payment_mode,
             **profile,
         )
         cls.other_household = Household.objects.create(
             holding=_holding("143/A"),
             head="Karim Mia",
-            tier=cls.tier,
-            payment_mode=cls.payment_mode,
             **profile,
         )
         cls.collector = Collector.objects.create(name="Abdul Karim", ward=cls.ward)
@@ -103,6 +99,27 @@ class ComplaintTestCase(TestCase):
             opened=timezone.now() - timedelta(hours=hours_ago),
             **kwargs,
         )
+
+    # --- holding-wise ------------------------------------------------------ #
+
+    def test_a_complaint_is_filed_against_the_reporting_familys_holding(self):
+        complaint = self.make()
+        self.assertEqual(complaint.holding_id, self.household.holding_id)
+        self.assertEqual(complaint.household_id, self.household.id)
+
+    def test_a_complaint_may_name_only_the_holding(self):
+        complaint = services.open_complaint(
+            holding=self.other_household.holding, type="overflow"
+        )
+        self.assertIsNone(complaint.household_id)
+        self.assertEqual(complaint.ward_id, self.ward.id)
+
+    def test_a_family_from_another_holding_is_refused(self):
+        with self.assertRaises(DomainError):
+            services.open_complaint(
+                holding=self.other_household.holding, household=self.household,
+                type="overflow",
+            )
 
     # --- SLA --------------------------------------------------------------- #
 

@@ -37,7 +37,7 @@ logger = logging.getLogger("swms.ai")
 ALLOWED_ROUTES = {
     "/app/dashboard": "Open dashboard",
     "/app/live": "Open live map",
-    "/app/households": "Open customers",
+    "/app/holdings": "Open holdings",
     "/app/collection": "Open today's round",
     "/app/routes": "Open routes",
     "/app/route-plan": "Open route plan",
@@ -96,7 +96,7 @@ def rule_based_answer(question: str, facts: dict) -> dict:
     the panel should degrade rather than break.
     """
     text = (question or "").lower()
-    households, billing = facts["households"], facts["billing"]
+    holdings, billing = facts["holdings"], facts["billing"]
 
     def taka(amount: int) -> str:
         return f"৳{amount:,}"
@@ -104,7 +104,7 @@ def rule_based_answer(question: str, facts: dict) -> dict:
     if any(word in text for word in ("due", "outstanding", "unpaid", "arrear")):
         return {
             "answer": (
-                f"{households['withDues']} households owe {taka(households['duesTotalBdt'])} "
+                f"{holdings['withDues']} holdings owe {taka(holdings['duesTotalBdt'])} "
                 f"in total."
             ),
             "go": "/app/billing",
@@ -150,14 +150,14 @@ def rule_based_answer(question: str, facts: dict) -> dict:
             "go": "/app/collection",
             "goLabel": ALLOWED_ROUTES["/app/collection"],
         }
-    if any(word in text for word in ("household", "customer", "register", "coverage")):
+    if any(word in text for word in ("holding", "household", "customer", "register", "coverage")):
         return {
             "answer": (
-                f"{households['active']} active households, {households['verified']} with a "
-                f"verified location, {households['unrouted']} not yet on a route."
+                f"{holdings['active']} active holdings, {holdings['verified']} with a "
+                f"verified location, {holdings['unrouted']} not yet on a route."
             ),
-            "go": "/app/households",
-            "goLabel": ALLOWED_ROUTES["/app/households"],
+            "go": "/app/holdings",
+            "goLabel": ALLOWED_ROUTES["/app/holdings"],
         }
     return {
         "answer": (

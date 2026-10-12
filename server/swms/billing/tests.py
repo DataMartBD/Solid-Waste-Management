@@ -1,7 +1,7 @@
 """Billing rules that must not regress.
 
 The invariant under test throughout is the one the module docstring in models.py
-sets out: a bill's status and a household's dues are *derived* from the payments
+sets out: a bill's status and a holding's dues are *derived* from the payments
 that exist. Every assertion here is ultimately checking that nothing can put the
 two out of step — which is exactly the bug the mock data shipped with.
 """
@@ -84,44 +84,41 @@ class BillingTestCase(TestCase):
 
     # --- factories --------------------------------------------------------- #
 
-    def make_household(self, holding: str, *, charge: int = 0, status=HoldingStatus.ACTIVE,
-                       routed: bool = True) -> Household:
-        parent = Holding.objects.filter(
-            ward=self.ward, road=self.road, holding_no=holding
-        ).first() or Holding.objects.create(
+    def make_holding(self, holding_no: str, *, charge: int = 0, status=HoldingStatus.ACTIVE,
+                     routed: bool = True) -> Holding:
+        """A building signed up for service — billing is holding-wise."""
+        holding = Holding.objects.create(
             ward=self.ward,
             road=self.road,
-            holding_no=holding,
+            holding_no=holding_no,
             holding_type=self.holding_type,
-            owner_name=f"Owner of {holding}",
+            owner_name=f"Owner of {holding_no}",
             verified=True,
-        )
-        household = Household.objects.create(
-            holding=parent,
-            head=f"Head of {holding}",
-            customer_type=self.customer_type,
-            storage=self.storage,
-            holding_type=self.holding_type,
-            suitable_time=self.suitable_time,
             tier=self.tier,
             payment_mode=self.cash,
             charge=charge,
             status=status,
         )
+        # A family lives there, but it is the building that is billed.
+        Household.objects.create(
+            holding=holding,
+            head=f"Head of {holding_no}",
+            customer_type=self.customer_type,
+            storage=self.storage,
+            holding_type=self.holding_type,
+            suitable_time=self.suitable_time,
+        )
         if routed:
-            # A stop is a building, so a second flat in the same block does not
-            # add a stop — it is already walked.
-            RouteStop.objects.get_or_create(
-                holding=household.holding,
-                defaults={"route": self.route, "seq": RouteStop.objects.count() + 1},
+            RouteStop.objects.create(
+                holding=holding, route=self.route, seq=RouteStop.objects.count() + 1
             )
-        return household
+        return holding
 
 
 class GenerateBillsTests(BillingTestCase):
-    def test_bills_every_active_routed_household_once(self):
-        self.make_household("1/A")
-        self.make_household("2/A")
+    def test_bills_every_active_routed_holding_once(self):
+        self.make_holding("1/A")
+        self.make_holding("2/A")
 
         summary = generate_bills(PERIOD, issued_on=date(2026, 7, 1), due_days=10)
 
@@ -135,8 +132,8 @@ class GenerateBillsTests(BillingTestCase):
         self.assertIsNone(bill.method_id)
 
     def test_running_twice_creates_no_duplicates(self):
-        self.make_household("1/A")
-        self.make_household("2/A")
+        self.make_holding("1/A")
+        self.make_holding("2/A")
 
         generate_bills(PERIOD)
         second = generate_bills(PERIOD)
@@ -150,10 +147,10 @@ class GenerateBillsTests(BillingTestCase):
         self.assertEqual(run.bill_count, 2)
         self.assertEqual(run.total_amount, 600)
 
-    def test_second_run_picks_up_a_newly_signed_up_household(self):
-        self.make_household("1/A")
+    def test_second_run_picks_up_a_newly_signed_up_holding(self):
+        self.make_holding("1/A")
         generate_bills(PERIOD)
-        self.make_household("9/C")
+        self.make_holding("9/C")
 
         summary = generate_bills(PERIOD)
 
@@ -161,28 +158,28 @@ class GenerateBillsTests(BillingTestCase):
         self.assertEqual(Bill.objects.filter(period=PERIOD).count(), 2)
         self.assertEqual(BillingRun.objects.get(period=PERIOD).bill_count, 2)
 
-    def test_skips_inactive_and_unrouted_households(self):
-        billed = self.make_household("1/A")
-        inactive = self.make_household("2/A", status=HoldingStatus.INACTIVE)
-        unrouted = self.make_household("3/A", routed=False)
+    def test_skips_inactive_and_unrouted_holdings(self):
+        billed = self.make_holding("1/A")
+        inactive = self.make_holding("2/A", status=HoldingStatus.INACTIVE)
+        unrouted = self.make_holding("3/A", routed=False)
 
         generate_bills(PERIOD)
 
-        self.assertTrue(Bill.objects.filter(household=billed, period=PERIOD).exists())
-        self.assertFalse(Bill.objects.filter(household=inactive).exists())
-        self.assertFalse(Bill.objects.filter(household=unrouted).exists())
+        self.assertTrue(Bill.objects.filter(holding=billed, period=PERIOD).exists())
+        self.assertFalse(Bill.objects.filter(holding=inactive).exists())
+        self.assertFalse(Bill.objects.filter(holding=unrouted).exists())
 
     def test_negotiated_charge_beats_the_tier_charge(self):
-        standard = self.make_household("1/A")
-        negotiated = self.make_household("2/A", charge=175)
+        standard = self.make_holding("1/A")
+        negotiated = self.make_holding("2/A", charge=175)
 
         generate_bills(PERIOD)
 
-        self.assertEqual(Bill.objects.get(household=standard).amount, self.tier.charge)
-        self.assertEqual(Bill.objects.get(household=negotiated).amount, 175)
+        self.assertEqual(Bill.objects.get(holding=standard).amount, self.tier.charge)
+        self.assertEqual(Bill.objects.get(holding=negotiated).amount, 175)
 
     def test_dry_run_writes_nothing(self):
-        self.make_household("1/A")
+        self.make_holding("1/A")
 
         summary = generate_bills(PERIOD, dry_run=True)
 
@@ -193,12 +190,12 @@ class GenerateBillsTests(BillingTestCase):
         self.assertFalse(BillingRun.objects.exists())
 
     def test_generating_bills_updates_cached_dues(self):
-        household = self.make_household("1/A")
+        holding = self.make_holding("1/A")
 
         generate_bills(PERIOD)
 
-        household.refresh_from_db()
-        self.assertEqual(household.dues, 300)
+        holding.refresh_from_db()
+        self.assertEqual(holding.dues, 300)
 
     def test_a_malformed_period_is_refused(self):
         with self.assertRaises(DomainError):
@@ -209,9 +206,9 @@ class GenerateBillsTests(BillingTestCase):
 
 class RecordPaymentTests(BillingTestCase):
     def setUp(self):
-        self.household = self.make_household("1/A")
+        self.holding = self.make_holding("1/A")
         generate_bills(PERIOD, issued_on=date(2026, 7, 1), due_days=10)
-        self.bill = Bill.objects.get(household=self.household, period=PERIOD)
+        self.bill = Bill.objects.get(holding=self.holding, period=PERIOD)
 
     def test_partial_payment_sets_status_partial(self):
         record_payment(
@@ -273,41 +270,41 @@ class RecordPaymentTests(BillingTestCase):
             record_payment(self.bill, amount=0, method=self.cash, at=at(5))
 
     def test_dues_follow_the_payments(self):
-        self.household.refresh_from_db()
-        self.assertEqual(self.household.dues, 300)
+        self.holding.refresh_from_db()
+        self.assertEqual(self.holding.dues, 300)
 
         record_payment(self.bill, amount=120, method=self.cash, at=at(5))
-        self.household.refresh_from_db()
-        self.assertEqual(self.household.dues, 180)
+        self.holding.refresh_from_db()
+        self.assertEqual(self.holding.dues, 180)
 
         record_payment(self.bill, amount=180, method=self.cash, at=at(7))
-        self.household.refresh_from_db()
-        self.assertEqual(self.household.dues, 0)
+        self.holding.refresh_from_db()
+        self.assertEqual(self.holding.dues, 0)
 
     def test_dues_span_several_months(self):
         generate_bills("2026-08", issued_on=date(2026, 8, 1))
-        self.household.refresh_from_db()
-        self.assertEqual(self.household.dues, 600)
+        self.holding.refresh_from_db()
+        self.assertEqual(self.holding.dues, 600)
 
         record_payment(self.bill, amount=300, method=self.cash, at=at(20))
-        self.household.refresh_from_db()
-        self.assertEqual(self.household.dues, 300)
+        self.holding.refresh_from_db()
+        self.assertEqual(self.holding.dues, 300)
 
-    def test_payment_inherits_the_bills_household(self):
+    def test_payment_inherits_the_bills_holding(self):
         payment = record_payment(self.bill, amount=50, method=self.cash, at=at(5))
 
-        self.assertEqual(payment.household_id, self.household.id)
+        self.assertEqual(payment.holding_id, self.holding.id)
         self.assertTrue(payment.id.startswith(f"PAY-{PERIOD}-"))
         self.assertEqual(payment.period, PERIOD)
 
 
 class VoidPaymentTests(BillingTestCase):
     def setUp(self):
-        self.household = self.make_household("1/A")
+        self.holding = self.make_holding("1/A")
         # Issued today so the bill is not yet due whenever the suite runs — the
         # point here is the status a void falls back to, not the overdue rule.
         generate_bills(PERIOD, issued_on=timezone.localdate(), due_days=10)
-        self.bill = Bill.objects.get(household=self.household, period=PERIOD)
+        self.bill = Bill.objects.get(holding=self.holding, period=PERIOD)
 
     def test_voiding_the_only_payment_restores_unpaid_and_dues(self):
         payment = record_payment(self.bill, amount=300, method=self.cash, at=at(5))
@@ -319,8 +316,8 @@ class VoidPaymentTests(BillingTestCase):
         self.assertEqual(bill.status, BillStatus.UNPAID)
         self.assertEqual(bill.received, 0)
         self.assertIsNone(bill.method_id)
-        self.household.refresh_from_db()
-        self.assertEqual(self.household.dues, 300)
+        self.holding.refresh_from_db()
+        self.assertEqual(self.holding.dues, 300)
         self.assertFalse(Payment.objects.exists())
 
     def test_voiding_one_instalment_falls_back_to_partial(self):
@@ -335,17 +332,17 @@ class VoidPaymentTests(BillingTestCase):
         self.assertEqual(bill.received, 100)
         # 'Paid via' falls back to the payment that is still on record.
         self.assertEqual(bill.method_id, self.cash.id)
-        self.household.refresh_from_db()
-        self.assertEqual(self.household.dues, 200)
+        self.holding.refresh_from_db()
+        self.assertEqual(self.holding.dues, 200)
 
 
 class DepositTests(BillingTestCase):
     def setUp(self):
-        self.household = self.make_household("1/A")
-        self.other = self.make_household("2/A")
+        self.holding = self.make_holding("1/A")
+        self.other = self.make_holding("2/A")
         generate_bills(PERIOD, issued_on=date(2026, 7, 1), due_days=10)
-        self.bill = Bill.objects.get(household=self.household, period=PERIOD)
-        self.other_bill = Bill.objects.get(household=self.other, period=PERIOD)
+        self.bill = Bill.objects.get(holding=self.holding, period=PERIOD)
+        self.other_bill = Bill.objects.get(holding=self.other, period=PERIOD)
 
     def test_recording_a_hand_in_links_the_collectors_payments(self):
         payment = record_payment(
@@ -393,11 +390,11 @@ class DepositTests(BillingTestCase):
 
 class CashPositionTests(BillingTestCase):
     def setUp(self):
-        self.household = self.make_household("1/A")
-        self.other = self.make_household("2/A")
+        self.holding = self.make_holding("1/A")
+        self.other = self.make_holding("2/A")
         generate_bills(PERIOD, issued_on=date(2026, 7, 1), due_days=10)
-        self.bill = Bill.objects.get(household=self.household, period=PERIOD)
-        self.other_bill = Bill.objects.get(household=self.other, period=PERIOD)
+        self.bill = Bill.objects.get(holding=self.holding, period=PERIOD)
+        self.other_bill = Bill.objects.get(holding=self.other, period=PERIOD)
 
     def test_variance_shows_a_shortfall_in_the_hand_in(self):
         record_payment(
@@ -466,29 +463,29 @@ class SummaryAndFilterTests(BillingTestCase):
     def setUp(self):
         # Issued in the past and already due, so 'unpaid' and 'overdue' are
         # distinguishable whichever day the suite runs.
-        self.paid_hh = self.make_household("1/A")
-        self.partial_hh = self.make_household("2/A")
-        self.overdue_hh = self.make_household("3/A")
+        self.paid_h = self.make_holding("1/A")
+        self.partial_h = self.make_holding("2/A")
+        self.overdue_h = self.make_holding("3/A")
         generate_bills(PERIOD, issued_on=date(2026, 7, 1), due_days=10)
         # And one that is not due yet, so it counts as unpaid rather than overdue.
-        self.unpaid_hh = self.make_household("4/A")
+        self.unpaid_h = self.make_holding("4/A")
         generate_bills(PERIOD, issued_on=timezone.localdate(), due_days=30)
 
         record_payment(
-            Bill.objects.get(household=self.paid_hh), amount=300, method=self.cash, at=at(5)
+            Bill.objects.get(holding=self.paid_h), amount=300, method=self.cash, at=at(5)
         )
         record_payment(
-            Bill.objects.get(household=self.partial_hh), amount=100, method=self.cash, at=at(5)
+            Bill.objects.get(holding=self.partial_h), amount=100, method=self.cash, at=at(5)
         )
 
     def test_paid_total_is_annotated_per_bill(self):
         rows = {
-            row.household_id: row.paid_total
+            row.holding_id: row.paid_total
             for row in with_paid_total(Bill.objects.filter(period=PERIOD))
         }
-        self.assertEqual(rows[self.paid_hh.id], 300)
-        self.assertEqual(rows[self.partial_hh.id], 100)
-        self.assertEqual(rows[self.overdue_hh.id], 0)
+        self.assertEqual(rows[self.paid_h.id], 300)
+        self.assertEqual(rows[self.partial_h.id], 100)
+        self.assertEqual(rows[self.overdue_h.id], 0)
 
     def test_summary_totals_and_counts(self):
         summary = billing_summary(Bill.objects.all(), period=PERIOD)
@@ -514,7 +511,7 @@ class SummaryAndFilterTests(BillingTestCase):
     def test_two_instalments_do_not_double_count_the_billed_amount(self):
         """A join to payments would report this bill's 300 BDT twice."""
         record_payment(
-            Bill.objects.get(household=self.partial_hh), amount=50, method=self.bkash, at=at(9)
+            Bill.objects.get(holding=self.partial_h), amount=50, method=self.bkash, at=at(9)
         )
 
         summary = billing_summary(Bill.objects.all(), period=PERIOD)
@@ -524,20 +521,20 @@ class SummaryAndFilterTests(BillingTestCase):
 
     def _filtered(self, **params):
         queryset = BillFilter(params, queryset=Bill.objects.filter(period=PERIOD)).qs
-        return {row.household_id for row in queryset}
+        return {row.holding_id for row in queryset}
 
     def test_settlement_filter_derives_each_state_in_sql(self):
-        self.assertEqual(self._filtered(settlement="paid"), {self.paid_hh.id})
-        self.assertEqual(self._filtered(settlement="partial"), {self.partial_hh.id})
-        self.assertEqual(self._filtered(settlement="overdue"), {self.overdue_hh.id})
-        self.assertEqual(self._filtered(settlement="unpaid"), {self.unpaid_hh.id})
+        self.assertEqual(self._filtered(settlement="paid"), {self.paid_h.id})
+        self.assertEqual(self._filtered(settlement="partial"), {self.partial_h.id})
+        self.assertEqual(self._filtered(settlement="overdue"), {self.overdue_h.id})
+        self.assertEqual(self._filtered(settlement="unpaid"), {self.unpaid_h.id})
 
     def test_has_outstanding_filter(self):
         self.assertEqual(
             self._filtered(hasOutstanding="true"),
-            {self.partial_hh.id, self.overdue_hh.id, self.unpaid_hh.id},
+            {self.partial_h.id, self.overdue_h.id, self.unpaid_h.id},
         )
-        self.assertEqual(self._filtered(hasOutstanding="false"), {self.paid_hh.id})
+        self.assertEqual(self._filtered(hasOutstanding="false"), {self.paid_h.id})
 
     def test_settlement_filter_disagrees_with_a_stale_status_column(self):
         """The filter must trust the payments, not the cached column.
@@ -545,7 +542,7 @@ class SummaryAndFilterTests(BillingTestCase):
         Writing a wrong `status` straight to the database is exactly what the mock
         UI effectively did; the derived filter is unmoved by it.
         """
-        Bill.objects.filter(household=self.overdue_hh).update(status=BillStatus.PAID)
+        Bill.objects.filter(holding=self.overdue_h).update(status=BillStatus.PAID)
 
-        self.assertEqual(self._filtered(settlement="paid"), {self.paid_hh.id})
-        self.assertEqual(self._filtered(status="paid"), {self.paid_hh.id, self.overdue_hh.id})
+        self.assertEqual(self._filtered(settlement="paid"), {self.paid_h.id})
+        self.assertEqual(self._filtered(status="paid"), {self.paid_h.id, self.overdue_h.id})

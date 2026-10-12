@@ -4,7 +4,7 @@ Three access rules shape this module, and they are deliberately different from
 each other:
 
 * Only an agency admin issues charges (`Bill`, `BillingRun` are ADMIN_WRITERS) —
-  a supervisor cannot invent a bill for a household.
+  a supervisor cannot invent a bill for a holding.
 * Collectors record payments, because they are the people who take the money at
   the door, so `Payment` adds `Role.COLLECTOR` to the operational writers.
 * Deposits are not ward-scoped at all. A collector's cash hand-in belongs to the
@@ -62,7 +62,7 @@ class BillFilter(filters.FilterSet):
     period = filters.CharFilter(field_name="period")
     ward = filters.CharFilter(field_name="ward_id")
     zone = filters.CharFilter(field_name="ward__zone_id")
-    hh = filters.CharFilter(field_name="household_id")
+    holding = filters.CharFilter(field_name="holding_id")
     status = filters.ChoiceFilter(choices=BillStatus.choices)
     #: Derived state, computed in SQL. See `filter_settlement`.
     settlement = filters.ChoiceFilter(choices=BillStatus.choices, method="filter_settlement")
@@ -70,7 +70,7 @@ class BillFilter(filters.FilterSet):
 
     class Meta:
         model = Bill
-        fields = ["period", "status", "ward", "zone", "hh", "run"]
+        fields = ["period", "status", "ward", "zone", "holding", "run"]
 
     def filter_settlement(self, queryset, name, value):
         """Filter on what the payments say, not on the cached `status` column.
@@ -105,12 +105,12 @@ class BillViewSet(SwmsModelViewSet):
 
     serializer_class = BillSerializer
     filterset_class = BillFilter
-    search_fields = ["id", "household_id", "household__head", "household__holding_no"]
-    ordering_fields = ["period", "issued_at", "amount", "status", "household_id"]
-    ordering = ["-period", "household_id"]
+    search_fields = ["id", "holding_id", "holding__owner_name", "holding__holding_no"]
+    ordering_fields = ["period", "issued_at", "amount", "status", "holding_id"]
+    ordering = ["-period", "holding_id"]
     ward_scope_field = "ward_id"
     #: A bill has no collector, so it belongs to whoever services the building.
-    agency_scope_field = "household__holding__agency_id"
+    agency_scope_field = "holding__agency_id"
     #: Issuing charges is an agency-admin act; a supervisor collects, not bills.
     write_roles = ADMIN_WRITERS
 
@@ -128,7 +128,7 @@ class BillViewSet(SwmsModelViewSet):
 
     def get_queryset(self):
         queryset = (
-            Bill.objects.select_related("household", "ward", "method", "run")
+            Bill.objects.select_related("holding", "ward", "method", "run")
             .prefetch_related("payments__method", "payments__collector")
             # One subquery for the whole page instead of one query per row for
             # `received`, `outstanding` and `settlement`.
@@ -140,7 +140,7 @@ class BillViewSet(SwmsModelViewSet):
         """Bills come from a billing run, never from an ad-hoc insert.
 
         A hand-made bill would have no `run`, so the month's `BillingRun` totals
-        would no longer describe the month, and a household could quietly end up
+        would no longer describe the month, and a holding could quietly end up
         charged twice for reasons no audit trail explains. Superusers are let
         through as a maintenance escape hatch (fixing seed data, backfilling a
         month the run missed) — they are the one caller who can be assumed to
@@ -187,7 +187,7 @@ class BillViewSet(SwmsModelViewSet):
         """Run — or with `dryRun`, preview — one month's charges.
 
         Super-admin only. `generate_bills` takes a period and nothing else: it
-        charges every household in the city, across every contractor. An agency
+        charges every holding in the city, across every contractor. An agency
         admin confined to their own tenant would be issuing the other
         contractors' invoices, which is not a permission they are supposed to
         hold no matter how the queryset behind the list is scoped.
@@ -219,7 +219,7 @@ class BillViewSet(SwmsModelViewSet):
 class PaymentFilter(filters.FilterSet):
     period = filters.CharFilter(method="filter_period")
     collector = filters.CharFilter(field_name="collector_id")
-    hh = filters.CharFilter(field_name="household_id")
+    holding = filters.CharFilter(field_name="holding_id")
     bill = filters.CharFilter(field_name="bill_id")
     method = filters.CharFilter(field_name="method_id")
     #: Yields the `at_after` / `at_before` pair the reports page sends.
@@ -228,7 +228,7 @@ class PaymentFilter(filters.FilterSet):
 
     class Meta:
         model = Payment
-        fields = ["period", "collector", "hh", "bill", "method", "at"]
+        fields = ["period", "collector", "holding", "bill", "method", "at"]
 
     def filter_period(self, queryset, name, value):
         """A payment's period is the month it was *taken* in, in local time.
@@ -250,18 +250,18 @@ class PaymentViewSet(SwmsModelViewSet):
 
     serializer_class = PaymentSerializer
     filterset_class = PaymentFilter
-    search_fields = ["id", "bill_id", "household_id", "reference"]
+    search_fields = ["id", "bill_id", "holding_id", "reference"]
     ordering_fields = ["at", "amount"]
     ordering = ["-at"]
-    #: A payment belongs to the ward its household sits in.
-    ward_scope_field = "household__ward_id"
+    #: A payment belongs to the ward its holding sits in.
+    ward_scope_field = "holding__ward_id"
     agency_scope_field = "agency_id"
     #: Collectors take money in the field, so they must be able to record it.
     write_roles = PAYMENT_WRITERS
 
     def get_queryset(self):
         queryset = Payment.objects.select_related(
-            "bill", "household", "collector", "method", "deposit"
+            "bill", "holding", "collector", "method", "deposit"
         )
         return self.scope_queryset(queryset)
 

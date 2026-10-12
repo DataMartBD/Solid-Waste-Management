@@ -70,10 +70,33 @@ export function LanguageProvider({ children }) {
       optLabel: (list, id) => {
         const found = list.find((o) => o.id === id)
         if (!found) return id || '—'
-        return t(found.key)
+        // A row added in setup has no dictionary entry yet: show its own label
+        // rather than the raw key.
+        const text = t(found.key)
+        return text === found.key ? found.label || id : text
       },
       // Ward display name from a ward id — "W-14" → "ওয়ার্ড ১৪ — সোনাডাঙ্গা".
-      wardName: (id) => (id ? t(`opt.ward.${id}`) : '—'),
+      wardName: (id) => {
+        if (!id) return '—'
+        const key = `opt.ward.${id}`
+        const text = t(key)
+        if (text !== key) return text
+        // No dictionary entry: the ward's own name, in Bangla when it has one.
+        const own = wardFallback.get(id)
+        if (!own) return id
+        return (lang === 'bn' && own.nameBn) || own.name || id
+      },
+      // The display name of a record carrying `name` and `nameBn` (a city, a
+      // zone, a ward): the Bangla one in Bangla mode when it has one.
+      localName: (row) => (row ? (lang === 'bn' && row.nameBn) || row.name || row.id : '—'),
+      // Zone display name from a zone id: its Bangla name in Bangla mode when it
+      // has one, else its English name. Zones carry their names in the catalog.
+      zoneName: (id) => {
+        if (!id) return '—'
+        const own = zoneNames.get(id)
+        if (!own) return id
+        return (lang === 'bn' && own.nameBn) || own.name || id
+      },
       // strips to Latin digits, accepting Bangla numerals as input
       digitsOnly,
       // formatting bound to the active language
@@ -91,6 +114,23 @@ export function LanguageProvider({ children }) {
   }, [lang])
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>
+}
+
+// Names for wards that have no dictionary entry — every ward of a city added
+// from the Setup page. DataContext fills this from the catalog, so `wardName`
+// shows that ward's own name (Bangla in Bangla mode, when it has one) instead
+// of the raw key.
+const wardFallback = new Map()
+export function setWardFallbackNames(wards) {
+  wardFallback.clear()
+  ;(wards || []).forEach((w) => wardFallback.set(w.id, { name: w.name, nameBn: w.nameBn }))
+}
+
+// Zone names in both languages, filled from the catalog by DataContext.
+const zoneNames = new Map()
+export function setZoneNames(zones) {
+  zoneNames.clear()
+  ;(zones || []).forEach((z) => zoneNames.set(z.id, { name: z.name, nameBn: z.nameBn }))
 }
 
 export const useLang = () => useContext(LanguageContext)

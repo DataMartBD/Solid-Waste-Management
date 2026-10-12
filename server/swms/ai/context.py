@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from swms.billing.models import Bill, Payment
 from swms.complaints.models import ACTIVE_STATUSES, Complaint
-from swms.customers.models import HoldingStatus, Household, PotentialCustomer
+from swms.customers.models import Holding, HoldingStatus, PotentialCustomer
 from swms.fieldops.models import Collector, RouteStop, Visit, VisitStatus
 from swms.fleet.models import Van, VanStatus
 from swms.reports import aggregates, periods
@@ -36,17 +36,17 @@ def build_facts(user) -> dict:
     period = periods.current_month()
     today = timezone.localdate()
 
-    households = _scoped(Household.objects.all(), ward_ids)
+    holdings = _scoped(Holding.objects.all(), ward_ids)
     if agency_id is not None:
-        households = households.filter(holding__agency_id=agency_id)
-    dues = households.filter(dues__gt=0).aggregate(
+        holdings = holdings.filter(agency_id=agency_id)
+    dues = holdings.filter(dues__gt=0).aggregate(
         count=Count("id"), total=Coalesce(Sum("dues"), 0)
     )
 
     bills = _scoped(Bill.objects.filter(period=period), ward_ids)
     billed = bills.aggregate(total=Coalesce(Sum("amount"), 0))["total"]
     received = (
-        _scoped(Payment.objects.all(), ward_ids, "household__ward_id")
+        _scoped(Payment.objects.all(), ward_ids, "holding__ward_id")
         .filter(**periods.month_range_filter("at", period))
         .aggregate(total=Coalesce(Sum("amount"), 0))["total"]
     )
@@ -55,7 +55,7 @@ def build_facts(user) -> dict:
     active_complaints = complaints.filter(status__in=ACTIVE_STATUSES)
 
     today_visits = _scoped(
-        Visit.objects.filter(served_on=today), ward_ids, "household__ward_id"
+        Visit.objects.filter(served_on=today), ward_ids, "holding__ward_id"
     ).aggregate(
         collected=Count("id", filter=Q(status=VisitStatus.COLLECTED)),
         skipped=Count("id", filter=Q(status=VisitStatus.SKIPPED)),
@@ -76,11 +76,11 @@ def build_facts(user) -> dict:
         "asOf": timezone.localtime().isoformat(timespec="minutes"),
         "period": period,
         "scope": "city-wide" if ward_ids is None else f"wards {', '.join(sorted(ward_ids))}",
-        "households": {
-            "total": households.count(),
-            "active": households.filter(status=HoldingStatus.ACTIVE).count(),
-            "verified": households.filter(holding__verified=True).count(),
-            "unrouted": households.filter(holding__route_stop__isnull=True).count(),
+        "holdings": {
+            "total": holdings.count(),
+            "active": holdings.filter(status=HoldingStatus.ACTIVE).count(),
+            "verified": holdings.filter(verified=True).count(),
+            "unrouted": holdings.filter(route_stop__isnull=True).count(),
             "withDues": dues["count"],
             "duesTotalBdt": dues["total"],
         },

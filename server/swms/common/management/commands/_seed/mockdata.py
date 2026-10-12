@@ -29,9 +29,9 @@ WARDS = [
 #: is the zone's lowest-numbered ward's locality, which is how `wasteByZone`
 #: labelled its rows.
 ZONES = [
-    {"id": "Z-02", "key": "opt.zone.Z-02", "name": "Daulatpur"},
-    {"id": "Z-03", "key": "opt.zone.Z-03", "name": "Sonadanga"},
-    {"id": "Z-05", "key": "opt.zone.Z-05", "name": "Khalishpur"},
+    {"id": "Z-02", "key": "opt.zone.Z-02", "name": "Daulatpur", "nameBn": "দৌলতপুর"},
+    {"id": "Z-03", "key": "opt.zone.Z-03", "name": "Sonadanga", "nameBn": "সোনাডাঙ্গা"},
+    {"id": "Z-05", "key": "opt.zone.Z-05", "name": "Khalishpur", "nameBn": "খালিশপুর"},
 ]
 
 ROADS_BY_WARD = {
@@ -442,6 +442,22 @@ OPERATORS = [
 
 #: The contractor supplying the demo collectors. One agency, matching how the
 #: live database looked when agencies were introduced.
+#: Setup lists behind the City and Agency type dropdowns.
+CITY_TYPES = [
+    {"id": "city_corporation", "key": "opt.cityType.city_corporation", "label": "City Corporation"},
+    {"id": "pourashova", "key": "opt.cityType.pourashova", "label": "Pourashova / Municipality"},
+]
+AGENCY_TYPES = [
+    {"id": "private", "key": "opt.agencyType.private", "label": "Private company"},
+    {"id": "ngo", "key": "opt.agencyType.ngo", "label": "NGO"},
+    {"id": "cbo", "key": "opt.agencyType.cbo", "label": "Community-based organisation"},
+    {"id": "cooperative", "key": "opt.agencyType.cooperative", "label": "Cooperative"},
+    {"id": "city_corporation", "key": "opt.agencyType.city_corporation",
+     "label": "City Corporation (in-house)"},
+    {"id": "pourashova", "key": "opt.agencyType.pourashova",
+     "label": "Pourashova / Municipality (in-house)"},
+]
+
 AGENCY = {
     "name": "Premier Clean Management",
     "shortCode": "PCM",

@@ -49,7 +49,7 @@ class CombinedEntryTests(HoldingData):
         return body
 
     def family(self, unit, head="Head", **overrides):
-        row = {"unit": unit, "head": head, "tier": self.tier.id}
+        row = {"unit": unit, "head": head}
         row.update(overrides)
         return row
 
@@ -86,21 +86,35 @@ class CombinedEntryTests(HoldingData):
         self.assertEqual(household.road_id, self.road.id)
         self.assertEqual(household.holding_no, "77/A")
 
-    def test_each_flat_keeps_its_own_tier(self):
-        """A shop under a residential block is not on the residential tier."""
-        self.post(self.payload([
-            self.family("Shop", tier=self.premium.id),
-            self.family("1A", tier=self.tier.id),
-        ]))
-        by_unit = {h.unit: h.tier_id for h in Household.objects.all()}
-        self.assertEqual(by_unit, {"Shop": "premium", "1A": "std"})
+    def test_the_service_charge_is_the_buildings(self):
+        """One tier and one charge for the holding, however many flats it has."""
+        response = self.post(self.payload(
+            [self.family("Shop"), self.family("1A")], tier=self.premium.id,
+        ))
+        holding = Holding.objects.get(pk=response.data["id"])
+        self.assertEqual(holding.tier_id, "premium")
+        self.assertEqual(response.data["effectiveCharge"], self.premium.charge)
 
     def test_the_charge_is_left_to_the_tier(self):
         """0 means 'use the tier's standard charge' — not 'free'."""
-        self.post(self.payload([self.family("1A")]))
+        response = self.post(self.payload([self.family("1A")], tier=self.tier.id))
+        holding = Holding.objects.get(pk=response.data["id"])
+        self.assertEqual(holding.charge, 0)
+        self.assertEqual(holding.effective_charge, self.tier.charge)
+
+    def test_an_agreed_charge_overrides_the_tier(self):
+        response = self.post(self.payload(
+            [self.family("1A")], tier=self.tier.id, charge=420, paymentDay=12,
+        ))
+        holding = Holding.objects.get(pk=response.data["id"])
+        self.assertEqual((holding.effective_charge, holding.payment_day), (420, 12))
+
+    def test_a_family_carries_no_charge(self):
+        """Sending charge terms on a flat changes nothing: they are not its to hold."""
+        self.post(self.payload([self.family("1A", tier=self.premium.id, charge=999)]))
         household = Household.objects.get(unit="1A")
-        self.assertEqual(household.charge, 0)
-        self.assertEqual(household.effective_charge, self.tier.charge)
+        self.assertFalse(hasattr(household, "charge"))
+        self.assertFalse(hasattr(household, "tier_id"))
 
     def test_the_flats_take_the_buildings_type(self):
         response = self.post(self.payload([self.family("1A")]))
@@ -111,16 +125,12 @@ class CombinedEntryTests(HoldingData):
 
     def test_shared_choices_apply_to_every_flat(self):
         sack = StorageType.objects.create(id="sack", key="opt.s2", label="Sack")
-        bkash = PaymentMode.objects.create(id="bkash", key="opt.pm2", label="bKash")
         self.post(self.payload(
             [self.family("1A"), self.family("1B")],
-            householdDefaults={"storage": sack.id, "paymentMode": bkash.id,
-                               "paymentDay": 12},
+            householdDefaults={"storage": sack.id},
         ))
         for household in Household.objects.all():
             self.assertEqual(household.storage_id, "sack")
-            self.assertEqual(household.payment_mode_id, "bkash")
-            self.assertEqual(household.payment_day, 12)
 
     def test_choices_fall_back_to_the_catalog_when_not_given(self):
         """The form need not ask for all of them; the flats are still valid."""
@@ -129,8 +139,6 @@ class CombinedEntryTests(HoldingData):
         self.assertEqual(household.customer_type_id, self.customer_type.id)
         self.assertEqual(household.storage_id, self.storage.id)
         self.assertEqual(household.suitable_time_id, self.suitable_time.id)
-        self.assertEqual(household.payment_mode_id, self.payment_mode.id)
-        self.assertEqual(household.payment_day, 5)
 
     def test_an_unknown_shared_choice_is_refused(self):
         response = self.post(self.payload(
@@ -140,10 +148,10 @@ class CombinedEntryTests(HoldingData):
         self.assertFalse(Holding.objects.exists())
 
     def test_a_bad_payment_day_is_refused(self):
-        response = self.post(self.payload(
-            [self.family("1A")], householdDefaults={"paymentDay": 31}))
+        response = self.post(self.payload([self.family("1A")], paymentDay=31))
         self.assertEqual(response.status_code, 400)
-        self.assertIn("between 1 and 28", str(response.data))
+        self.assertIn("paymentDay", response.data["fields"])
+        self.assertFalse(Holding.objects.exists())
 
     # ---- the save is all or nothing ---------------------------------- #
 
@@ -166,14 +174,14 @@ class CombinedEntryTests(HoldingData):
     def test_nothing_is_written_when_one_row_fails(self):
         response = self.post(self.payload([
             self.family("1A"),
-            self.family("1B", tier="no-such-tier"),
+            self.family("1B", storage="no-such-storage"),
         ]))
         self.assertEqual(response.status_code, 400)
         self.assertFalse(Holding.objects.exists())
         self.assertFalse(Household.objects.exists())
 
     def test_a_family_with_no_head_is_refused(self):
-        response = self.post(self.payload([{"unit": "1A", "tier": self.tier.id}]))
+        response = self.post(self.payload([{"unit": "1A"}]))
         self.assertEqual(response.status_code, 400)
         self.assertFalse(Holding.objects.exists())
 
@@ -208,7 +216,7 @@ class CombinedEntryTests(HoldingData):
         """The list adds; it is not the complete set.
 
         If it replaced, an edit that resent only one flat would delete the other
-        along with its bills, payments and visit history.
+        family's record.
         """
         created = self.post(self.payload([
             self.family("1A"), self.family("1B"),
@@ -270,7 +278,8 @@ class CombinedEntryTests(HoldingData):
         self.post(self.payload([self.family("1A", "Shirin Akter", phone="01799999999")]))
         household = Household.objects.get(unit="1A")
         self.assertTrue(household.id.startswith("HH-KCC-"))
-        self.assertTrue(household.qr)
+        # The QR tag is the building's, not the family's.
+        self.assertTrue(household.holding.qr)
         self.assertEqual(household.head, "Shirin Akter")
         self.assertEqual(household.phone, "01799999999")
         self.assertEqual(household.status, "active")

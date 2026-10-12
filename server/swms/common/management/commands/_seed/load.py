@@ -5,10 +5,15 @@ ids, QR tags and addresses are all supplied explicitly instead of being filled i
 for us.
 
 That matters most for payments. `Payment.save()` recalculates its bill and
-refreshes the household's dues — correct for money taken at a gate, and a write
+refreshes the holding's dues — correct for money taken at a gate, and a write
 plus two aggregates per row when a whole billing history arrives at once. Payments
 are inserted flat and `settle()` reaches the same end state for the entire table
 in two aggregates and two bulk updates.
+
+The generated dataset is per family (it predates holding-wise operation), so
+it is folded onto holdings here: a holding takes its service terms from its
+families, one visit per holding per day survives, and a month's family bills
+become one bill per holding.
 """
 
 from __future__ import annotations
@@ -28,6 +33,9 @@ from swms.accounts.models import ScopeKind, User
 from swms.agencies.models import Agency, CollectorEmployment
 from swms.billing.models import Bill, BillingRun, BillStatus, Deposit, Payment
 from swms.catalog.models import (
+    AgencyType,
+    City,
+    CityType,
     CurrentPractice,
     CustomerType,
     HoldingType,
@@ -42,6 +50,7 @@ from swms.catalog.models import (
     Zone,
 )
 from swms.common import ids
+from swms.common.ids import bill_id, qr_tag
 from swms.complaints.models import SLA_HOURS, Complaint, ComplaintActivity, Priority
 from swms.customers.models import Holding, Household, PotentialCustomer
 from swms.fieldops.models import Assignment, AssignmentRoute, Collector, Route, RouteStop, Visit
@@ -63,9 +72,11 @@ _OPTION_TABLES = [
     (PotentialReason, mock.POTENTIAL_REASONS),
     (TimeGap, mock.TIME_GAPS),
     (CurrentPractice, mock.CURRENT_PRACTICES),
+    (CityType, mock.CITY_TYPES),
+    (AgencyType, mock.AGENCY_TYPES),
 ]
 
-#: The same eight models, for the command's teardown and summary lists.
+#: The same option models, for the command's teardown and summary lists.
 OPTION_MODELS = [model for model, _ in _OPTION_TABLES]
 
 
@@ -87,13 +98,35 @@ def _stamp(value: str | None) -> dt.datetime | None:
 
 
 def load_catalog() -> dict[tuple[str, str], int]:
-    """Zones, wards, roads, tiers and the eight option lists.
+    """The city, its zones, wards, roads, tiers and the option lists.
 
     Returns the (ward, road name) → road pk map, because a household's road is a
     foreign key here and free text in the mock.
     """
+    # First: City and Agency take their type from two of these lists. Those two
+    # are also loaded by migration catalog.0005, so rows already there are kept.
+    for model, rows in _OPTION_TABLES:
+        model.objects.bulk_create(
+            (
+                model(id=row["id"], key=row["key"], label=row["label"], sort_order=order)
+                for order, row in enumerate(rows)
+            ),
+            ignore_conflicts=True,
+        )
+    City.objects.create(
+        id="KCC",
+        city_type_id="city_corporation",
+        name="Khulna City Corporation",
+        name_bn="খুলনা সিটি কর্পোরেশন",
+        district="Khulna",
+        lat=_coord(22.8456),
+        lng=_coord(89.5403),
+    )
     Zone.objects.bulk_create(
-        Zone(id=row["id"], key=row["key"], name=row["name"], sort_order=order)
+        Zone(
+            id=row["id"], city_id="KCC", key=row["key"], name=row["name"],
+            name_bn=row.get("nameBn", ""), sort_order=order,
+        )
         for order, row in enumerate(mock.ZONES)
     )
     Ward.objects.bulk_create(
@@ -127,11 +160,6 @@ def load_catalog() -> dict[tuple[str, str], int]:
         )
         for order, row in enumerate(mock.TIERS)
     )
-    for model, rows in _OPTION_TABLES:
-        model.objects.bulk_create(
-            model(id=row["id"], key=row["key"], label=row["label"], sort_order=order)
-            for order, row in enumerate(rows)
-        )
     return {
         (road.ward_id, road.name): road.pk
         for road in Road.objects.all()
@@ -147,9 +175,10 @@ def load_agencies() -> Agency:
     """
     agency = Agency.objects.create(
         id="AGN-KCC-0001",
+        city_id="KCC",
         name=mock.AGENCY["name"],
         short_code=mock.AGENCY["shortCode"],
-        agency_type=mock.AGENCY["type"],
+        agency_type_id=mock.AGENCY["type"],
         contact_person=mock.AGENCY["contactPerson"],
         phone=mock.AGENCY["phone"],
         contract_no=mock.AGENCY["contractNo"],
@@ -214,19 +243,39 @@ def load_holdings(
     operators are meant to trust.
     """
     seen: dict[tuple[str, str, str], dict] = {}
+    families: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
     for row in rows:
         key = (row["ward"], row["road"], row["holding"])
         if key not in seen:
             seen[key] = row
+        if "tier" in row:  # a family under service, not a survey row
+            families[key].append(row)
+    tier_charge = dict(Tier.objects.values_list("id", "charge"))
 
     holdings = []
     lookup: dict[tuple[str, str, str], str] = {}
     for index, (key, row) in enumerate(sorted(seen.items()), start=1):
         holding_pk = f"HLD-KCC-{index:06d}"
         lookup[key] = holding_pk
+        # Service terms are the holding's: one family's as they were, or the
+        # sum of what several families paid.
+        served = [f for f in families.get(key, []) if f["status"] == "active"] or families.get(key, [])
+        terms = {}
+        if served:
+            first = served[0]
+            terms = {
+                "tier_id": first["tier"],
+                "payment_mode_id": first["paymentMode"],
+                "payment_day": first["paymentDay"],
+                "charge": first["charge"] if len(served) == 1 else sum(
+                    f["charge"] or tier_charge.get(f["tier"], 0) for f in served
+                ),
+            }
         holdings.append(
             Holding(
                 id=holding_pk,
+                qr=qr_tag(holding_pk),
+                **terms,
                 ward_id=row["ward"],
                 road_id=roads[(row["ward"], row["road"])],
                 holding_no=row["holding"],
@@ -284,22 +333,12 @@ def load_households(
     roads: dict[tuple[str, str], int],
     holdings: dict[tuple[str, str, str], str],
 ) -> None:
-    """Load holdings. `dues` starts at zero — settle() derives it from the bills.
-
-    The mock carried a hand-written dues figure per household that no billing
-    operation ever recomputed; here it is a cache over the bill table.
-    """
+    """Load the families living in each holding — occupant records only."""
     Household.objects.bulk_create(
         (
             Household(
                 id=row["id"],
-                qr=row["qr"],
-                tier_id=row["tier"],
                 status=row["status"],
-                charge=row["charge"],
-                payment_mode_id=row["paymentMode"],
-                payment_day=row["paymentDay"],
-                dues=0,
                 **_profile_fields(row, roads, holdings),
             )
             for row in rows
@@ -394,16 +433,30 @@ def load_plan(
     )
 
 
+def _holding_of() -> dict[str, str]:
+    """`{household id: holding id}` — how the per-family demo data is folded."""
+    return dict(Household.objects.values_list("id", "holding_id"))
+
+
 def load_visits(rows: list[dict], agency: Agency) -> None:
+    """One visit per holding per day: a collected family wins over a skipped one."""
+    holding_of = _holding_of()
+    qr_of = dict(Holding.objects.values_list("id", "qr"))
+    best: dict[tuple[str, dt.date], dict] = {}
+    for row in rows:
+        key = (holding_of[row["hh"]], row["served_on"])
+        kept = best.get(key)
+        if kept is None or (kept["status"] != "collected" and row["status"] == "collected"):
+            best[key] = row
     Visit.objects.bulk_create(
         (
             Visit(
                 id=row["id"],
-                household_id=row["hh"],
+                holding_id=holding_id,
                 collector_id=row["collector"],
                 agency=agency if row["collector"] else None,
                 route_id=row["route"],
-                qr=row["qr"],
+                qr=qr_of.get(holding_id) or "",
                 status=row["status"],
                 at=localize(row["at"]),
                 served_on=row["served_on"],
@@ -412,7 +465,7 @@ def load_visits(rows: list[dict], agency: Agency) -> None:
                 reason=row["reason"],
                 synced=row["synced"],
             )
-            for row in rows
+            for (holding_id, _day), row in best.items()
         ),
         batch_size=BATCH,
     )
@@ -487,22 +540,20 @@ def load_positions(rng, now: dt.datetime) -> None:
     An idle or workshop-bound van gets an older fix and its engine off, so the
     map's "last seen" and "live" states both have something to show.
     """
-    from swms.customers.models import Household
-
     stops_by_collector: dict[str, list[tuple[Decimal, Decimal]]] = {}
     routed = (
-        Household.objects.filter(
-            holding__route_stop__isnull=False,
-            holding__lat__isnull=False,
-            holding__route_stop__route__assignment_links__assignment__active=True,
+        Holding.objects.filter(
+            route_stop__isnull=False,
+            lat__isnull=False,
+            route_stop__route__assignment_links__assignment__active=True,
         )
         .values_list(
-            "holding__route_stop__route__assignment_links__assignment__collector_id",
-            "id", "holding__lat", "holding__lng",
+            "route_stop__route__assignment_links__assignment__collector_id",
+            "id", "lat", "lng",
         )
-        .order_by("holding__route_stop__route_id", "holding__route_stop__seq")
+        .order_by("route_stop__route_id", "route_stop__seq")
     )
-    for collector_id, _hh, lat, lng in routed:
+    for collector_id, _holding, lat, lng in routed:
         if collector_id:
             stops_by_collector.setdefault(collector_id, []).append((lat, lng))
 
@@ -546,6 +597,7 @@ def load_complaints() -> None:
     `resolved_at` and `closed_at` did not exist in the mock; they are read off the
     activity entries, which is where the timeline drawer already showed them.
     """
+    holding_of = _holding_of()
     complaints = []
     activity = []
     for row in mock.COMPLAINTS:
@@ -557,6 +609,7 @@ def load_complaints() -> None:
         complaints.append(
             Complaint(
                 id=row["id"],
+                holding_id=holding_of[row["hh"]],
                 household_id=row["hh"],
                 ward_id=row["ward"],
                 type=row["type"],
@@ -595,12 +648,35 @@ DUE_AFTER = dt.timedelta(days=10)
 def load_billing(
     bills: list[dict], payments: list[dict], deposits: list[dict], agency: Agency
 ) -> None:
-    runs = _load_billing_runs(bills)
+    # The generated bills are per family; a month's family bills at one
+    # building become that building's one bill.
+    holding_of = _holding_of()
+    merged: dict[tuple[str, str], dict] = {}
+    bill_of: dict[str, str] = {}
+    for row in bills:
+        holding_id = holding_of[row["hh"]]
+        key = (holding_id, row["period"])
+        target = merged.get(key)
+        if target is None:
+            target = merged[key] = {
+                "id": bill_id(row["period"], holding_id),
+                "holding": holding_id,
+                "ward": row["ward"],
+                "period": row["period"],
+                "issued_at": row["issued_at"],
+                "amount": 0,
+            }
+        target["amount"] += row["amount"]
+        target["issued_at"] = min(target["issued_at"], row["issued_at"])
+        bill_of[row["id"]] = target["id"]
+    holding_bills = list(merged.values())
+
+    runs = _load_billing_runs(holding_bills)
     Bill.objects.bulk_create(
         (
             Bill(
                 id=row["id"],
-                household_id=row["hh"],
+                holding_id=row["holding"],
                 ward_id=row["ward"],
                 run_id=runs[row["period"]],
                 period=row["period"],
@@ -609,7 +685,7 @@ def load_billing(
                 amount=row["amount"],
                 status=BillStatus.UNPAID,
             )
-            for row in bills
+            for row in holding_bills
         ),
         batch_size=BATCH,
     )
@@ -634,8 +710,8 @@ def load_billing(
         (
             Payment(
                 id=row["id"],
-                bill_id=row["bill"],
-                household_id=row["hh"],
+                bill_id=bill_of[row["bill"]],
+                holding_id=holding_of[row["hh"]],
                 collector_id=row["collector"],
                 agency=agency if row["collector"] else None,
                 amount=row["amount"],
@@ -664,9 +740,9 @@ def _load_billing_runs(bills: list[dict]) -> dict[str, int]:
 
 
 def settle(today: dt.date) -> None:
-    """Derive every bill's status and every household's dues from the payment rows.
+    """Derive every bill's status and every holding's dues from the payment rows.
 
-    This is `Bill.recalculate()` and `refresh_household_dues()` for the whole table
+    This is `Bill.recalculate()` and `refresh_holding_dues()` for the whole table
     at once — two aggregates and two bulk updates, rather than the write and two
     aggregate queries per payment that saving each one individually would cost.
     """
@@ -685,13 +761,13 @@ def settle(today: dt.date) -> None:
         paid = received.get(bill.id, 0)
         bill.status = _settlement(bill.amount, paid, bill.due_on, today)
         bill.method_id = method_of.get(bill.id)
-        dues[bill.household_id] += max(bill.amount - paid, 0)
+        dues[bill.holding_id] += max(bill.amount - paid, 0)
     Bill.objects.bulk_update(bills, ["status", "method", "updated_at"], batch_size=BATCH)
 
-    households = list(Household.objects.all())
-    for household in households:
-        household.dues = dues.get(household.id, 0)
-    Household.objects.bulk_update(households, ["dues", "updated_at"], batch_size=BATCH)
+    holdings = list(Holding.objects.all())
+    for holding in holdings:
+        holding.dues = dues.get(holding.id, 0)
+    Holding.objects.bulk_update(holdings, ["dues", "updated_at"], batch_size=BATCH)
 
 
 def _settlement(amount: int, received: int, due_on: dt.date | None, today: dt.date) -> str:

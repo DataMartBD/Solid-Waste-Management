@@ -49,6 +49,8 @@ const LANG = {
   t: (key, vars) => (vars ? `${key}:${JSON.stringify(vars)}` : key),
   n: (v) => String(v),
   date: (v) => String(v),
+  localName: (row) => row?.name || row?.id,
+  zoneName: (id) => id,
 }
 vi.mock('../i18n/index.jsx', () => ({ useLang: () => LANG }))
 

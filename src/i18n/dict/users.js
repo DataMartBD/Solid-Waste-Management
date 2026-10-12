@@ -28,7 +28,7 @@ export default {
     'users.role.supervisor': 'Supervisor',
     'users.role.agency_admin': 'Agency Admin',
     'users.role.super_admin': 'Super Admin',
-    'users.role.kcc_viewer': 'KCC Viewer',
+    'users.role.kcc_viewer': 'City Viewer',
 
     'users.scope.ward': 'Chosen wards',
     'users.scope.zone': 'A whole zone',
@@ -38,6 +38,8 @@ export default {
     'users.scopeHint.zone': 'Sees every ward in one zone.',
     'users.scopeHint.agency': 'Sees every ward this agency works.',
     'users.scopeHint.city': 'Sees the whole city.',
+    'users.field.city': 'City',
+    'users.allCities': 'Every city',
 
     'users.active': 'active',
     'users.inactive': 'inactive',
@@ -110,7 +112,7 @@ export default {
     'users.role.supervisor': 'সুপারভাইজার',
     'users.role.agency_admin': 'সংস্থা প্রশাসক',
     'users.role.super_admin': 'সুপার প্রশাসক',
-    'users.role.kcc_viewer': 'কেসিসি পর্যবেক্ষক',
+    'users.role.kcc_viewer': 'সিটি পর্যবেক্ষক',
 
     'users.scope.ward': 'নির্বাচিত ওয়ার্ড',
     'users.scope.zone': 'একটি সম্পূর্ণ জোন',
@@ -120,6 +122,8 @@ export default {
     'users.scopeHint.zone': 'একটি জোনের সব ওয়ার্ড দেখতে পাবেন।',
     'users.scopeHint.agency': 'এই সংস্থা যেসব ওয়ার্ডে কাজ করে সব দেখতে পাবেন।',
     'users.scopeHint.city': 'পুরো শহর দেখতে পাবেন।',
+    'users.field.city': 'সিটি',
+    'users.allCities': 'সব সিটি',
 
     'users.active': 'সক্রিয়',
     'users.inactive': 'নিষ্ক্রিয়',

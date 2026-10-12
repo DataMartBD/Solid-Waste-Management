@@ -1,6 +1,6 @@
 # Smart Sweep — user manual
 
-**Solid Waste Management System · Khulna City Corporation pilot**
+**Solid Waste Management System · multi-city, with Khulna City Corporation as the pilot**
 
 This manual covers every screen in the app, what each role can do, and the
 handful of rules that will otherwise surprise you.
@@ -16,25 +16,33 @@ Companion documents: [Workflows](WORKFLOWS.md) · [API reference](API-REFERENCE.
 - [Finding your way around](#finding-your-way-around)
 - [Language, theme and Bangla numerals](#language-theme-and-bangla-numerals)
 - [What your role can do](#what-your-role-can-do)
+- [The one idea to hold on to: everything is holding-wise](#the-one-idea-to-hold-on-to-everything-is-holding-wise)
 
 **Daily work**
 - [Daily Collection](#daily-collection) — the collector's round
-- [Households](#households) — the customer register
+- [The collection day](#the-collection-day) — collected unless someone complains
+- [Holding Master](#holding-master) — buildings, their families and their charge
+- [Surveys](#surveys)
 - [Complaints](#complaints)
 - [Live Map](#live-map)
 
 **Planning and money**
 - [Route Plan](#route-plan) · [Routes](#routes)
 - [Billing](#billing)
-- [Collectors](#collectors) · [Fleet & Vans](#fleet--vans)
+- [Collectors](#collectors) · [Fleet & Vans](#fleet--vans) · [Agency Master](#agency-master)
 
 **Insight**
 - [Dashboard](#dashboard)
+- [City Collection](#city-collection) — the City Corporation's view
 - [Reports](#reports) · [Customer Reports](#customer-reports)
 - [Sweep AI](#sweep-ai)
 
-**Reference**
+**Administration**
+- [Setup](#setup) — cities, zones, wards, dumping points, type lists
+- [Users](#users)
 - [My Profile](#my-profile)
+
+**Reference**
 - [Rules that will surprise you](#rules-that-will-surprise-you)
 - [When something goes wrong](#when-something-goes-wrong)
 
@@ -55,14 +63,15 @@ Smart Sweep signs you in by **mobile number**. There is no username.
 > arrives by SMS and never appears on screen.
 
 If your number is not yet registered, signing in creates a Collector account
-called *Field Operator*. An agency admin then sets your real role and area. This
-is how field staff are added without a separate registration form.
+called *Field Operator*. An administrator then sets your real role and area.
+This is how field staff are added without a separate registration form.
 
-### After that — by PIN
+### After that — by PIN or password
 
 Once signed in, set a **4-digit PIN** from *My Profile*. Then you can sign in
 with your number and PIN alone, without waiting for an SMS. This is the normal
 way collectors sign in, because mobile coverage in the field is unreliable.
+Office accounts created on the Users screen can also sign in with a password.
 
 **If you forget your PIN or lock yourself out**, sign in by SMS code instead. A
 successful code sign-in clears the lockout and lets you set a new PIN.
@@ -77,10 +86,10 @@ demo account uses PIN **1470**.
 
 | Mobile | Role | Area | Sees |
 |---|---|---|---|
-| `01711000042` | Collector | Ward 14 | Their own round, their ward's customers and complaints |
+| `01711000042` | Collector | Ward 14 | Their own round, their ward's holdings and complaints |
 | `01700112233` | Supervisor | Zone 03 | Full operational control of that zone's wards |
-| `01900445566` | Agency Admin | All zones | Everything, including staff, fleet and billing runs |
-| `01800778899` | KCC Viewer | City-wide | Read-only oversight and reports |
+| `01900445566` | Agency Admin | All zones | Everything for their agency, including staff, fleet, billing and bulk upload |
+| `01800778899` | City Viewer | City-wide | Read-only: the City Collection dashboard and reports |
 
 Signing in as each of these in turn is the quickest way to understand what the
 roles actually differ on.
@@ -93,15 +102,16 @@ The sidebar is grouped:
 
 | Group | Screens |
 |---|---|
-| **Overview** | Dashboard · Live Map |
-| **Operations** | Households · Daily Collection · Routes · Route Plan · Complaints · Billing |
-| **Fleet & People** | Fleet & Vans · Collectors |
+| **Overview** | Dashboard · City Collection · Live Map |
+| **Operations** | Holding Master · Surveys · Daily Collection · Routes · Route Plan · Complaints · Billing |
+| **Fleet & People** | Fleet & Vans · Collectors · Agency Master |
 | **Insight** | Reports · Customer Reports |
-| **System** | My Profile |
+| **System** | Users · Setup · My Profile |
 
 **The sidebar only lists screens your role can actually open.** A collector does
-not see Billing at all; a KCC viewer does not see Route Plan. If a screen is
-missing, that is why — it is not a fault.
+not see Billing at all; a City Viewer does not see Route Plan; only a Super
+Admin sees Setup and Agency Master. If a screen is missing, that is why — it is
+not a fault.
 
 After signing in you land on the screen that matters most for your role:
 
@@ -110,10 +120,11 @@ After signing in you land on the screen that matters most for your role:
 | Collector | Daily Collection |
 | Supervisor | Dashboard |
 | Agency Admin | Dashboard |
-| KCC Viewer | Reports |
+| Super Admin | Dashboard |
+| City Viewer | City Collection |
 
-The top bar carries global **search** (households, vans, complaints),
-notifications, the theme toggle, the language switch, and your account menu.
+The top bar carries global **search**, notifications, the theme toggle, the
+language switch, and your account menu.
 
 ---
 
@@ -124,7 +135,9 @@ interface changes, including form labels, dropdown options and status badges.
 Your choice is remembered.
 
 In Bangla, **numbers are shown in Bangla numerals** (১, ২, ৩) throughout —
-counts, money, dates and percentages alike.
+counts, money, dates and percentages alike. **Names follow the language too**:
+a city, zone, ward, dumping point or agency shows its Bangla name when one has
+been entered in Setup, and its English name otherwise.
 
 **Dark mode.** Toggle from the top bar. Remembered between sessions.
 
@@ -132,45 +145,77 @@ counts, money, dates and percentages alike.
 
 ## What your role can do
 
-| | Collector | Supervisor | Agency Admin | KCC Viewer |
-|---|:---:|:---:|:---:|:---:|
-| Dashboard | ● | ● | ● | ● |
-| Live Map | ● | ● | ● | ● |
-| Households | ● | ● | ● | — |
-| Daily Collection | ● | ● | ● | — |
-| Routes | ● | ● | ● | — |
-| Route Plan | — | ● | ● | — |
-| Complaints | ● | ● | ● | — |
-| Billing | — | ● | ● | — |
-| Fleet & Vans | — | ● | ● | — |
-| Collectors | — | ● | ● | — |
-| Reports | — | ● | ● | ● |
-| Customer Reports | — | ● | ● | ● |
+| | Collector | Supervisor | Agency Admin | Super Admin | City Viewer |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Dashboard | ● | ● | ● | ● | ● |
+| City Collection | — | ● | ● | ● | ● |
+| Live Map | ● | ● | ● | ● | ● |
+| Holding Master | ● | ● | ● | ● | — |
+| Bulk upload of holdings | — | — | ● | ● | — |
+| Surveys | ● | ● | ● | ● | — |
+| Daily Collection | ● | ● | ● | ● | — |
+| Routes | ● | ● | ● | ● | — |
+| Route Plan | — | ● | ● | ● | — |
+| Complaints | ● | ● | ● | ● | — |
+| Billing | — | ● | ● | ● | — |
+| Fleet & Vans · Collectors | — | ● | ● | ● | — |
+| Agency Master | — | — | — | ● | — |
+| Reports · Customer Reports | — | ● | ● | ● | ● |
+| Users | — | — | ● | ● | — |
+| Setup | — | — | — | ● | — |
 
 **Area scope** limits what you see even on screens you can open:
 
 - A **collector** sees their own ward.
 - A **supervisor** sees their zone's wards.
-- An **agency admin** and a **KCC viewer** see the whole city.
+- An **agency admin** sees everything that belongs to **their agency**.
+- A **super admin** sees every city and every agency.
+- A **City Viewer** sees **one city** — the one set on their account — or every
+  city if none is set.
 
-This is applied by the server, not by the screen. A supervisor cannot widen it
-by changing a filter — the ward dropdown simply does not offer wards outside
-their zone, and asking for one anyway returns their own.
+This is applied by the server, not by the screen. Nobody can widen it by
+changing a filter — the dropdowns simply do not offer what is outside your
+area, and asking for it anyway returns your own.
+
+---
+
+## The one idea to hold on to: everything is holding-wise
+
+A **holding** is a building. Everything the system does is done **per
+holding**:
+
+| Thing | Belongs to |
+|---|---|
+| The monthly **service charge** (tier, amount, payment mode and day) | The holding |
+| The **bill** — one a month | The holding |
+| **Payments** and **dues** | The holding |
+| The daily **collection** — one visit a day | The holding |
+| The **QR tag** — one on the building | The holding |
+| A **complaint** | The holding (and, optionally, the family that reported it) |
+
+A **household** is a family or unit living in the building — name, phone, flat
+number, members. It is kept for the register and for one rule:
+
+> **Households must equal units.** A building declared with 4 units can never
+> have more than 4 active families on record. Fewer is allowed while families
+> are still being recorded, and is shown in amber until they match.
 
 ---
 
 ## Daily Collection
 
-*Collector, Supervisor, Agency Admin*
+*Collector, Supervisor, Agency Admin, Super Admin*
 
-Your round for the day: every stop in walking order.
+Your round for the day: every **building** in walking order, one line each.
 
 ### The screen
 
 - **Stat cards** — stops today, collected, pending, and *queued to sync* if you
   have recorded anything offline.
 - **Tabs** — All · Collected · Pending.
-- **Search** by name, holding, road or tag.
+- **Search** by owner, holding number, road or tag.
+- Each line shows the **owner**, the **holding number**, the **QR tag**, and how
+  many families live there ("4 families").
 - **Scan QR code** — the main action.
 
 > **"Pending" includes stops you skipped.** A skip is not a completed stop — it
@@ -178,21 +223,21 @@ Your round for the day: every stop in walking order.
 
 ### Recording a collection
 
-1. Tap **Scan QR code** and hold the tag on the bin or gate inside the frame.
-2. The app looks the tag up and shows the household.
-3. Confirm to record the collection.
+1. Tap **Scan QR code** and hold the **building's tag** inside the frame.
+2. The app looks the tag up and finds the holding on your round.
+3. The collection is recorded — once, for the whole building.
 
-You can also find the stop in the list and record it by hand — useful when a tag
+You can also find the stop in the list and tap **Collect** — useful when a tag
 is missing or the camera will not focus.
 
 ### What a scan can tell you
 
 | Result | Meaning | What to do |
 |---|---|---|
-| The household appears | It is a stop on your round | Collect and confirm |
+| The holding is collected | It is a stop on your round | Nothing more |
 | **Already collected** | Recorded earlier today | Nothing — this prevents a double entry |
-| **Not on your round** | It belongs to another collector | Do not collect it; tell your supervisor |
-| **Unknown tag** | Not registered, or the sticker is damaged | Report it to the office |
+| **Not on your round** | It belongs to another round | Do not collect it; tell your supervisor |
+| **Unknown tag** | Not registered, or the tag is damaged | Report it to the office |
 | **Could not read** | The camera got nothing | Clean the tag and scan again |
 
 None of these is an error message you need to dismiss and retry — they are
@@ -208,7 +253,7 @@ If you cannot serve a stop, record a **skip** and choose a reason:
 - Could not access
 - Householder refused
 
-Add a note if the reason needs explaining. The stop stays in **Pending**.
+The stop stays in **Pending**.
 
 **Correcting a skip.** If you come back later and collect it, just record the
 collection normally. It replaces the skip — you will not end up with two entries
@@ -227,43 +272,107 @@ is retried, so nothing is silently lost.
 
 ### Looking at someone else's round
 
-A **supervisor or agency admin** can pick any collector from the dropdown and
-review their round from the desk.
+A **supervisor or admin** can pick any collector from the dropdown and review
+their round from the desk.
 
 A **collector cannot** — you always see your own round, whatever is selected. A
-round lists householders' names and phone numbers, which is not shared between
-collectors.
+round lists owners' names, phone numbers and what they owe, which is not shared
+between collectors.
 
 ---
 
-## Households
+## The collection day
 
-*Collector, Supervisor, Agency Admin*
+*How the system decides what was collected*
 
-The customer register. Two kinds of record sit here, on separate tabs:
+Agencies collect every day. They **may** confirm each holding by QR scan, app or
+web — but nobody has to. At the city's **cut-off time** (9:00 PM unless Setup
+says otherwise) the day closes:
 
-- **Under service** — paying customers, QR-tagged, billed monthly.
-- **Potential** — surveyed holdings that are *not* yet paying. The "ghost
-  homes".
+| On the day | Result |
+|---|---|
+| The agency confirmed the holding (scan, app, web) | **Collected (confirmed)** — never changed afterwards |
+| No confirmation and no complaint | **Collected (auto)** |
+| A "missed collection" complaint names that day | **Not collected** |
+| A complaint arrives **the next morning, before 12:00 noon** | The auto "collected" becomes **Not collected** |
+| A complaint arrives after noon the next day | Refused — too late to name yesterday |
 
-Tabs: All · Under service · Potential · Verified · Unverified.
+Only holdings on an active route are due on a day. The confirmed, auto and not
+collected counts are kept apart everywhere, so the city can see which agencies
+actually confirm their work.
 
-Filter by ward, customer type, tier and status; search by ID, name, QR tag,
-holding or road.
+> **The day is closed by a scheduled job on the server.** If the history on the
+> City Collection screen stays empty, ask your administrator to check that the
+> job is running.
 
-### Registering a household
+---
 
-**Register household** opens the full form. Required:
+## Holding Master
 
-- Ward, road, holding number, head of household
-- Service tier — this sets the monthly charge
-- Payment mode and payment day
-- Customer type, holding type, storage type, suitable collection time
+*Collector, Supervisor, Agency Admin, Super Admin*
 
-Optional but useful: phone, alternate phone, contact person, profession,
-address, floor, household size (total, under-5, female), blood group.
+The register of buildings. Each row shows the holding number, address, owner,
+how many families live there against its units ("3/4 units", amber until they
+match), the **monthly charge**, the **dues**, the service status and whether its
+location is confirmed.
 
-The ID (`HH-KCC-…`) is assigned automatically.
+Filter by service status (all, fully served, partly served, not served) and
+search by holding number, owner, phone, road, district, thana or QR tag. Tap a
+row to see the families living in the building.
+
+### Registering or editing a holding
+
+**Register holding** opens a full-page editor: the building on the left, its
+families on the right, saved together in one go.
+
+**The building**
+
+- District and thana, then ward and road (the road list follows the ward)
+- Holding number, holding type, floors, **units**
+- Agency (only asked when the system cannot work it out from your account)
+- Owner's name, phone, alternate phone, email
+- **Service charge** — tier (sets the standard amount), monthly charge (leave
+  blank for the tier's rate), payment mode and payment day
+- For a saved holding: the **dues** and the building's **QR code**, ready to
+  print and fix at the gate
+
+**The families**
+
+Add one card per family or unit: name, customer type, phones, flat number,
+floor, members (total, under 5, female), storage and a suitable collection time.
+Families carry **no charge** — that is the building's.
+
+> **More active families than units will not save.** Raise the unit count, or
+> set a family that has moved out to inactive, which frees its unit.
+
+A family already on the register is never deleted from the editor — it is set
+inactive instead, because complaints may name it.
+
+### Bulk upload from Excel or CSV
+
+*Agency Admin, Super Admin* — the fastest way to set up a new city.
+
+1. On Holding Master, tap **Import**, then **Download template**.
+2. Fill one row per holding: **Holding No, Name, Mobile, City, Ward, Area,
+   Address, Route, GPS Location** — plus, if you have them, Holding Type, Tier,
+   Charge, Units and Agency. The template's Notes sheet explains each column.
+3. Choose the file and tap **Check file**. Every row is checked and listed —
+   nothing is saved yet.
+4. Fix any rows with errors in the sheet and check again, or carry on without
+   them.
+5. Tap **Import N valid rows**.
+
+What happens to a row:
+
+- **Ward** can be the code (W-14), the name, or just the number (14).
+- An **Area** (road) that does not exist yet in the ward is **added**; the check
+  tells you so.
+- **GPS Location** (e.g. `22.8456, 89.5403`) confirms the building's location,
+  which makes it routable.
+- **Route** puts the holding at the end of that route's walk — it needs GPS.
+- A row matching a holding already registered (same ward, area and number)
+  **updates** it instead of creating a copy.
+- Rows with errors are skipped and listed; the valid rows are saved together.
 
 ### Confirming the location — this one matters
 
@@ -272,58 +381,55 @@ Every holding needs a confirmed GPS pin, because:
 > **A holding without a confirmed location cannot be put on a route.** Not
 > "should not" — the system refuses.
 
-**In the field**, open the holding and tap to verify while standing at the door.
-The app records the coordinates and their accuracy in metres.
+**In the field**, open the holding and verify while standing at the door. The
+app records the coordinates and their accuracy in metres. **From the office**
+you can drop the pin on the map instead; the system records that it was placed
+by hand, because a desk pin and a doorstep GPS fix are not equally reliable.
 
-**From the office**, you can drop the pin on the map instead. The system records
-that it was placed by hand, because a desk pin and a doorstep GPS fix are not
-equally reliable.
+---
 
-The **Unverified** tab is your work list. The header also shows how many
-holdings are not on any route and how many of those are blocked by verification.
+## Surveys
 
-### Find by tag
+*Collector, Supervisor, Agency Admin, Super Admin*
 
-**Find by tag** scans a QR sticker — or lets you key the code in — and opens the
-holding it belongs to. Useful when someone reports a problem and the only thing
-you have is the number on the bin.
+The door-to-door questionnaire. A collector fills it in at the door — on the
+phone or tablet, with or without a signal — and it uploads when the signal
+returns.
 
-### Surveys and conversion
+A survey goes **reviewed** (or rejected) by a supervisor before anything is done
+with it. An **agency admin** can then **convert** a reviewed survey into a
+holding on the register. The preview shows what will be created first: the road
+it matched, the suggested holding type, the owner and units — and warns if that
+address is already registered.
 
-Record a survey on a holding that is not under service. Alongside the usual
-details you capture:
-
-- **Estimated tier** — what they would pay
-- **Reason** they are not served (never approached, refused the charge, …)
-- **Time gap** — how long since any service
-- **Current practice** — what they do with their waste now
-
-To sign one up, open it and **bring it under service**. Confirm the tier, charge,
-payment mode and payment day — leave any of them and the survey's estimates are
-used.
-
-> The survey is **kept**, not deleted. That is what lets the Customer Funnel
-> report show how many holdings were approached, how many converted, and how
-> much monthly revenue is still on the table.
-
-You cannot convert the same survey twice.
+Surveyed families that are not yet paying ("potential customers") are also
+listed against their holding, and can be **brought under service** from there:
+the tier, charge, payment mode and day you confirm land on the **holding**.
 
 ---
 
 ## Complaints
 
-*Collector, Supervisor, Agency Admin*
+*Collector, Supervisor, Agency Admin, Super Admin*
 
-Citizen tickets with an SLA clock and a full audit trail.
+Citizen tickets with a deadline clock and a full audit trail.
 
 ### Raising one
 
-Choose the household, the **type** (missed collection, overflow, billing
-dispute, staff behaviour, other) and the **channel** it arrived by (SMS, app,
-phone, counter). Set a priority and describe the problem. Anything you write in
-the note becomes the first entry in the ticket's history.
+1. Choose the **holding** the complaint is about.
+2. Optionally choose the **family** in it that reported it — or leave it as the
+   holding's owner.
+3. Choose the **type** (missed collection, overflow, billing dispute, staff
+   behaviour, other), the **channel** (SMS, app) and a **priority**.
+4. For a **missed collection**, choose the **day not collected**: today, or
+   yesterday until 12:00 noon.
+5. Describe the problem. Anything you write becomes the first entry in the
+   ticket's history.
 
-### The SLA clock
+A missed-collection complaint is what turns a holding's day into **Not
+collected** — see [The collection day](#the-collection-day).
+
+### The deadline clock
 
 The priority sets the time budget:
 
@@ -334,13 +440,11 @@ The priority sets the time budget:
 | Medium | 24 hours |
 | Low | 48 hours |
 
-Each ticket shows how it is doing against its budget, and **breached** tickets
-are called out on the list, the Dashboard and the Reports screen.
+**Breached** tickets are called out on the list, the Dashboard and Reports.
 
 > **Changing the priority changes the clock.** Re-grading a medium ticket to
 > urgent gives it a 4-hour budget measured from when it was opened — which may
-> put it straight into breach. That is intended: it was always urgent, you just
-> found out late.
+> put it straight into breach. That is intended.
 
 ### Moving a ticket along
 
@@ -356,16 +460,11 @@ Open → Assigned → In progress → Resolved → Closed.
 | **Add note** | Adds to the history; changes nothing else |
 | **Attach photos** | Evidence from the camera roll |
 
-**Collectors can do all of these**, not just add notes — they progress the jobs
-on their own round. Area scope is what keeps them to their own ward's tickets,
-so no extra restriction is needed. A **KCC viewer** cannot do any of them.
+**Collectors can do all of these** for their own ward's tickets. A **City
+Viewer** cannot do any of them.
 
 > **Every one of these is recorded with who did it and when.** You cannot edit a
-> ticket's status directly, and you cannot remove an entry from its history. A
-> ticket cannot change hands without a trace.
-
-Photos can be attached several at a time. If any one file is rejected, none of
-them is saved — so you never end up with half a batch.
+> ticket's status directly, and you cannot remove an entry from its history.
 
 ---
 
@@ -373,86 +472,69 @@ them is saved — so you never end up with half a batch.
 
 *All roles*
 
-A map of Khulna showing where the vans are right now, drawn from real GPS
-telemetry.
-
-Positions arrive continuously — you do not need to refresh. Where a live
-connection is not possible, the map falls back to refreshing on a timer, and
-carries on working.
-
-Alongside vehicles, the map shows household pins and today's progress. It also
-reacts live to collections recorded in the field and complaints raised anywhere
-in your area.
+Where the vans are right now, drawn from real GPS telemetry, and a pin for
+every located **holding** — amber when it owes money. Positions arrive
+continuously; where a live connection is not possible the map refreshes on a
+timer instead.
 
 ---
 
 ## Route Plan
 
-*Supervisor, Agency Admin*
+*Supervisor, Agency Admin, Super Admin*
 
-Where routes are built and handed out.
+Where routes are built and handed out. A route walks **buildings**.
 
 ### Building a route
 
-Give it a name, a ward and a **service window** (start and end time). Then add
-stops.
-
-The planner shows holdings **not yet on any route**, split into two piles:
+Give it a name, a ward and a **service window** (start and end time). The
+planner shows holdings **not yet on any route**, in two piles:
 
 - **Ready to route** — location confirmed.
-- **Blocked** — no confirmed location. Send someone to verify before you can use
-  them.
+- **Blocked** — no confirmed location. Send someone to verify first.
 
 ### Ordering the walk
 
 Drag stops into the order a collector would actually walk them. The order is
-saved as one change, so a collector opening their round mid-edit never sees a
-half-sorted route.
-
-**Moving a holding between routes** is allowed — drag it and it moves. It is
+saved as one change. **Moving a holding between routes** is allowed — it is
 never on two routes at once.
 
 ### Assigning collectors
 
-Create an assignment for a collector and give it routes.
-
-**Taking a route from another collector is allowed** — the planner reassigns it
-and removes the old link. It does not stop and ask, because reassigning is a
-normal part of covering for absence.
+Give a collector an assignment and its routes. **Taking a route from another
+collector of the same agency is allowed** — reassigning is a normal part of
+covering for absence. Routes cannot be taken across agencies.
 
 ---
 
 ## Routes
 
-*Collector, Supervisor, Agency Admin*
+*Collector, Supervisor, Agency Admin, Super Admin*
 
 A read-only, stop-by-stop view of a route as it is walked: a timeline of what
 has been served and what is left, with a live map of the walk.
-
-Collectors use this to see the shape of their day; supervisors use it to see how
-a round is progressing without interrupting anyone.
 
 ---
 
 ## Billing
 
-*Supervisor, Agency Admin*
+*Supervisor, Agency Admin, Super Admin*
 
-### Running a month's billing — Agency Admin only
+**One bill per holding per month**, for the holding's monthly charge.
 
-1. Choose the **period** (`YYYY-MM`), the issue date and the number of days
-   until bills fall due (10 by default).
-2. **Preview first.** The preview shows exactly how many bills would be created
-   and for how much, and changes nothing.
-3. Check the count and total against what you expect.
-4. Run it for real.
+### Running a month's billing — admins only
 
-> **Always preview.** A billing run has no bulk undo.
+1. Choose the **period** (`YYYY-MM`), the issue date and the days until bills
+   fall due (10 by default).
+2. **Preview first.** It shows how many bills would be created and for how much,
+   and changes nothing.
+3. Run it for real.
 
-Re-running the same month is safe — households already billed are skipped, not
-charged twice.
+Who is billed: every **active holding on a route that has a charge**. A holding
+with no tier and no charge has not been signed up and is not billed.
 
-Every run is recorded, so you can always see who billed which month and when.
+> **Always preview.** A billing run has no bulk undo. Re-running the same month
+> is safe — holdings already billed are skipped.
 
 ### Recording payments
 
@@ -460,91 +542,70 @@ Every run is recorded, so you can always see who billed which month and when.
 the door is the person the money is handed to.
 
 Open the bill, record the amount, choose the method (cash, bKash, Nagad, Rocket,
-bank) and add a reference if there is one.
-
-**Partial payments are normal.** Record what was actually handed over. The bill
-moves from unpaid to **partial**, and to **paid** once the total is covered.
+bank) and add a reference if there is one. **Partial payments are normal**: the
+bill moves from unpaid to partial, and to paid once covered. The holding's
+**dues** follow automatically.
 
 > **A bill's state is not something you set.** There is no "mark as paid"
-> button. Paid, partial, unpaid and overdue are all worked out from the payments
-> on record. This is deliberate: it is why the Billing screen's totals and the
-> Reports screen's totals cannot disagree.
-
-**Who the payment is credited to matters.** A payment recorded by a collector is
-money that collector must later hand in. A payment taken at the office counter
-has no collector against it and no hand-in is expected. Getting this wrong is
-the usual cause of a cash position that looks wrong at month end.
+> button. Paid, partial, unpaid and overdue are worked out from the payments on
+> record — which is why Billing and Reports cannot disagree.
 
 ### Fixing a mistake
 
-Payments cannot be edited. To correct one, an **agency admin** voids it and it
-is recorded again correctly. The bill is immediately restated from the payments
-that remain.
-
-Voiding is admin-only because it is the only action that can make money on
-record disappear — so it does not sit with the person who keyed it in.
+Payments cannot be edited. An **admin** voids a wrong one and it is recorded
+again; the bill is restated immediately.
 
 ### Cash hand-ins
 
-At the end of the month a collector records what they have handed in: the
-amount, the method and a reference such as a depot slip number.
-
-Recording it again for the same month **updates** the entry rather than adding a
-second one, so a correction is just a re-entry.
-
-The **cash position** view shows, per collector: collected, deposited, and the
-variance between them. That variance is what a supervisor works through at month
-end.
+At month end a collector's hand-in is recorded: amount, method and a reference
+such as a depot slip. Recording it again for the same month updates it. The
+**cash position** shows collected, deposited and the variance per collector.
 
 ---
 
 ## Collectors
 
-*Supervisor, Agency Admin*
+*Supervisor, Agency Admin, Super Admin*
 
-The DSP staff register: name, staff ID, ward, phone, licence and its expiry,
-joining date, and the van they drive.
+The field-staff register: name, staff ID, ward, agency, phone, licence and its
+expiry, and the van they drive. Mark attendance for the day; coverage and
+on-time figures are calculated from the visit log.
 
-- **Attendance** — mark a collector checked in or absent for the day.
-- **Performance** — coverage and on-time figures, calculated from the visit log.
-- **Complaints** — how many open tickets are on each collector right now.
-
-> **Refreshing performance figures is agency-admin only.** They feed staff
-> reviews, so a supervisor cannot recalculate their own team's numbers on
-> demand.
+> **Refreshing performance figures is admin only.** They feed staff reviews.
 
 ---
 
 ## Fleet & Vans
 
-*Supervisor, Agency Admin*
+*Supervisor, Agency Admin, Super Admin*
 
 The vehicle register: plate, type (compactor, pickup, rickshaw van, tricycle),
-capacity, fuel type, ownership, GPS unit, odometer and driver.
+capacity, fuel, ownership, GPS unit, odometer and driver — plus the **ward** the
+van works and the **dumping point** it unloads at (only points in that ward's
+city are offered).
 
-### Documents
+- **Documents** — fitness, tax, insurance and permit expiries, with alerts.
+- **Maintenance** — opening a job takes the van off the road until it is closed.
+- **Fuel** — litres, cost and odometer; efficiency is calculated.
 
-Fitness, tax, insurance and permit expiry dates are tracked, and the **alerts**
-panel lists what is expiring — measured against today, so it stays current
-without anyone maintaining it.
+---
 
-### Maintenance
+## Agency Master
 
-Open a job with the reason, odometer reading and vendor.
+*Super Admin*
 
-> **Opening a job may take the van off the road.** It moves to *in maintenance*
-> and stops being available to assign.
+The organisations that collect waste — what the client calls the "customer". An
+agency can be a private company, an NGO, a community organisation, a
+cooperative, or the city's own **in-house** service (City Corporation or
+Pourashova). The types come from Setup.
 
-Close the job when it comes back, with the final cost. Downtime is worked out
-from when it went in and came out, so you do not need to calculate it.
+Each agency belongs to **one city**, has a name in English and Bangla, a short
+code, registration and contact details, a contract, and the **wards it
+serves** — only wards of its own city can be ticked. One city may have several
+agencies; one agency many wards and vans.
 
-### Fuel
-
-Log refuelling with litres, cost and odometer. Efficiency (km/l) is calculated
-from the distance since the last fill.
-
-The **KPI cards** show availability, downtime, average efficiency by fuel type,
-and fuel and maintenance spend.
+**Remittances** — what an agency hands over to the corporation — are recorded
+here, and the month's cash position shows collected, deposited and remitted.
 
 ---
 
@@ -552,90 +613,118 @@ and fuel and maintenance spend.
 
 *All roles*
 
-The headline view, all of it calculated live for **your area**:
+The headline view, calculated live for **your area**: the KPI scorecard
+(collection efficiency, charge rate, **coverage of holdings**, complaint
+resolution time, on-time completion, fleet availability), the 7-day collection
+trend, estimated waste by zone, the top holdings, collector rankings and the
+latest visits.
 
-- **KPI scorecard** — collection efficiency, charge rate, coverage, median
-  complaint resolution time, on-time completion, fleet availability.
-- **Collection trend** — the last 7 days.
-- **Waste by zone** — estimated tonnage.
-- **Ward collection** — service and revenue per ward.
-- **Complaints** — open, breached, urgent.
-- **Customer funnel** — surveys, conversions, revenue at stake.
+> **Tonnage is an estimate and is labelled as one.** Nothing weighs the waste.
 
-Every panel is calculated at the same moment from the same area scope, so they
-always agree with each other.
+---
 
-> **Tonnage is an estimate and is labelled `est.`** Nothing weighs the waste. The
-> figure comes from the number of stops collected multiplied by typical amounts
-> per customer type. Treat it as an indicator of trend, not a measurement.
+## City Collection
+
+*City Viewer, Supervisor, Agency Admin, Super Admin*
+
+The City Corporation's view of its city.
+
+- **Today** — holdings due, confirmed so far, not yet confirmed, and
+  not-collected complaints, with a badge saying whether the day is still open
+  (until the cut-off) or closed.
+- **For the period** — collected %, confirmed by agencies %, auto at cut-off,
+  and not collected.
+- **Chart** — confirmed, auto and not collected by day, week or month.
+- **By agency** and **by ward** — the same figures side by side, so you can see
+  which agencies prove their work.
+
+Switch Daily / Weekly / Monthly; export to View, PDF, Excel or CSV. A City
+Viewer tied to one city sees only that city; others can pick a city.
 
 ---
 
 ## Reports
 
-*Supervisor, Agency Admin, KCC Viewer*
+*Supervisor, Agency Admin, Super Admin, City Viewer*
 
 | Report | Answers |
 |---|---|
 | **Waste collection** | Rounds walked, per period and collector, with cover work called out |
 | **Service series** | Day by day: scheduled, served, skipped, billed, collected |
-| **Ward collection** | Service and revenue per ward for a month |
 | **Bill collection** | Billed against received, per period and collector |
 | **Bill status** | Paid, partial, unpaid and overdue counts per collector |
 | **Reconciliation** | Service against revenue, and cash taken against cash handed in |
+| **Customers** | Holdings per ward or road: active, on a round, dues, charge |
 
-Most reports take a **period** and a **grouping** (daily, weekly, monthly,
-yearly), and several offer an **overall** view that collapses to one row per
-period.
-
-### Exporting
-
-Every report exports to **CSV, Excel or PDF** from the same screen. The export is
-generated by the server from the same figures you are looking at, so a sheet you
-send to someone can never disagree with the screen it came from. The export
-notes your area scope and the time it was generated.
-
-The **reconciliation** export is worth knowing about: alongside the cash summary
-it carries the **exception list** — the cases that do not balance. Those are the
-point of the report.
-
-Reports always cover **your** area. A ward supervisor's city-wide-looking report
-is their wards.
+Every report exports to **CSV, Excel or PDF**, generated from the same figures
+you are looking at. Reports always cover **your** area.
 
 ---
 
 ## Customer Reports
 
-*Supervisor, Agency Admin, KCC Viewer*
+*Supervisor, Agency Admin, Super Admin, City Viewer*
 
-Per-household billing:
+Per-holding billing:
 
-- **Customer collection** — billed and received per household. This is the *"who
-  has not paid"* list.
+- **Customer collection** — billed and received per holding. The *"who has not
+  paid"* list.
 - **Customer bill status** — one row per bill, with what was paid, by which
   methods, and in how many instalments.
-
-Both export to CSV, Excel and PDF.
 
 ---
 
 ## Sweep AI
 
-The floating assistant, available on every screen.
+The floating assistant, on every screen. Ask in plain language — *"how many
+holdings have dues?"*, *"how many complaints are past their deadline?"* — and it
+answers from live data, **limited to your area**. Answers may suggest a screen
+to open; opening it is your choice.
 
-Ask an operational question in plain language — *"how many complaints are past
-their deadline?"*, *"which households in my ward have not been collected this
-week?"* — and it answers from live data, **limited to your area**.
+---
 
-Answers often come with a **suggested screen** to open. Opening it is your
-choice: the assistant never navigates on its own, and the panel stays open while
-you read.
+## Setup
 
-You can see the exact figures the assistant is working from, so its answers can
-always be checked.
+*Super Admin*
 
-> The assistant works whether or not the AI service is configured. Without it,
-> it answers from a set of built-in rules — shorter answers, same numbers.
+Where a city is set up. Every list here feeds the dropdowns on the other
+screens, and changes show up straight away.
+
+| Tab | What you set |
+|---|---|
+| **Cities** | Code, name (English and Bangla), type, district, the **collection cut-off** (9:00 PM by default) and the **complaint deadline** (12:00 noon the next day by default) |
+| **Zones** | Code, name (English and Bangla), city |
+| **Wards** | Code, name (English and Bangla), city and zone, centre point, active |
+| **Dumping points** | Name (English and Bangla), kind (dumping area, disposal site, transfer station), city, the wards it serves, location, daily capacity |
+| **City types** | e.g. City Corporation, Pourashova — add more any time |
+| **Agency types** | e.g. Private company, NGO, City Corporation (in-house) |
+
+**Setting up a new city, in order:**
+
+1. **Cities** — add the city with its type, cut-off and complaint deadline.
+2. **Zones**, then **Wards** — codes are shared by every city, so start them
+   with the city code (e.g. `SCC-Z1`, `SCC-W22`).
+3. **Dumping points** for its wards.
+4. **Agency Master** — add its agencies and tick their wards.
+5. **Holding Master → Import** — upload its holdings.
+6. **Users** — create its staff, and a City Viewer for the corporation.
+
+> **Hiding is not deleting.** Set an entry to *Hidden* to take it out of the
+> dropdowns; records already using it keep it. A type in use cannot be deleted.
+
+---
+
+## Users
+
+*Agency Admin, Super Admin*
+
+Operator accounts: phone, name, role, area scope, agency and password. To give
+the City Corporation its own login, create a **City Viewer** with the scope
+**City-wide** and choose the **city** — that account then sees only that city.
+
+You cannot change your own role, area or active status — another administrator
+does that. Accounts are deactivated rather than deleted, because records point
+at the person who made them.
 
 ---
 
@@ -644,33 +733,32 @@ always be checked.
 *All roles*
 
 Your own details: name, email, alternate phone, NID, blood group and emergency
-contact. Upload a photo if you like.
-
-**Set or change your PIN** here, or remove it to go back to SMS-only sign-in.
-
-You cannot change your own role or area — an agency admin does that.
+contact. Upload a photo if you like. **Set or change your PIN** here, or remove
+it to go back to SMS-only sign-in.
 
 ---
 
 ## Rules that will surprise you
 
-Ten things the system does that are deliberate, not faults:
+Twelve things the system does that are deliberate, not faults:
 
-1. **An unconfirmed location cannot be routed.** Verify the pin first; the
-   system will not let you around it.
-2. **There is no "mark as paid".** A bill's state follows the payments recorded
-   against it, and nothing else.
-3. **A bill can only come from a billing run.** There is no way to add one by
-   hand.
-4. **A skipped stop stays in Pending.** It still needs a return visit.
-5. **Recording the same household twice in one day corrects the entry** rather
-   than adding a second one.
-6. **A collector always sees their own round**, whichever collector is selected.
-7. **A complaint's status can only move through an action**, and each move is
-   recorded with your name against it.
-8. **Changing a complaint's priority moves its deadline**, possibly into breach.
-9. **Tonnage is estimated**, and labelled as such everywhere it appears.
-10. **Your reports are your area**, whatever the filters appear to offer.
+1. **Everything is per holding** — one charge, one bill, one visit and one QR
+   tag per building, however many families live in it.
+2. **Households must equal units.** More active families than units will not
+   save.
+3. **A holding is collected unless someone complains.** At the cut-off, every
+   holding nobody confirmed and nobody complained about counts as collected.
+4. **A complaint can name yesterday only until noon.**
+5. **An unconfirmed location cannot be routed.** Verify the pin first.
+6. **There is no "mark as paid".** A bill's state follows its payments.
+7. **A bill can only come from a billing run**, and only for a holding with a
+   charge.
+8. **A skipped stop stays in Pending.** It still needs a return visit.
+9. **Recording the same holding twice in one day corrects the entry.**
+10. **A collector always sees their own round.**
+11. **A complaint's status only moves through an action**, recorded with your
+    name.
+12. **Your reports are your area** — and a City Viewer's are their city.
 
 ---
 
@@ -680,18 +768,23 @@ Ten things the system does that are deliberate, not faults:
 |---|---|---|
 | **Sign-in says the PIN is wrong** and you are sure it is not | Five wrong attempts locks the account for 15 minutes | Sign in by SMS code instead — that clears the lockout |
 | **You are signed out unexpectedly** | Your session expired | Sign in again; anything queued on your device is still there |
-| **A screen is missing from the menu** | Your role cannot open it | Not a fault. Ask an agency admin if you need access |
-| **"Could not load this data"** | The screen could not reach the server | Tap Retry. The screen shows the failure rather than an empty chart, because zeros would read as real figures |
-| **A stop will not go on a route** | Its location is not confirmed | Verify it from Households, then add it |
-| **A bill will not save** | Bills come only from a billing run | Ask an agency admin to run the month |
-| **Your queue is not uploading** | No connection yet, or a row the server rejected | Keep working. Accepted rows clear on their own; a row that keeps failing needs the office |
-| **A figure looks wrong on a report** | Reports cover your area only | Check the period and remember the scope; if it still looks wrong, raise it with an agency admin |
-| **Cash position shows a variance** | Collected and deposited do not match | Check for payments recorded against the wrong collector, and for a hand-in not yet entered |
+| **A screen is missing from the menu** | Your role cannot open it | Not a fault. Ask an administrator if you need access |
+| **"Could not load this data"** | The screen could not reach the server | Tap Retry |
+| **A holding will not save: "households must equal units"** | More active families than the unit count | Raise the units, or set a family that moved out to inactive |
+| **A holding will not go on a route** | Its location is not confirmed | Verify it, then add it |
+| **A holding was not billed** | It has no tier or charge, is not on a route, or is inactive | Set its service charge in the Holding editor |
+| **Yesterday's complaint is refused** | It is past 12:00 noon | It can no longer change yesterday's result; log it for today if it applies |
+| **City Collection history is empty** | No day has been closed yet | Ask your administrator to check the day-end job |
+| **Import says a row has errors** | That row failed a check | Read the reason next to it, fix the sheet, check again |
+| **Your queue is not uploading** | No connection yet, or a row the server rejected | Keep working. Accepted rows clear on their own |
+| **Cash position shows a variance** | Collected and deposited do not match | Check for payments against the wrong collector, or a hand-in not yet entered |
 | **"Request was throttled"** | Too many sign-in attempts in an hour | Wait, or sign in with your PIN instead of a code |
 
 ### Getting help
 
 - The **Sweep AI** panel answers most "how many" and "which" questions directly.
 - Your **supervisor** handles routes, assignments and complaint escalation.
-- An **agency admin** handles accounts, roles, staff, fleet, service tiers,
-  billing runs and voided payments.
+- An **agency admin** handles your agency's accounts, staff, fleet, billing runs
+  and bulk uploads.
+- The **super admin** handles cities, zones, wards, dumping points, type lists
+  and agencies.

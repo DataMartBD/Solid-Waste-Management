@@ -23,6 +23,7 @@ from decimal import Decimal
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from swms.catalog.models import DumpingPoint, Ward
 from swms.common.serializers import NullableDecimal, SwmsModelSerializer
 from swms.fieldops.models import Collector
 
@@ -34,6 +35,12 @@ class VanSerializer(SwmsModelSerializer):
 
     driver = serializers.PrimaryKeyRelatedField(
         queryset=Collector.objects.all(), allow_null=True, required=False
+    )
+    ward = serializers.PrimaryKeyRelatedField(
+        queryset=Ward.objects.all(), allow_null=True, required=False
+    )
+    dumpingPoint = serializers.PrimaryKeyRelatedField(
+        source="dumping_point", queryset=DumpingPoint.objects.all(), allow_null=True, required=False
     )
 
     fitnessExp = serializers.DateField(source="fitness_exp", allow_null=True, required=False)
@@ -63,6 +70,8 @@ class VanSerializer(SwmsModelSerializer):
             "odometer",
             "status",
             "driver",
+            "ward",
+            "dumpingPoint",
             "fitnessExp",
             "taxExp",
             "insuranceExp",
@@ -110,6 +119,13 @@ class VanSerializer(SwmsModelSerializer):
         if fuel == FuelType.ELECTRIC and kmpl is not None:
             raise serializers.ValidationError(
                 {"kmpl": "An electric vehicle has no km/L figure — leave it empty."}
+            )
+        # A van unloads in its own city: its dumping point must be in its ward's city.
+        ward = attrs.get("ward", getattr(self.instance, "ward", None))
+        point = attrs.get("dumping_point", getattr(self.instance, "dumping_point", None))
+        if ward is not None and point is not None and point.city_id != ward.zone.city_id:
+            raise serializers.ValidationError(
+                {"dumpingPoint": f"{point.name} is not in {ward.id}'s city."}
             )
         return attrs
 

@@ -84,10 +84,19 @@ PRIORITY_RANK = {Priority.URGENT: 3, Priority.HIGH: 2, Priority.MEDIUM: 1, Prior
 
 
 class Complaint(TextKeyModel):
-    household = models.ForeignKey(
-        "customers.Household", on_delete=models.CASCADE, related_name="complaints"
+    #: The holding complained about — every complaint has one.
+    holding = models.ForeignKey(
+        "customers.Holding", on_delete=models.CASCADE, related_name="complaints"
     )
-    #: Denormalised from the household so ward reports stay a single-table scan.
+    #: Optionally, which family or unit in it reported it.
+    household = models.ForeignKey(
+        "customers.Household",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="complaints",
+    )
+    #: Denormalised from the holding so ward reports stay a single-table scan.
     ward = models.ForeignKey("catalog.Ward", on_delete=models.PROTECT, related_name="complaints")
 
     type = models.CharField(max_length=24, choices=ComplaintType.choices)
@@ -114,6 +123,9 @@ class Complaint(TextKeyModel):
         "accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
     reporter_phone = models.CharField(max_length=20, blank=True)
+    #: For a missed collection: the day that was missed. Today, or yesterday
+    #: until the city's complaint deadline the next morning.
+    missed_on = models.DateField(null=True, blank=True, db_index=True)
 
     class Meta:
         db_table = "complaint"
@@ -122,7 +134,7 @@ class Complaint(TextKeyModel):
             models.Index(fields=["status", "-opened"]),
             models.Index(fields=["ward", "status"]),
             models.Index(fields=["assigned", "status"]),
-            models.Index(fields=["household"]),
+            models.Index(fields=["holding"], name="complaint_holding_idx"),
         ]
 
     def __str__(self) -> str:
@@ -131,8 +143,10 @@ class Complaint(TextKeyModel):
     def save(self, *args, **kwargs):
         if not self.id:
             self.id = complaint_id()
+        if not self.holding_id and self.household_id:
+            self.holding_id = self.household.holding_id
         if not self.ward_id:
-            self.ward_id = self.household.ward_id
+            self.ward_id = self.holding.ward_id
         if not self.sla:
             self.sla = SLA_HOURS[Priority(self.priority)]
         super().save(*args, **kwargs)

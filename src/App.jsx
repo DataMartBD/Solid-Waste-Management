@@ -4,6 +4,8 @@ import { canAccess, homeFor } from './access.js'
 import Layout from './components/Layout.jsx'
 import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
+import CityDashboard from './pages/CityDashboard.jsx'
+import Setup from './pages/Setup.jsx'
 import LiveMap from './pages/LiveMap.jsx'
 import Agencies from './pages/Agencies.jsx'
 import Users from './pages/Users.jsx'
@@ -61,6 +63,7 @@ export default function App() {
       <Route path="/app" element={<Protected><Layout /></Protected>}>
         <Route index element={<Navigate to={homeFor(user)} replace />} />
         <Route path="dashboard" element={gated(<Dashboard />)} />
+        <Route path="city" element={gated(<CityDashboard />)} />
         <Route path="live" element={gated(<LiveMap />)} />
         <Route path="holdings" element={gated(<Holdings />)} />
         <Route path="holdings/new" element={gated(<HoldingEditor />)} />
@@ -77,6 +80,7 @@ export default function App() {
         <Route path="collectors" element={gated(<Collectors />)} />
         <Route path="agencies" element={gated(<Agencies />)} />
         <Route path="users" element={gated(<Users />)} />
+        <Route path="setup" element={gated(<Setup />)} />
         <Route path="reports" element={gated(<Reports />)} />
         <Route path="reports-customer" element={gated(<ReportsCustomer />)} />
         <Route path="profile" element={<Profile />} />

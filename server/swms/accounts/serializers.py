@@ -57,6 +57,8 @@ class UserSerializer(serializers.ModelSerializer):
     #: that asks the operator which agency a new building belongs to should not
     #: ask somebody who has no choice in the matter.
     agency = serializers.CharField(source="agency_id", read_only=True, default=None)
+    #: The one city a city-scoped account may see, or null for every city.
+    city = serializers.CharField(source="city_id", read_only=True, default=None)
     home = serializers.SerializerMethodField()
     readOnly = serializers.BooleanField(source="is_read_only", read_only=True)
     avatarUrl = serializers.SerializerMethodField()
@@ -81,6 +83,7 @@ class UserSerializer(serializers.ModelSerializer):
             "hasPin",
             "collector",
             "agency",
+            "city",
             "home",
             "readOnly",
             "avatarUrl",
@@ -267,7 +270,7 @@ class UserAdminSerializer(serializers.ModelSerializer):
         fields = [
             "id", "phone", "name", "role", "roleLabel",
             "scopeKind", "scopeZone", "scopeWards", "scope",
-            "agency", "collector",
+            "agency", "collector", "city",
             "email", "altPhone", "nid", "bloodGroup", "emergencyContact",
             "isActive", "password", "hasPin", "lastLogin",
         ]
@@ -303,6 +306,7 @@ class UserAdminSerializer(serializers.ModelSerializer):
             locked = {
                 "role": "role", "scope_kind": "scopeKind", "scope_zone": "scopeZone",
                 "scope_wards": "scopeWards", "is_active": "isActive", "agency": "agency",
+                "city": "city",
             }
             for field, key in locked.items():
                 if field not in attrs:

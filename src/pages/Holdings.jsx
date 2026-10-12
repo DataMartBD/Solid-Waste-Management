@@ -10,7 +10,7 @@ import { useData } from '../context/DataContext.jsx'
 import { useLang } from '../i18n/index.jsx'
 import VerifyLocationModal from '../components/VerifyLocationModal.jsx'
 import {
-  IconHome, IconPlus, IconCheck, IconAlert, IconMap, IconClipboard,
+  IconHome, IconPlus, IconCheck, IconAlert, IconMap, IconClipboard, IconDownload,
 } from '../components/Icons.jsx'
 
 // Derived server-side from the households on each holding, so it cannot go
@@ -56,8 +56,9 @@ function captureFix() {
 }
 
 export default function Holdings() {
-  const { t, n } = useLang()
-  const { canWrite, user } = useAuth()
+  const { t, n, taka } = useLang()
+  const { canWrite, user, isAdmin } = useAuth()
+  const [importing, setImporting] = useState(false)
   const { catalog } = useData()
   const navigate = useNavigate()
 
@@ -195,10 +196,39 @@ export default function Holdings() {
       cell: ({ row }) => {
         // The dictionary has no plural rules, so the two cases are two keys.
         const count = row.original.householdCount || 0
-        return count === 1
+        const label = count === 1
           ? t('holdings.familyCountOne')
           : t('holdings.familyCount', { count: n(count) })
+        const units = row.original.unitsTotal
+        if (units == null) return label
+        // Households must equal units — show both, amber until they do.
+        return (
+          <span className="row gap-8">
+            {label}
+            <span className={`badge ${row.original.unitsMatch ? 'badge-ok' : 'badge-warn'}`}
+              title={row.original.unitsMatch ? t('holdings.units.match') : t('holdings.units.mismatch')}>
+              {t('holdings.units.ofUnits', { active: n(row.original.activeHouseholdCount || 0), units: n(units) })}
+            </span>
+          </span>
+        )
       },
+    },
+    {
+      // The service charge and the dues are the building's: one bill a month.
+      accessorKey: 'effectiveCharge',
+      header: t('holdings.col.charge'),
+      cell: ({ row }) => (row.original.effectiveCharge
+        ? <span>{taka(row.original.effectiveCharge)}<span className="tiny muted-3">{t('common.perMonth')}</span></span>
+        : <span className="tiny muted">—</span>),
+    },
+    {
+      accessorKey: 'dues',
+      header: t('households.field.duesOutstanding'),
+      cell: ({ row }) => (
+        <span style={{ color: row.original.dues ? 'var(--danger-fg)' : undefined, fontWeight: row.original.dues ? 600 : 400 }}>
+          {taka(row.original.dues || 0)}
+        </span>
+      ),
     },
     {
       accessorKey: 'serviceStatus',
@@ -253,7 +283,7 @@ export default function Holdings() {
         </div>
       ),
     },
-  ], [t, n, canWrite, navigate])
+  ], [t, n, taka, canWrite, navigate])
 
   const exportColumns = [
     { key: 'id', label: t('holdings.col.id') },
@@ -267,6 +297,9 @@ export default function Holdings() {
     { key: 'ownerName', label: t('holdings.col.owner') },
     { key: 'ownerPhone', label: t('holdings.col.phone') },
     { key: 'householdCount', label: t('holdings.col.households') },
+    { key: 'qr', label: t('holdings.qr') },
+    { key: 'effectiveCharge', label: t('holdings.col.charge') },
+    { key: 'dues', label: t('households.field.duesOutstanding') },
     { key: 'serviceStatus', label: t('holdings.col.service') },
   ]
 
@@ -283,6 +316,13 @@ export default function Holdings() {
             rows={rows}
             filename="holdings"
           />
+          {/* Bulk upload is an administrator's job: it can create a city's
+              whole register in one go. */}
+          {isAdmin && (
+            <button className="btn" onClick={() => setImporting(true)}>
+              <IconDownload size={16} style={{ transform: 'rotate(180deg)' }} /> {t('holdings.import.button')}
+            </button>
+          )}
           {canWrite && (
             <button className="btn btn-primary" onClick={() => navigate('/app/holdings/new')}>
               <IconPlus size={16} /> {t('holdings.register')}
@@ -290,6 +330,9 @@ export default function Holdings() {
           )}
         </>}
       />
+      {importing && (
+        <ImportModal onClose={() => setImporting(false)} onDone={() => { setImporting(false); load() }} />
+      )}
 
       <div className="stat-grid">
         <StatCard icon={<IconHome size={18} />} label={t('holdings.stat.total')} value={n(stats.total)} sub={t('holdings.stat.totalSub')} />
@@ -450,6 +493,123 @@ export function HoldingForm({ holding, catalog, onClose, onSaved }) {
           </button>
         </ModalActions>
       </form>
+    </Modal>
+  )
+}
+
+// Bulk upload: pick a file, preview every row, then import the valid ones.
+// Nothing is written until the operator has seen the preview and confirmed.
+function ImportModal({ onClose, onDone }) {
+  const { t, n } = useLang()
+  const [file, setFile] = useState(null)
+  const [preview, setPreview] = useState(null)
+  const [result, setResult] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function run(commit) {
+    if (!file) { setError(t('holdings.import.chooseFile')); return }
+    setBusy(true)
+    setError('')
+    try {
+      const data = await api.importFile(file, commit)
+      if (commit) setResult(data)
+      else setPreview(data)
+    } catch (err) {
+      setError(err?.detail || t('common.requestFailed'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const summary = (result || preview)?.summary
+  const rows = (result || preview)?.rows || []
+  const bad = rows.filter((r) => r.status === 'error')
+
+  return (
+    <Modal title={t('holdings.import.title')} subtitle={t('holdings.import.subtitle')} onClose={onClose} width={760}>
+      {!result && (
+        <>
+          <div className="row gap-8 wrap" style={{ alignItems: 'center' }}>
+            <input type="file" accept=".xlsx,.csv" disabled={busy}
+              aria-label={t('holdings.import.file')}
+              onChange={(e) => { setFile(e.target.files?.[0] || null); setPreview(null); setError('') }} />
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => api.importTemplate()}>
+              <IconDownload size={14} /> {t('holdings.import.template')}
+            </button>
+          </div>
+          <div className="tiny muted-3 mt-8">{t('holdings.import.columns')}</div>
+        </>
+      )}
+
+      {error && <div className="app-banner error mt-16" role="alert">{error}</div>}
+
+      {summary && (
+        <div className="row gap-8 wrap mt-16">
+          <span className="badge badge-muted">{t('holdings.import.total', { count: n(summary.total) })}</span>
+          <span className="badge badge-ok">{t('holdings.import.valid', { count: n(summary.valid) })}</span>
+          {summary.invalid > 0 && <span className="badge badge-danger">{t('holdings.import.invalid', { count: n(summary.invalid) })}</span>}
+          {result
+            ? <span className="badge badge-info">{t('holdings.import.done', { created: n(summary.created), updated: n(summary.updated) })}</span>
+            : <span className="badge badge-info">{t('holdings.import.plan', { create: n(summary.toCreate), update: n(summary.toUpdate) })}</span>}
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <div className="table-wrap mt-16" style={{ maxHeight: 320, overflow: 'auto' }}>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>{t('holdings.import.col.row')}</th>
+                <th>{t('holdings.col.holdingNo')}</th>
+                <th>{t('holdings.col.owner')}</th>
+                <th>{t('holdings.col.ward')}</th>
+                <th>{t('holdings.import.col.result')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(bad.length ? [...bad, ...rows.filter((r) => r.status !== 'error')] : rows).map((r) => (
+                <tr key={r.row}>
+                  <td className="mono">{n(r.row)}</td>
+                  <td className="mono">{r.holdingNo || '—'}</td>
+                  <td>{r.name || '—'}</td>
+                  <td className="mono">{r.ward || '—'}</td>
+                  <td className="small">
+                    {r.status === 'error'
+                      ? <span style={{ color: 'var(--danger)' }}>{r.errors.join(' ')}</span>
+                      : <>
+                          <span className={`badge ${r.action === 'update' ? 'badge-info' : 'badge-ok'}`}>
+                            {t(`holdings.import.action.${r.action}`)}
+                          </span>
+                          {r.warnings.length > 0 && <div className="tiny muted-3">{r.warnings.join(' ')}</div>}
+                        </>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <ModalActions>
+        {result ? (
+          <button type="button" className="btn btn-primary" onClick={onDone}>{t('holdings.import.close')}</button>
+        ) : (
+          <>
+            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>{t('common.cancel')}</button>
+            {!preview ? (
+              <button type="button" className="btn btn-primary" onClick={() => run(false)} disabled={busy || !file}>
+                {busy ? <span className="spinner" /> : t('holdings.import.check')}
+              </button>
+            ) : (
+              <button type="button" className="btn btn-primary" onClick={() => run(true)}
+                disabled={busy || !preview.summary.valid}>
+                {busy ? <span className="spinner" /> : t('holdings.import.confirm', { count: n(preview.summary.valid) })}
+              </button>
+            )}
+          </>
+        )}
+      </ModalActions>
     </Modal>
   )
 }

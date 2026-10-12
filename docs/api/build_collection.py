@@ -166,6 +166,19 @@ auth_items = [
              "how field staff are onboarded without a registration screen. A "
              "successful OTP also clears any PIN lockout — OTP is the recovery path."),
 
+    req("Sign in with password", "POST", "/api/auth/login/",
+        auth=False,
+        body={"phone": "{{phone}}", "password": "{{password}}"},
+        tests=CAPTURE_SESSION,
+        desc="Phone + password — the sign-in the web app offers. Returns the same "
+             "`{access, refresh, user}` body as OTP verification. A wrong number "
+             "and a wrong password fail identically, so it cannot enumerate accounts."),
+
+    req("Change my password", "PUT", "/api/auth/password/",
+        body={"currentPassword": "{{password}}", "password": "a-new-long-passphrase"},
+        desc="Runs the same password validators as account creation. Fails on a "
+             "wrong `currentPassword`."),
+
     req("Sign in with PIN", "POST", "/api/auth/pin/login/",
         auth=False,
         body={"phone": "{{phone}}", "pin": "{{pin}}"},
@@ -232,32 +245,95 @@ auth_items = [
 catalog_items = [
     req("Catalog bundle", "GET", "/api/catalog/",
         desc="**Call this once after signing in.** Every dropdown the app needs in "
-             "one round trip: zones, wards, `roadsByWard`, tiers, blood groups, and "
-             "the eight option lists (customer types, holding types, storage types, "
-             "suitable times, payment modes, potential reasons, time gaps, current "
-             "practices).\n\nEvery option row carries both `key` (the i18n key the "
-             "Bangla dictionary resolves) and `label` (the English fallback)."),
+             "one round trip: `cities`, `cityTypes`, `agencyTypes`, `zones`, `wards`, "
+             "`roadsByWard`, `dumpingPoints`, tiers, blood groups, districts/thanas and "
+             "the eight option lists.\n\nOption rows carry both `key` (the i18n key the "
+             "Bangla dictionary resolves) and `label` (the English fallback). Cities, "
+             "zones, wards and dumping points also carry `nameBn`. Only **active** "
+             "rows are included — a hidden entry leaves the dropdowns but stays on "
+             "the records already using it."),
 
-    req("List zones", "GET", "/api/zones/", query=paged()),
+    # --- cities ---------------------------------------------------------- #
+    req("List cities", "GET", "/api/cities/",
+        query=paged(q("city_type", "city_corporation", "", enabled=False),
+                    q("active", "true", "", enabled=False)),
+        desc="City corporations and pourashovas — the top of the geography "
+             "(City → Zone → Ward → Area/Road). Each carries its own collection-day "
+             "times."),
+    req("Create city", "POST", "/api/cities/",
+        body={"id": "SCC", "name": "Sylhet City Corporation", "nameBn": "সিলেট সিটি কর্পোরেশন",
+              "cityType": "city_corporation", "district": "Sylhet",
+              "lat": 24.8949, "lng": 91.8687,
+              "collectionCutoff": "21:00", "complaintDeadline": "12:00", "active": True},
+        desc="**Super admin only.** `collectionCutoff` (default 21:00) is when every "
+             "holding with no complaint counts as collected; `complaintDeadline` "
+             "(default 12:00) is the next-day time until which a complaint can still "
+             "mark that day not collected. `cityType` comes from **City types**."),
+    req("Get city", "GET", "/api/cities/{{cityId}}/"),
+    req("Update city", "PATCH", "/api/cities/{{cityId}}/", body={"collectionCutoff": "20:30"}),
+    req("Delete city", "DELETE", "/api/cities/{{cityId}}/",
+        desc="Refused while any zone or agency belongs to the city."),
+
+    # --- setup lists ----------------------------------------------------- #
+    req("List city types", "GET", "/api/city-types/", query=paged(q("active", "true", "", enabled=False)),
+        desc="Setup list behind the city form: City Corporation, Pourashova / "
+             "Municipality, and anything an admin adds."),
+    req("Add a city type", "POST", "/api/city-types/",
+        body={"id": "union_parishad", "key": "opt.cityType.union_parishad",
+              "label": "Union Parishad", "sortOrder": 3, "active": True},
+        desc="**Super admin only.** Appears in the dropdown at once; a row without "
+             "a dictionary entry shows its own `label`."),
+    req("Get city type", "GET", "/api/city-types/{{cityTypeId}}/"),
+    req("Update city type", "PATCH", "/api/city-types/{{cityTypeId}}/", body={"active": False},
+        desc="`active: false` hides it from dropdowns; cities already using it keep it."),
+    req("Delete city type", "DELETE", "/api/city-types/{{cityTypeId}}/",
+        desc="Refused while a city uses it."),
+
+    req("List agency types", "GET", "/api/agency-types/", query=paged(q("active", "true", "", enabled=False)),
+        desc="Setup list behind the agency form: private company, NGO, CBO, "
+             "cooperative, City Corporation (in-house), Pourashova (in-house)…"),
+    req("Add an agency type", "POST", "/api/agency-types/",
+        body={"id": "trust", "key": "opt.agencyType.trust", "label": "Trust", "active": True},
+        desc="**Super admin only.**"),
+    req("Get agency type", "GET", "/api/agency-types/{{agencyTypeId}}/"),
+    req("Update agency type", "PATCH", "/api/agency-types/{{agencyTypeId}}/", body={"label": "Private limited company"}),
+    req("Delete agency type", "DELETE", "/api/agency-types/{{agencyTypeId}}/",
+        desc="Refused while an agency uses it."),
+
+    # --- zones, wards, blocks, roads -------------------------------------- #
+    req("List zones", "GET", "/api/zones/", query=paged(q("city", "{{cityId}}", "One city's zones.", enabled=False))),
     req("Create zone", "POST", "/api/zones/",
-        body={"id": "Z-07", "key": "opt.zone.Z-07", "name": "Boyra"},
-        desc="Agency admin only. Ids are supplied, not generated — they appear on "
-             "printed material."),
+        body={"id": "SCC-Z1", "key": "opt.zone.SCC-Z1", "name": "Zindabazar",
+              "nameBn": "জিন্দাবাজার", "city": "{{cityId}}"},
+        desc="**Super admin only.** Ids are supplied, not generated, and shared by "
+             "every city — prefix them with the city code."),
     req("Get zone", "GET", "/api/zones/{{zoneId}}/"),
-    req("Update zone", "PATCH", "/api/zones/{{zoneId}}/", body={"name": "Sonadanga"}),
+    req("Update zone", "PATCH", "/api/zones/{{zoneId}}/", body={"nameBn": "সোনাডাঙ্গা"}),
     req("Delete zone", "DELETE", "/api/zones/{{zoneId}}/"),
 
     req("List wards", "GET", "/api/wards/",
         query=paged(q("zone", "{{zoneId}}", "Filter to one zone.", enabled=False),
+                    q("zone__city", "{{cityId}}", "Filter to one city.", enabled=False),
                     q("active", "true", "", enabled=False))),
     req("Create ward", "POST", "/api/wards/",
-        body={"id": "W-22", "key": "opt.ward.W-22", "name": "Ward 22 — Boyra",
-              "zone": "{{zoneId}}", "lat": 22.8340, "lng": 89.5002},
-        desc="Agency admin only. `lat`/`lng` is the ward centre the live map "
-             "centres on and generated households scatter around."),
+        body={"id": "SCC-W22", "key": "opt.ward.SCC-W22", "name": "Ward 22 — Zindabazar",
+              "nameBn": "ওয়ার্ড ২২ — জিন্দাবাজার", "zone": "SCC-Z1",
+              "lat": 24.8949, "lng": 91.8687, "active": True},
+        desc="**Super admin only.** `lat`/`lng` is the ward centre the live map opens "
+             "on. `city` is read-only — a ward moves city by moving zone. `nameBn` is "
+             "shown in Bangla mode for a ward with no dictionary entry."),
     req("Get ward", "GET", "/api/wards/{{wardId}}/"),
-    req("Update ward", "PATCH", "/api/wards/{{wardId}}/", body={"name": "Ward 14 — Sonadanga"}),
+    req("Update ward", "PATCH", "/api/wards/{{wardId}}/", body={"active": False},
+        desc="A hidden ward leaves the dropdowns; records already in it keep it."),
     req("Delete ward", "DELETE", "/api/wards/{{wardId}}/"),
+
+    req("List blocks", "GET", "/api/blocks/",
+        query=paged(q("ward", "{{wardId}}", "", enabled=False), q("active", "true", "", enabled=False)),
+        desc="Named divisions of a ward — the patch a surveyor is given to walk."),
+    req("Create block", "POST", "/api/blocks/", body={"id": "W-14-E", "ward": "{{wardId}}", "name": "Block-E"}),
+    req("Get block", "GET", "/api/blocks/{{blockId}}/"),
+    req("Update block", "PATCH", "/api/blocks/{{blockId}}/", body={"name": "Block-E (North)"}),
+    req("Delete block", "DELETE", "/api/blocks/{{blockId}}/"),
 
     req("List roads", "GET", "/api/roads/",
         query=paged(q("ward", "{{wardId}}", "Filter to one ward.", enabled=False),
@@ -268,9 +344,26 @@ catalog_items = [
     req("Update road", "PATCH", "/api/roads/{{roadId}}/", body={"name": "KDA Avenue (South)"}),
     req("Delete road", "DELETE", "/api/roads/{{roadId}}/"),
 
+    # --- dumping points --------------------------------------------------- #
+    req("List dumping points", "GET", "/api/dumping-points/",
+        query=paged(q("city", "{{cityId}}", "", enabled=False),
+                    q("kind", "transfer_station", "`dumping_area` | `disposal_site` | `transfer_station`.", enabled=False),
+                    q("wards", "{{wardId}}", "Points serving this ward.", enabled=False),
+                    q("active", "true", "", enabled=False)),
+        desc="Where each city's waste is taken, and the wards whose waste goes there."),
+    req("Add a dumping point", "POST", "/api/dumping-points/",
+        body={"name": "Rajbandh Landfill", "nameBn": "রাজবাঁধ ল্যান্ডফিল",
+              "kind": "disposal_site", "city": "KCC", "wards": ["{{wardId}}"],
+              "lat": 22.7891, "lng": 89.5012, "capacityTonnes": 450, "notes": "", "active": True},
+        desc="**Super admin only.** `wards` must all be in the point's `city`."),
+    req("Get dumping point", "GET", "/api/dumping-points/{{dumpingPointId}}/"),
+    req("Update dumping point", "PATCH", "/api/dumping-points/{{dumpingPointId}}/", body={"capacityTonnes": 500}),
+    req("Delete dumping point", "DELETE", "/api/dumping-points/{{dumpingPointId}}/"),
+
+    # --- tiers ------------------------------------------------------------- #
     req("List tiers", "GET", "/api/tiers/", query=paged(),
-        desc="Service tiers and the monthly charge each one carries. A household's "
-             "`charge` defaults from its tier."),
+        desc="Service tiers and the standard monthly charge each one carries. A "
+             "**holding's** charge defaults from its tier."),
     req("Create tier", "POST", "/api/tiers/",
         body={"id": "commercial_medium", "key": "opt.tier.commercial_medium",
               "label": "Commercial — medium", "charge": 400}),
@@ -285,130 +378,322 @@ catalog_items = [
 # 02 · Customers
 # --------------------------------------------------------------------------- #
 
-HOUSEHOLD_BODY = {
+HOLDING_BODY = {
     "ward": "{{wardId}}",
     "road": "KDA Avenue",
-    "holding": "42/A",
-    "head": "Rahim Uddin",
-    "phone": "01711223344",
+    "holdingNo": "42/A",
+    "holdingType": "single_storey",
+    "ownerName": "Rahim Uddin",
+    "ownerPhone": "01711223344",
+    "district": "Khulna",
+    "thana": "Sonadanga",
+    "floors": 2,
+    "unitsTotal": 2,
     "tier": "{{tierId}}",
-    "charge": 100,
+    "charge": 0,
     "paymentMode": "cash",
     "paymentDay": 5,
+    "agency": "{{agencyId}}",
+    "notes": "",
+    "households": [
+        {"unit": "1A", "head": "Rahim Uddin", "phone": "01711223344", "members": 5},
+        {"unit": "2A", "head": "Shirin Akter", "phone": "01911223344", "members": 3},
+    ],
+    "householdDefaults": {"customerType": "residential", "storage": "covered_bin",
+                          "suitableTime": "morning"},
+}
+
+HOUSEHOLD_BODY = {
+    "holding": "{{holdingId}}",
+    "unit": "3B",
+    "head": "Salma Begum",
+    "phone": "01811223344",
     "status": "active",
     "customerType": "residential",
     "holdingType": "single_storey",
     "storage": "covered_bin",
     "suitableTime": "morning",
-    "floor": "Ground",
-    "members": 5,
+    "floor": "3rd",
+    "members": 4,
     "membersUnder5": 1,
-    "membersFemale": 3,
-    "profession": "Teacher",
-    "address": "42/A KDA Avenue, Sonadanga",
-    "lat": 22.8452,
-    "lng": 89.5405,
-    "accuracy": 8,
-    "qr": "",
+    "membersFemale": 2,
+    "profession": "Tailor",
 }
 
 customers_items = [
-    req("List households", "GET", "/api/households/",
+    # --- holdings ---------------------------------------------------------- #
+    req("List holdings", "GET", "/api/holdings/",
         query=paged(
             q("ward", "{{wardId}}", "", enabled=False),
             q("zone", "{{zoneId}}", "", enabled=False),
-            q("road", "", "", enabled=False),
-            q("tier", "{{tierId}}", "", enabled=False),
+            q("road", "", "Road name.", enabled=False),
+            q("holdingType", "", "", enabled=False),
             q("status", "active", "`active` | `inactive`.", enabled=False),
-            q("customer_type", "residential", "", enabled=False),
-            q("verified", "true", "GPS pin confirmed.", enabled=False),
+            q("verified", "true", "Location confirmed.", enabled=False),
             q("located", "true", "Has coordinates at all.", enabled=False),
-            q("hasDues", "true", "Outstanding money on record.", enabled=False),
-            q("unplanned", "true", "Not on any route.", enabled=False),
+            q("serviceStatus", "partial", "`none` | `partial` | `full` (from its households).", enabled=False),
+            q("unitsMismatch", "true", "Active households do not equal declared units.", enabled=False),
         ),
-        desc="The customer register. Results are **ward-scoped server-side** to the "
-             "caller: a supervisor's `?ward=` cannot widen past their own wards."),
+        desc="The Holding Master. **Every operation is holding-wise** — the service "
+             "charge, the monthly bill, the daily visit and the QR tag belong to the "
+             "building. Rows carry `qr`, `tier`, `charge`, `paymentMode`, "
+             "`paymentDay`, read-only `effectiveCharge`, `dues`, `routeId`, "
+             "`householdCount`, `activeHouseholdCount` and `unitsMatch` "
+             "(households must equal units; `null` when no unit count is declared).\n\n"
+             "Ward- and agency-scoped server-side."),
 
-    req("Create household", "POST", "/api/households/", body=HOUSEHOLD_BODY,
-        desc="`ward`, `road`, `holding`, `head`, `tier`, `paymentMode`, "
-             "`customerType`, `storage`, `holdingType` and `suitableTime` are "
-             "required. The id (`HH-KCC-…`) is allocated by the server.\n\n"
-             "`charge` defaults from the tier when omitted."),
+    req("Register a holding (with its families)", "POST", "/api/holdings/", body=HOLDING_BODY,
+        desc="The building and the families in it in **one save** — all or nothing. "
+             "`households` rows without an `id` are created; rows with one update that "
+             "family; a family left out is untouched (retire one with `status`).\n\n"
+             "Service terms are the holding's: `tier`, `charge` (0 = the tier's "
+             "standard), `paymentMode`, `paymentDay`. The QR tag is issued "
+             "automatically.\n\n**Households must equal units:** more active families "
+             "than `unitsTotal` is refused (`unitsTotal` error); fewer saves and is "
+             "flagged by `unitsMatch: false`."),
 
-    req("Get household", "GET", "/api/households/{{householdId}}/",
-        desc="Also carries derived fields: `lastVisit` (computed from the visit "
-             "log, never stored), `effectiveCharge`, `routable` and `routeId`."),
+    req("Get holding", "GET", "/api/holdings/{{holdingId}}/"),
+    req("Update holding", "PATCH", "/api/holdings/{{holdingId}}/",
+        body={"tier": "{{tierId}}", "charge": 250, "paymentDay": 10},
+        desc="Change the building's service terms. Lowering `unitsTotal` below its "
+             "active households is refused."),
+    req("Delete holding", "DELETE", "/api/holdings/{{holdingId}}/",
+        desc="Its bills, payments, visits and complaints cascade with it."),
 
-    req("Update household", "PATCH", "/api/households/{{householdId}}/",
-        body={"phone": "01711223355", "suitableTime": "evening"}),
+    req("Families in a holding", "GET", "/api/holdings/{{holdingId}}/households/",
+        desc="The occupant records for the editor's right-hand panel."),
 
-    req("Delete household", "DELETE", "/api/households/{{householdId}}/"),
-
-    req("Verify GPS location", "POST", "/api/households/{{householdId}}/verify/",
+    req("Verify the building's location", "POST", "/api/holdings/{{holdingId}}/verify/",
         body={"lat": 22.8452, "lng": 89.5405, "accuracy": 8, "placedByHand": False},
-        desc="Confirms the holding's pin. **This is the gate for routing** — the "
+        desc="Confirms the building's pin. **This is the gate for routing** — the "
              "server refuses to put an unverified holding on a route.\n\n"
              "`placedByHand: true` records that an office user dropped the pin on a "
              "map rather than a collector standing at the door with GPS."),
 
-    req("Resolve a QR tag", "GET", "/api/households/by-qr/{{qrTag}}/",
-        desc="Look up the household behind a scanned bin sticker. Use "
-             "`/api/collection/scan/` instead when the scan happens during a round — "
-             "that one also answers *whether the stop belongs to this collector today*."),
+    req("Resolve a building QR tag", "GET", "/api/holdings/by-qr/{{qrTag}}/",
+        desc="Look up the holding behind a scanned building tag (or a holding id). "
+             "Use `/api/collection/scan/` instead during a round — that one also "
+             "answers *whether the stop belongs to this collector today*."),
 
-    req("Unplanned holdings", "GET", "/api/households/unplanned/",
-        desc="The route planner's to-do list, split the way the planner presents it: "
-             "holdings that could be routed now, and holdings blocked because their "
-             "location is unverified."),
+    req("Unplanned holdings", "GET", "/api/holdings/unplanned/",
+        desc="The route planner's to-do list: buildings that could be routed now, "
+             "and buildings blocked because their location is unverified."),
 
-    req("List potential customers (surveys)", "GET", "/api/potential-customers/",
+    req("Download the bulk-upload template", "GET", "/api/holdings/import-template/",
+        desc="**Admin only.** An `.xlsx` with the upload columns, an example row and "
+             "a Notes sheet: Holding No · Name · Mobile · City · Ward · Area · Address · "
+             "Route · GPS Location, plus optional Holding Type · Tier · Charge · Units · "
+             "Agency."),
+
+    req("Bulk upload — preview", "POST", "/api/holdings/import/",
+        formdata=[
+            {"key": "file", "type": "file", "src": [],
+             "description": "Excel (.xlsx) or CSV (.csv) — pick it in Postman."},
+            {"key": "commit", "value": "false", "type": "text"},
+        ],
+        desc="**Admin only** (agency admin or super admin). Validates every row and "
+             "returns `{dryRun, rows, summary}` — nothing is written.\n\nEach row "
+             "reports `action` (`create` | `update`), `status`, `errors` and "
+             "`warnings`. Checks: required columns and fields; city and ward (code, "
+             "name or number); mobile `01XXXXXXXXX` (+880 accepted); GPS inside "
+             "Bangladesh; route in the same ward and only with GPS; tier/agency exist; "
+             "no duplicate rows; an agency admin uploads only for their own agency.\n\n"
+             "`Name`/`Mobile` are the owner; `Area` is the road (a new one is added to "
+             "the ward); GPS pins and verifies the building; a matching ward + area + "
+             "holding no **updates** instead of duplicating. At most 5000 rows / 5 MB."),
+
+    req("Bulk upload — import", "POST", "/api/holdings/import/",
+        formdata=[
+            {"key": "file", "type": "file", "src": [], "description": "The same file."},
+            {"key": "commit", "value": "true", "type": "text"},
+        ],
+        desc="Writes the **valid** rows in one transaction and skips the invalid ones; "
+             "`summary.created` / `summary.updated` say what happened."),
+
+    # --- households (occupant records) ------------------------------------- #
+    req("List households", "GET", "/api/households/",
+        query=paged(
+            q("holding", "{{holdingId}}", "One building's families.", enabled=False),
+            q("ward", "{{wardId}}", "", enabled=False),
+            q("zone", "{{zoneId}}", "", enabled=False),
+            q("road", "", "", enabled=False),
+            q("status", "active", "`active` | `inactive`.", enabled=False),
+            q("customer_type", "residential", "", enabled=False),
+            q("verified", "true", "The building's pin is confirmed.", enabled=False),
+            q("located", "true", "", enabled=False),
+            q("unplanned", "true", "Its building is not on any route.", enabled=False),
+        ),
+        desc="The families living in each holding — **occupant records only**: who "
+             "lives there (name, phone, unit, members, profile). No charge, bill, "
+             "visit or QR tag — those are the holding's."),
+
+    req("Add a household to a holding", "POST", "/api/households/", body=HOUSEHOLD_BODY,
+        desc="`holding`, `head`, `customerType`, `storage`, `holdingType` and "
+             "`suitableTime` are required. Ward, road and holding number are copied "
+             "from the holding. Refused when the holding already has as many active "
+             "households as its `unitsTotal`."),
+
+    req("Get household", "GET", "/api/households/{{householdId}}/"),
+    req("Update household", "PATCH", "/api/households/{{householdId}}/",
+        body={"phone": "01711223355", "status": "inactive"},
+        desc="A family that moved out is retired with `status: inactive`, which frees "
+             "its unit."),
+    req("Delete household", "DELETE", "/api/households/{{householdId}}/"),
+
+    # --- potential customers ---------------------------------------------- #
+    req("List potential customers", "GET", "/api/potential-customers/",
         query=paged(
             q("ward", "{{wardId}}", "", enabled=False),
             q("zone", "{{zoneId}}", "", enabled=False),
-            q("converted", "false", "Exclude surveys already signed up.", enabled=False),
+            q("converted", "false", "Exclude ones already signed up.", enabled=False),
             q("reason", "refused_charge", "", enabled=False),
             q("time_gap", "never", "", enabled=False),
             q("current_practice", "roadside_dump", "", enabled=False),
             q("verified", "true", "", enabled=False),
         ),
-        desc="Surveyed 'ghost homes' — holdings not yet paying for service. Kept "
-             "separate from households so the conversion funnel has history."),
+        desc="Surveyed families not yet under service — 'ghost homes' — attached to a "
+             "holding. Kept separate so the conversion funnel has history."),
 
-    req("Create survey", "POST", "/api/potential-customers/",
+    req("Create potential customer", "POST", "/api/potential-customers/",
         body={
-            "ward": "{{wardId}}", "road": "KDA Avenue", "holding": "77/B",
-            "head": "Salma Begum", "phone": "01911223344",
-            "estTier": "{{tierId}}", "surveyedAt": "{{today}}",
+            "holding": "{{holdingId}}", "unit": "", "head": "Salma Begum",
+            "phone": "01911223344", "estTier": "{{tierId}}", "surveyedAt": "{{today}}",
             "surveyor": "{{collectorId}}",
             "reason": "never_approached", "timeGap": "never",
             "currentPractice": "roadside_dump",
             "customerType": "residential", "holdingType": "single_storey",
             "storage": "open_bin", "suitableTime": "morning",
-            "lat": 22.8455, "lng": 89.5410, "accuracy": 10,
             "notes": "Interested if the charge can be paid weekly.",
         }),
 
-    req("Get survey", "GET", "/api/potential-customers/{{potentialId}}/"),
-    req("Update survey", "PATCH", "/api/potential-customers/{{potentialId}}/",
+    req("Get potential customer", "GET", "/api/potential-customers/{{potentialId}}/"),
+    req("Update potential customer", "PATCH", "/api/potential-customers/{{potentialId}}/",
         body={"notes": "Follow up after Eid."}),
-    req("Delete survey", "DELETE", "/api/potential-customers/{{potentialId}}/"),
+    req("Delete potential customer", "DELETE", "/api/potential-customers/{{potentialId}}/"),
 
-    req("Verify survey location", "POST", "/api/potential-customers/{{potentialId}}/verify/",
-        body={"lat": 22.8455, "lng": 89.5410, "accuracy": 10, "placedByHand": False}),
-
-    req("Convert survey → household", "POST", "/api/potential-customers/{{potentialId}}/convert/",
-        body={"tier": "{{tierId}}", "charge": 100, "paymentMode": "cash",
-              "paymentDay": 5, "qr": ""},
-        desc="Signs the holding up for service. Returns `{household, potential}`: "
-             "the new customer **and** the survey, which is closed rather than "
-             "deleted so the conversion funnel keeps its history.\n\n"
-             "Every field is optional — omitted ones fall back to the survey's "
-             "estimates (`estTier` becomes `tier`). Converting twice fails with "
+    req("Bring under service", "POST", "/api/potential-customers/{{potentialId}}/convert/",
+        body={"tier": "{{tierId}}", "charge": 100, "paymentMode": "cash", "paymentDay": 5},
+        desc="Creates the **household** in its holding and closes the survey (kept, "
+             "not deleted). Returns `{household, potential}`.\n\nThe terms land on the "
+             "**holding**: one with no tier yet takes these (or the survey's "
+             "`estTier`); one already under service keeps its terms except for any "
+             "sent here. Every field is optional. Converting twice fails with "
              "`already_converted`."),
 ]
 
 # --------------------------------------------------------------------------- #
-# 03 · Collectors
+# 03 · Surveys
+# --------------------------------------------------------------------------- #
+
+survey_items = [
+    req("List survey forms", "GET", "/api/survey-forms/", query=paged(),
+        desc="The questionnaires (e.g. the door-to-door household form)."),
+    req("Get survey form", "GET", "/api/survey-forms/{{surveyFormId}}/",
+        desc="With every question, option and show-if rule."),
+    req("Published form", "GET", "/api/survey-forms/published/",
+        query=[q("code", "d2d-household", "The form's stable code.", enabled=False)],
+        desc="The current published version the field app renders."),
+
+    req("List surveys", "GET", "/api/surveys/",
+        query=paged(
+            q("form", "{{surveyFormId}}", "", enabled=False),
+            q("status", "submitted", "`draft` | `submitted` | `reviewed` | `rejected` | `converted`.", enabled=False),
+            q("surveyor", "{{collectorId}}", "", enabled=False),
+            q("block", "", "", enabled=False),
+            q("from_date", "", "YYYY-MM-DD.", enabled=False),
+            q("converted", "false", "", enabled=False),
+            q("gives_to_van", "true", "", enabled=False),
+            q("synced", "false", "Still queued on a device.", enabled=False),
+        )),
+    req("Record a survey", "POST", "/api/surveys/",
+        body={"form": "{{surveyFormId}}", "surveyor": "{{collectorId}}",
+              "answers": {"ward": "{{wardId}}", "holding_no": "77/B",
+                          "respondent_name": "Salma Begum", "respondent_phone": "01911223344"},
+              "lat": 22.8455, "lng": 89.5410, "accuracy": 10, "notes": "", "status": "submitted"},
+        desc="`answers` is `{question_code: value}`; per-question validation runs "
+             "against the form. `holding` may name the building it was started from."),
+    req("Get survey", "GET", "/api/surveys/{{surveyId}}/", desc="With answers and photos."),
+    req("Update survey", "PATCH", "/api/surveys/{{surveyId}}/", body={"notes": "Re-visit on Friday."}),
+    req("Delete survey", "DELETE", "/api/surveys/{{surveyId}}/"),
+    req("Upload queued surveys", "POST", "/api/surveys/bulk/",
+        body={"rows": [{"form": "{{surveyFormId}}", "answers": {"holding_no": "80"}}]},
+        desc="The field app's offline queue. Answers per row; one bad row never "
+             "rejects the batch."),
+    req("Acknowledge a synced survey", "POST", "/api/surveys/{{surveyId}}/sync/"),
+    req("Review a survey", "POST", "/api/surveys/{{surveyId}}/review/",
+        body={"status": "reviewed", "notes": "Checked with the owner by phone."},
+        desc="A supervisor marks it `reviewed` (good enough to act on) or `rejected`."),
+    req("Conversion preview", "GET", "/api/surveys/{{surveyId}}/convert-preview/",
+        desc="What converting would create, and whether a holding already matches."),
+    req("Convert survey → holding", "POST", "/api/surveys/{{surveyId}}/convert/",
+        body={"holdingType": "single_storey", "holdingNo": "77/B",
+              "ownerName": "Salma Begum", "ownerPhone": "01911223344"},
+        desc="**Agency admin.** Puts the surveyed building on the register. Every field "
+             "is optional — defaults come from the survey; `road` is a road id; `link` "
+             "attaches to an existing holding instead of creating one."),
+]
+
+# --------------------------------------------------------------------------- #
+# 04 · Agencies & remittances
+# --------------------------------------------------------------------------- #
+
+agency_items = [
+    req("List agencies", "GET", "/api/agencies/",
+        query=paged(
+            q("city", "{{cityId}}", "", enabled=False),
+            q("ward", "{{wardId}}", "Agencies serving this ward.", enabled=False),
+            q("agencyType", "private", "", enabled=False),
+            q("status", "active", "`active` | `suspended` | `expired` | `terminated`.", enabled=False),
+            q("active", "true", "", enabled=False),
+        ),
+        desc="The client's \"customers\": whoever collects waste from holdings — a "
+             "contractor, NGO, or the city's own in-house service. One city may have "
+             "one or many; an agency serves many wards and runs many vans. Rows carry "
+             "`collectorCount`, `holdingCount` and derived `contractExpired`."),
+    req("Register an agency", "POST", "/api/agencies/",
+        body={"name": "Green Equipment Limited", "nameBn": "গ্রিন ইকুইপমেন্ট লিমিটেড",
+              "shortCode": "GEL", "agencyType": "private", "city": "{{cityId}}",
+              "serviceWards": ["{{wardId}}"], "contactPerson": "Shahidul Islam",
+              "phone": "01711445566", "contractNo": "KCC/SWM/2026/09",
+              "contractStart": "2026-01-01", "contractEnd": "2027-12-31", "status": "active"},
+        desc="**Super admin only.** `agencyType` comes from **Agency types**. "
+             "`serviceWards` must all be in the agency's `city`; moving an agency to "
+             "another city while it still serves wards of the old one is refused."),
+    req("Get agency", "GET", "/api/agencies/{{agencyId}}/"),
+    req("Update agency", "PATCH", "/api/agencies/{{agencyId}}/", body={"contractEnd": "2028-06-30"}),
+    req("Delete agency", "DELETE", "/api/agencies/{{agencyId}}/",
+        desc="Refused while collectors, vans or holdings belong to it."),
+    req("Agency's collectors", "GET", "/api/agencies/{{agencyId}}/collectors/"),
+    req("Agency's employment history", "GET", "/api/agencies/{{agencyId}}/employment-history/",
+        desc="Who worked for this agency, and when. Rows carry `agencyName` and `agencyNameBn`."),
+    req("Transfer a collector to an agency", "POST", "/api/collectors/{{collectorId}}/transfer/",
+        body={"agency": "{{agencyId}}", "onDate": "{{today}}", "note": "Contract moved."},
+        desc="Closes the current employment and opens one with the new agency. Past "
+             "visits and payments stay credited to the agency that employed the "
+             "collector then."),
+
+    req("List remittances", "GET", "/api/remittances/",
+        query=paged(q("agency", "{{agencyId}}", "", enabled=False),
+                    q("period", "{{period}}", "", enabled=False)),
+        desc="An agency's hand-overs of collected service charges to the corporation. "
+             "Rows carry `agencyName` and `agencyNameBn`. An agency sees its own."),
+    req("Record a remittance", "POST", "/api/remittances/record/",
+        body={"agency": "{{agencyId}}", "period": "{{period}}", "method": "bank",
+              "amount": 125000, "at": "{{nowIso}}", "ref": "TRX-88231", "note": ""},
+        desc="**Super admin only** — it is the corporation acknowledging money received."),
+    req("Create remittance (plain)", "POST", "/api/remittances/",
+        body={"agency": "{{agencyId}}", "period": "{{period}}", "method": "bank", "amount": 1000},
+        desc="Equivalent to `/record/`; super admin only."),
+    req("Get remittance", "GET", "/api/remittances/{{remittanceId}}/"),
+    req("Update remittance", "PATCH", "/api/remittances/{{remittanceId}}/", body={"ref": "TRX-88232"}),
+    req("Delete remittance", "DELETE", "/api/remittances/{{remittanceId}}/"),
+    req("Agency cash position", "GET", "/api/remittances/cash-position/",
+        query=[q("period", "{{period}}", "Required. YYYY-MM.")],
+        desc="Collected → deposited → remitted, per agency, for one month."),
+]
+
+# --------------------------------------------------------------------------- #
+# 05 · Collectors
 # --------------------------------------------------------------------------- #
 
 collector_items = [
@@ -466,9 +751,9 @@ routes_items = [
     req("Create route", "POST", "/api/routes/",
         body={"name": "KDA Avenue morning", "ward": "{{wardId}}",
               "windowStart": "06:30", "windowEnd": "09:30",
-              "stops": ["{{householdId}}"], "active": True},
-        desc="`stops` is the ordered walk. Every household in it must have a "
-             "**verified** location or the request fails.\n\nThe id "
+              "stops": ["{{holdingId}}"], "active": True},
+        desc="`stops` is the ordered walk of **holding** ids. Every holding in it must "
+             "have a **verified** location and sit in the route's ward.\n\nThe id "
              "(`RT-W-14-01`) is allocated per ward."),
 
     req("Get route", "GET", "/api/routes/{{routeId}}/"),
@@ -477,19 +762,20 @@ routes_items = [
     req("Delete route", "DELETE", "/api/routes/{{routeId}}/"),
 
     req("Replace the whole stop list", "POST", "/api/routes/{{routeId}}/stops/",
-        body={"stops": ["HH-KCC-0012840", "HH-KCC-0012841", "HH-KCC-0012842"]},
+        body={"stops": ["HLD-KCC-000001", "HLD-KCC-000002", "HLD-KCC-000003"]},
         desc="Sets the ordered walk in one call, so a drag-reorder on the planner "
              "is **atomic** — the route is never briefly half-ordered. Prefer this "
              "over a sequence of add/remove calls when the user reorders."),
 
     req("Append one stop", "POST", "/api/routes/{{routeId}}/add-stop/",
-        body={"hh": "{{householdId}}"},
-        desc="Adds the holding to the end of the walk. A holding already on another "
+        body={"hh": "{{holdingId}}"},
+        desc="`hh` here is a **holding** id (the field keeps its old name). Adds the "
+             "holding to the end of the walk. A holding already on another "
              "route **moves** here rather than being refused — that is what "
              "dragging it across routes on the planner means."),
 
     req("Remove one stop", "POST", "/api/routes/{{routeId}}/remove-stop/",
-        body={"hh": "{{householdId}}"},
+        body={"hh": "{{holdingId}}"},
         desc="Takes the holding off the walk and closes the gap in the numbering."),
 
     req("List assignments", "GET", "/api/assignments/",
@@ -523,9 +809,10 @@ round_items = [
         query=[q("collector", "{{collectorId}}", "Collector id, e.g. C-042."),
                q("day", "{{today}}", "YYYY-MM-DD. Defaults to today.")],
         desc="Everything the round screen renders in one call: `stops` in walking "
-             "order, the three `counts` its tabs show, and the `routes` behind them "
-             "for the headings.\n\nA **collector-role** caller is pinned to their "
-             "own round whatever they pass — a round names households and phone "
+             "order (one per **holding**: `holding`, `holdingNo`, owner `head`, `units` "
+             "= active families, `qr`, `dues`, `visitStatus`), the three `counts` its "
+             "tabs show, and the `routes` behind them.\n\nA **collector-role** caller "
+             "is pinned to their own round whatever they pass — a round names owners and phone "
              "numbers. Supervisors and admins may look in on anyone, which is how a "
              "round gets reviewed from a desk."),
 
@@ -535,7 +822,7 @@ round_items = [
              "something the collector acts on, not a failed request.\n\n"
              "`{ok: true, stop}` — scan is a stop on this round.\n"
              "`{ok: false, reason: 'alreadyCollected', stop}` — stops a double entry.\n"
-             "`{ok: false, reason: 'otherRoute', ...}` — a wrong-round mistake the "
+             "`{ok: false, reason: 'otherRoute', holding}` — a wrong-round mistake the "
              "collector can fix on the spot.\n"
              "`{ok: false, reason: 'unknown'}` — unregistered or damaged tag; needs the office.\n"
              "`{ok: false, reason: 'unreadable'}` — the camera got nothing."),
@@ -543,30 +830,34 @@ round_items = [
     req("List visits", "GET", "/api/visits/",
         query=paged(
             q("collector", "{{collectorId}}", "", enabled=False),
-            q("hh", "{{householdId}}", "", enabled=False),
+            q("holding", "{{holdingId}}", "", enabled=False),
             q("route", "{{routeId}}", "", enabled=False),
             q("ward", "{{wardId}}", "", enabled=False),
             q("day", "{{today}}", "One date.", enabled=False),
             q("dateFrom", "", "YYYY-MM-DD.", enabled=False),
             q("dateTo", "", "YYYY-MM-DD.", enabled=False),
             q("status", "collected", "`collected` | `skipped`.", enabled=False),
-            q("source", "scan", "`scan` | `manual`.", enabled=False),
+            q("source", "scan", "`scan` | `manual` | `auto` (written at the city's cut-off).", enabled=False),
             q("synced", "false", "Still queued on a device.", enabled=False),
         )),
 
     req("Record a collection", "POST", "/api/visits/",
-        body={"hh": "{{householdId}}", "collector": "{{collectorId}}",
+        body={"holding": "{{holdingId}}", "collector": "{{collectorId}}",
               "status": "collected", "at": "{{nowIso}}", "source": "scan",
               "lat": 22.8452, "lng": 89.5405, "accuracy": 6, "note": ""},
-        desc="**One visit per household per day**, enforced by a unique constraint "
-             "on `(household, served_on)`. Re-posting for the same day updates that "
+        desc="**One visit per holding per day**, enforced by a unique constraint "
+             "on `(holding, served_on)`. Collection is holding-wise: one scan of the "
+             "building's tag covers every family in it. Re-posting for the same day updates that "
              "row rather than inserting a second one — which is exactly what "
              "correcting a skip to a collection, and the offline queue, rely on.\n\n"
              "The tag and route are taken from the plan, not the request, and the "
-             "live map is notified."),
+             "live map is notified.\n\nConfirming is optional: at the city's "
+             "`collectionCutoff` every due holding with no visit is written an `auto` "
+             "visit — collected, or skipped with reason `complaint` if a missed-"
+             "collection complaint names that day (`manage.py close_collection_day`)."),
 
     req("Record a skip", "POST", "/api/visits/",
-        body={"hh": "{{householdId}}", "collector": "{{collectorId}}",
+        body={"holding": "{{holdingId}}", "collector": "{{collectorId}}",
               "status": "skipped", "at": "{{nowIso}}", "source": "manual",
               "reason": "locked", "note": "Nobody home; gate padlocked."},
         desc="A skip needs a `reason`: `noOne` | `noWaste` | `locked` | `access` | "
@@ -578,10 +869,10 @@ round_items = [
 
     req("Upload the offline queue", "POST", "/api/visits/bulk/",
         body={"rows": [
-            {"hh": "HH-KCC-0012840", "collector": "{{collectorId}}",
+            {"holding": "HLD-KCC-000001", "collector": "{{collectorId}}",
              "status": "collected", "at": "{{nowIso}}", "source": "scan",
              "lat": 22.8452, "lng": 89.5405, "accuracy": 6},
-            {"hh": "HH-KCC-0012841", "collector": "{{collectorId}}",
+            {"holding": "HLD-KCC-000002", "collector": "{{collectorId}}",
              "status": "skipped", "at": "{{nowIso}}", "source": "manual",
              "reason": "locked", "note": "Gate locked"},
         ]},
@@ -606,7 +897,8 @@ complaint_items = [
             q("type", "missed_collection", "", enabled=False),
             q("channel", "phone", "`sms` | `app` | `phone` | `counter`.", enabled=False),
             q("assigned", "{{collectorId}}", "", enabled=False),
-            q("hh", "{{householdId}}", "", enabled=False),
+            q("holding", "{{holdingId}}", "", enabled=False),
+            q("household", "{{householdId}}", "The family that reported it.", enabled=False),
             q("ward", "{{wardId}}", "", enabled=False),
             q("zone", "{{zoneId}}", "", enabled=False),
             q("active", "true", "Not yet resolved or closed.", enabled=False),
@@ -615,17 +907,24 @@ complaint_items = [
             q("opened_before", "", "YYYY-MM-DD.", enabled=False),
         ),
         desc="Rows carry the derived `slaState`, `priorityRank` and `nextStatus`, "
-             "plus the household's `head`, `holding`, `road` and `phone` so the "
-             "list needs no second lookup."),
+             "plus `holding`, `holdingNo`, `road`, and `head`/`phone` (the reporting "
+             "family's, else the owner's) so the list needs no second lookup."),
 
     req("Open a complaint", "POST", "/api/complaints/",
-        body={"hh": "{{householdId}}", "type": "missed_collection",
+        body={"holding": "{{holdingId}}", "household": "{{householdId}}",
+              "type": "missed_collection", "missedOn": "{{today}}",
               "channel": "phone", "priority": "high",
               "description": "Bin not emptied for three days.",
               "assigned": "{{collectorId}}",
               "note": "Caller says this is the second time this month."},
-        desc="`type`: `missed_collection` | `overflow` | `billing_dispute` | "
-             "`staff_behaviour` | `other`.\n\n`note` is write-only — it becomes the "
+        desc="A complaint names a **holding**; `household` (optional) is the family "
+             "in it that reported it — or send only `household` and the holding is "
+             "taken from it. A household from another holding is refused.\n\n"
+             "`type`: `missed_collection` | `overflow` | `billing_dispute` | "
+             "`staff_behaviour` | `other`. A missed collection carries `missedOn`: "
+             "today (default), or yesterday until the city's `complaintDeadline`; "
+             "after the cut-off it turns that day's auto visit into *not collected*."
+             "\n\n`note` is write-only — it becomes the "
              "first entry in the audit trail. `sla` defaults from the priority."),
 
     req("Get complaint", "GET", "/api/complaints/{{complaintId}}/",
@@ -692,7 +991,7 @@ billing_items = [
     req("List bills", "GET", "/api/bills/",
         query=paged(
             q("period", "{{period}}", "Billing month, YYYY-MM.", enabled=False),
-            q("hh", "{{householdId}}", "", enabled=False),
+            q("holding", "{{holdingId}}", "", enabled=False),
             q("ward", "{{wardId}}", "", enabled=False),
             q("zone", "{{zoneId}}", "", enabled=False),
             q("run", "", "Billing-run id.", enabled=False),
@@ -701,7 +1000,8 @@ billing_items = [
                                       "prefer this over `status`.", enabled=False),
             q("hasOutstanding", "true", "", enabled=False),
         ),
-        desc="Each row carries `received`, `outstanding` and `settlement`, computed "
+        desc="**One bill per holding per month.** Rows carry `holding`, `holdingNo`, "
+             "`head` (the owner), and `received`, `outstanding` and `settlement`, computed "
              "from the payments that actually exist.\n\nFilter on **`settlement`**, "
              "not `status`: `status` is only ever as fresh as the last "
              "`recalculate()`, while `settlement` is derived in SQL and can never "
@@ -716,7 +1016,8 @@ billing_items = [
 
     req("Run the month's billing", "POST", "/api/bills/generate/",
         body={"period": "{{period}}", "issuedOn": "{{today}}", "dueDays": 10, "dryRun": False},
-        desc="**Agency admin only.** Issues one bill per active household for the "
+        desc="**Agency admin only.** Issues one bill per **active, routed holding with "
+             "a charge** (its tier's rate, or its agreed `charge`) for the "
              "period and writes a `BillingRun` audit row. Answers 201.\n\n"
              "Re-running the same period does not double-charge — existing bills "
              "for the month are respected."),
@@ -728,13 +1029,19 @@ billing_items = [
              "describe exactly the rows shown beneath them."),
 
     req("Get bill", "GET", "/api/bills/{{billId}}/"),
+    req("Edit a bill", "PATCH", "/api/bills/{{billId}}/", body={"amount": 120},
+        desc="**Agency admin only.** `holding` and `period` are fixed at issue time; "
+             "`status` and `method` are caches and not writable."),
+    req("Delete a bill", "DELETE", "/api/bills/{{billId}}/",
+        desc="**Agency admin only.** Its payments go with it and the holding's dues "
+             "are restated."),
 
     req("Record a payment against a bill", "POST", "/api/bills/{{billId}}/pay/",
         body={"amount": 100, "method": "cash", "collector": "{{collectorId}}",
               "at": "{{nowIso}}", "reference": "", "note": ""},
         desc="**The only way a bill's status changes.** `Bill.status` is a cache "
              "that `recalculate()` derives from the payments that exist, and "
-             "`Household.dues` follows from that.\n\nPartial payments are normal — "
+             "`Holding.dues` follows from that.\n\nPartial payments are normal — "
              "post several and the bill moves unpaid → partial → paid on its own.\n\n"
              "Open to **collectors** as well as office roles: the collector at the "
              "door is the person the cash is handed to. `collector` defaults to the "
@@ -743,11 +1050,11 @@ billing_items = [
              "Returns the restated bill."),
 
     req("Create bill directly (blocked)", "POST", "/api/bills/",
-        body={"hh": "{{householdId}}", "period": "{{period}}", "issuedAt": "{{today}}",
+        body={"holding": "{{holdingId}}", "period": "{{period}}", "issuedAt": "{{today}}",
               "amount": 100, "ward": "{{wardId}}"},
         desc="**Fails with `use_billing_run` for everyone but a superuser.** A "
              "hand-made bill would have no `run`, so the month's totals would stop "
-             "describing the month and a household could quietly be charged twice. "
+             "describing the month and a holding could quietly be charged twice. "
              "Use `POST /api/bills/generate/`.\n\nKept in the collection to document "
              "the refusal."),
 
@@ -756,7 +1063,7 @@ billing_items = [
             q("period", "{{period}}", "The month the money was **taken** in, not the "
                                       "month its bill covers.", enabled=False),
             q("collector", "{{collectorId}}", "", enabled=False),
-            q("hh", "{{householdId}}", "", enabled=False),
+            q("holding", "{{holdingId}}", "", enabled=False),
             q("bill", "{{billId}}", "", enabled=False),
             q("method", "cash", "", enabled=False),
             q("undeposited", "true", "Cash taken but not yet handed in.", enabled=False),
@@ -773,6 +1080,11 @@ billing_items = [
              "the restated bill."),
 
     req("Get payment", "GET", "/api/payments/{{paymentId}}/"),
+    req("Edit a payment", "PATCH", "/api/payments/{{paymentId}}/", body={"reference": "BK-77812"},
+        desc="Payments are effectively immutable — correct the amount by voiding and "
+             "re-recording. The bill cannot be changed."),
+    req("Delete a payment", "DELETE", "/api/payments/{{paymentId}}/",
+        desc="Prefer **Void a payment**, which restates the bill and returns it."),
 
     req("Void a payment", "POST", "/api/payments/{{paymentId}}/void/",
         desc="**Agency admin only.** Removes a mis-keyed payment and restates the "
@@ -799,6 +1111,10 @@ billing_items = [
              "it covers. Posting again for the same collector and month updates the "
              "existing row rather than adding a second one."),
 
+    req("Create deposit (plain)", "POST", "/api/deposits/",
+        body={"collector": "{{collectorId}}", "period": "{{period}}", "method": "cash",
+              "amount": 4500, "at": "{{nowIso}}", "ref": "Depot slip 2291"},
+        desc="Prefer **Record a hand-in**, which also links the payments it covers."),
     req("Get deposit", "GET", "/api/deposits/{{depositId}}/"),
     req("Update deposit", "PATCH", "/api/deposits/{{depositId}}/", body={"ref": "Depot slip 2292"}),
     req("Delete deposit", "DELETE", "/api/deposits/{{depositId}}/"),
@@ -813,7 +1129,14 @@ billing_items = [
         desc="The audit list. Written by `POST /bills/generate/` — creating one "
              "directly fails with `use_billing_run`."),
 
+    req("Create billing run directly (blocked)", "POST", "/api/billing-runs/",
+        body={"period": "{{period}}"},
+        desc="Fails with `use_billing_run` — runs are written by `POST /bills/generate/`. "
+             "Kept to document the refusal."),
     req("Get billing run", "GET", "/api/billing-runs/{{billingRunId}}/"),
+    req("Update billing run", "PATCH", "/api/billing-runs/{{billingRunId}}/", body={"issuedOn": "{{today}}"}),
+    req("Delete billing run", "DELETE", "/api/billing-runs/{{billingRunId}}/",
+        desc="Its bills keep existing with `run: null`."),
 ]
 
 # --------------------------------------------------------------------------- #
@@ -836,9 +1159,12 @@ fleet_items = [
         body={"plate": "KHULNA-METRO-TA-11-4520", "type": "compactor",
               "capacity": 3000, "fuel": "diesel", "ownership": "owned",
               "gps": "GPS-7781", "odometer": 48210, "status": "active",
-              "driver": "{{collectorId}}", "fitnessExp": "2026-11-30",
+              "driver": "{{collectorId}}", "ward": "{{wardId}}",
+              "dumpingPoint": "{{dumpingPointId}}", "fitnessExp": "2026-11-30",
               "taxExp": "2026-09-15", "insuranceExp": "2026-12-01",
-              "permitExp": "2027-01-20", "nextServiceKm": 53000, "kmpl": 6.1}),
+              "permitExp": "2027-01-20", "nextServiceKm": 53000, "kmpl": 6.1},
+        desc="`ward` is the ward the van works; `dumpingPoint` is where it unloads and "
+             "must be in that ward's city."),
 
     req("Get van", "GET", "/api/vans/{{vanId}}/"),
     req("Update van", "PATCH", "/api/vans/{{vanId}}/", body={"odometer": 48900}),
@@ -925,7 +1251,8 @@ fleet_items = [
 live_items = [
     req("Live snapshot", "GET", "/api/live/",
         desc="Everything the map draws on first paint: current vehicle positions, "
-             "collector states and today's progress.\n\nAfter this, open the "
+             "collector states, today's route progress (in holdings) and `holdings` — "
+             "one pin per located active holding with its `dues`.\n\nAfter this, open the "
              "websocket at `ws://127.0.0.1:8000/ws/live/` for incremental frames. "
              "Postman can connect to it as a WebSocket request — see the "
              "**Realtime** section of the API reference. Clients that cannot use "
@@ -954,7 +1281,8 @@ report_items = [
 
     req("KPI scorecard", "GET", "/api/reports/kpis/",
         query=[q("period", "{{period}}", "YYYY-MM.")],
-        desc="The six-figure scorecard, every number derived rather than stored."),
+        desc="The six-figure scorecard, every number derived rather than stored. "
+             "Coverage is `coveredHoldings` of `activeHoldings` (holdings on a round)."),
 
     req("Waste collection", "GET", "/api/reports/waste-collection/",
         query=[q("mode", "daily", "`daily` | `weekly` | `monthly` | `yearly`."),
@@ -992,9 +1320,10 @@ report_items = [
         query=[q("mode", "monthly", ""),
                q("from", "", "", enabled=False),
                q("to", "", "", enabled=False),
-               q("hh", "{{householdId}}", "One household.", enabled=False),
+               q("holding", "{{holdingId}}", "One holding.", enabled=False),
                FORMAT_Q],
-        desc="Billed and received per household — the *'who has not paid'* list." + REPORT_NOTE),
+        desc="Billed and received per **holding** — the *'who has not paid'* list. "
+             "Rows carry `holding`, `holdingNo` and `head` (the owner)." + REPORT_NOTE),
 
     req("Customer bill status", "GET", "/api/reports/customer-bill-status/",
         query=[q("period", "{{period}}", "YYYY-MM."), FORMAT_Q],
@@ -1018,18 +1347,59 @@ report_items = [
     req("Complaint summary", "GET", "/api/reports/complaint-summary/",
         query=[q("period", "{{period}}", "YYYY-MM.", enabled=False)]),
 
+    req("City collection (City dashboard)", "GET", "/api/reports/city-collection/",
+        query=[q("city", "{{cityId}}", "City id. Ignored for a City Viewer bound to one city.", enabled=False),
+               q("mode", "daily", "`daily` | `weekly` | `monthly` | `yearly`."),
+               q("from", "", "YYYY-MM-DD. Defaults to a span that suits the mode.", enabled=False),
+               q("to", "", "YYYY-MM-DD. Defaults to today.", enabled=False),
+               FORMAT_Q],
+        desc="One city's collection for the City Corporation dashboard: `today` (live "
+             "until the cut-off: due, confirmed, pending, complaints, closed), `totals`, "
+             "`rows` (one per period), `byAgency` and `byWard` — each keeping "
+             "**confirmed** (by the agency), **auto** (assumed at the cut-off) and "
+             "**missed** (by complaint) apart. Closed days come from the daily summary "
+             "`close_collection_day` writes; `cities` lists what the caller may pick."
+             + REPORT_NOTE),
+
     req("Customer funnel", "GET", "/api/reports/customer-funnel/",
         desc="Survey-to-customer conversion, and the monthly revenue still on the "
              "table from unconverted surveys."),
 ]
 
 # --------------------------------------------------------------------------- #
-# 11 · Sweep AI
+# 13 · Users
+# --------------------------------------------------------------------------- #
+
+user_items = [
+    req("List operators", "GET", "/api/users/",
+        query=paged(q("role", "supervisor", "", enabled=False),
+                    q("agency", "{{agencyId}}", "", enabled=False),
+                    q("is_active", "true", "", enabled=False)),
+        desc="**Admin only** on reading too — the list is every operator's phone, NID "
+             "and next of kin. An agency admin sees their own agency's operators."),
+    req("Create an operator", "POST", "/api/users/",
+        body={"phone": "01711000099", "name": "Khulna City Monitor", "role": "kcc_viewer",
+              "scopeKind": "city", "city": "{{cityId}}", "password": "a-long-passphrase-1"},
+        desc="`role`: `collector` | `supervisor` | `agency_admin` | `super_admin` | "
+             "`kcc_viewer` (shown as **City Viewer**). `scopeKind`: `ward` (with "
+             "`scopeWards`) | `zone` (with `scopeZone`) | `agency` | `city`. With "
+             "`scopeKind: city`, `city` confines the account to one city — a City "
+             "Viewer then sees only that city's dashboard; leave it null for every "
+             "city. Only a super admin may grant `super_admin`."),
+    req("Get operator", "GET", "/api/users/{{userId}}/"),
+    req("Update operator", "PATCH", "/api/users/{{userId}}/", body={"scopeKind": "ward", "scopeWards": ["{{wardId}}"]},
+        desc="An admin may not change their own role, scope, city, agency or active flag."),
+    req("Deactivate operator", "POST", "/api/users/{{userId}}/deactivate/"),
+    req("Activate operator", "POST", "/api/users/{{userId}}/activate/"),
+]
+
+# --------------------------------------------------------------------------- #
+# 14 · Sweep AI
 # --------------------------------------------------------------------------- #
 
 ai_items = [
     req("Ask Sweep AI", "POST", "/api/ai/ask/",
-        body={"question": "Which households in my ward have not been collected this week?"},
+        body={"question": "Which holdings in my ward have not been collected this week?"},
         desc="Answers an operational question from a live, **ward-scoped** snapshot "
              "of the database.\n\nWith `ANTHROPIC_API_KEY` set it reasons over that "
              "snapshot with the Claude API; without one it falls back to rule-based "
@@ -1050,8 +1420,11 @@ collection = {
         "name": COLLECTION_NAME,
         "_postman_id": "5a9d4c10-7e2b-4f66-9a31-swms0000001",
         "description": (
-            "Smart Sweep — Solid Waste Management System for the Khulna City "
-            "Corporation pilot.\n\n"
+            "Smart Sweep — Solid Waste Management System. Multi-city (City "
+            "Corporation / Pourashova), with Khulna City Corporation as the pilot.\n\n"
+            "**Every operation is holding-wise**: the service charge, the monthly "
+            "bill, payments, the daily collection visit, the QR tag and complaints "
+            "belong to the holding (the building). Households are occupant records.\n\n"
             "Django 5.2 + DRF on PostgreSQL 18. Every endpoint under `/api/`.\n\n"
             "## Getting started\n\n"
             "1. Start the backend: `cd server && .venv\\Scripts\\python.exe manage.py runserver`\n"
@@ -1060,9 +1433,9 @@ collection = {
             "The test scripts capture the JWT pair, the role and the collector id "
             "into collection variables, so every other request is authorised "
             "automatically.\n"
-            "4. Run **01 · Catalog → Catalog bundle** to see the real ids for wards, "
-            "tiers and the option lists, then point the `wardId` / `tierId` "
-            "variables at them.\n\n"
+            "4. Run **01 · Catalog & setup → Catalog bundle** to see the real ids for "
+            "cities, wards, tiers and the option lists, then point the `cityId` / "
+            "`wardId` / `tierId` / `holdingId` variables at them.\n\n"
             "## Conventions\n\n"
             "- **Auth** — collection-level Bearer `{{accessToken}}`. Access tokens "
             "are short-lived; re-run **Refresh access token** when a request "
@@ -1073,10 +1446,10 @@ collection = {
             "- **Pagination** — list endpoints return "
             "`{count, page, pages, next, previous, results}`. Pass `?page_size=all` "
             "for a bare array (capped at 5000).\n"
-            "- **Ward scoping** — applied on the server from the caller's role. It "
-            "cannot be widened by a query parameter.\n"
-            "- **Ids are text and meaningful** — `HH-KCC-0012840`, `RT-W-14-01`, "
-            "`C-042` — because field staff read them off bin stickers.\n\n"
+            "- **Scoping** — ward, agency and city scoping are applied on the server "
+            "from the caller's account. They cannot be widened by a query parameter.\n"
+            "- **Ids are text and meaningful** — `HLD-KCC-000001`, `RT-W-14-01`, "
+            "`C-042` — because field staff read them off building tags.\n\n"
             "Interactive schema: `http://127.0.0.1:8000/api/docs/`"
         ),
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
@@ -1126,21 +1499,33 @@ collection = {
         {"key": "phone", "value": "01900445566", "type": "string"},
         {"key": "otpCode", "value": "", "type": "string"},
         {"key": "pin", "value": "1470", "type": "string"},
+        {"key": "password", "value": "demo-password", "type": "string"},
+        {"key": "cityId", "value": "KCC", "type": "string"},
+        {"key": "cityTypeId", "value": "city_corporation", "type": "string"},
+        {"key": "agencyTypeId", "value": "private", "type": "string"},
+        {"key": "agencyId", "value": "AGN-KCC-0001", "type": "string"},
+        {"key": "holdingId", "value": "HLD-KCC-000001", "type": "string"},
+        {"key": "blockId", "value": "W-14-A", "type": "string"},
+        {"key": "dumpingPointId", "value": "1", "type": "string"},
+        {"key": "surveyFormId", "value": "1", "type": "string"},
+        {"key": "surveyId", "value": "SRV-000001", "type": "string"},
+        {"key": "remittanceId", "value": "REM-2026-10-0001", "type": "string"},
+        {"key": "userId", "value": "1", "type": "string"},
         {"key": "zoneId", "value": "Z-03", "type": "string"},
         {"key": "wardId", "value": "W-14", "type": "string"},
         {"key": "tierId", "value": "residential_standard", "type": "string"},
-        {"key": "householdId", "value": "HH-KCC-0012840", "type": "string"},
+        {"key": "householdId", "value": "HH-KCC-0000001", "type": "string"},
         {"key": "potentialId", "value": "POT-3006", "type": "string"},
         {"key": "collectorId", "value": "C-042", "type": "string"},
         {"key": "routeId", "value": "RT-W-14-01", "type": "string"},
         {"key": "assignmentId", "value": "AS-C-042", "type": "string"},
         {"key": "visitId", "value": "V-000001", "type": "string"},
         {"key": "complaintId", "value": "CMP-20698", "type": "string"},
-        {"key": "billId", "value": "B-2026-07-0009050", "type": "string"},
+        {"key": "billId", "value": "B-2026-10-0000001", "type": "string"},
         {"key": "paymentId", "value": "PAY-2026-07-00015", "type": "string"},
         {"key": "depositId", "value": "DEP-2026-07-0002", "type": "string"},
         {"key": "vanId", "value": "VAN-KCC-017", "type": "string"},
-        {"key": "qrTag", "value": "SS-05003", "type": "string"},
+        {"key": "qrTag", "value": "SS-000001", "type": "string"},
         {"key": "roadId", "value": "170", "type": "string"},
         {"key": "maintenanceId", "value": "MNT-3341", "type": "string"},
         {"key": "fuelLogId", "value": "FUEL-5521", "type": "string"},
@@ -1155,51 +1540,69 @@ collection = {
                "the operator's own profile. Run the two numbered OTP requests in "
                "order — their test scripts populate every other request's token.",
                auth_items),
-        folder("01 · Catalog & reference data",
-               "Zones, wards, roads, tiers and the eight option lists. `GET "
-               "/api/catalog/` returns all of it in one call; the CRUD endpoints "
-               "exist so an agency admin can maintain the lists.",
+        folder("01 · Catalog & setup",
+               "The geography — cities, zones, wards, blocks and roads — plus the "
+               "setup lists (city types, agency types, dumping points, tiers). `GET "
+               "/api/catalog/` returns all of it in one call; the CRUD endpoints are "
+               "the Setup page's, writable by a super admin.",
                catalog_items),
-        folder("02 · Customers",
-               "Households under service, and surveyed potential customers — the "
-               "'ghost homes' not yet paying. Converting a survey creates the "
-               "household and keeps the survey, so the funnel has history.",
+        folder("02 · Holdings & households",
+               "The Holding Master — the unit every operation is done by, with its "
+               "service charge and QR tag — its families (occupant records), "
+               "bulk Excel/CSV upload, and potential customers not yet under service.",
                customers_items),
-        folder("03 · Collectors",
+        folder("03 · Surveys",
+               "Door-to-door questionnaires: forms, recorded surveys, review and "
+               "conversion into a holding.",
+               survey_items),
+        folder("04 · Agencies & remittances",
+               "The organisations that collect waste (the client's \"customers\"), "
+               "their collectors, and the money they remit to the corporation.",
+               agency_items),
+        folder("05 · Collectors",
                "DSP field staff: licensing, attendance, van assignment and "
                "performance.",
                collector_items),
-        folder("04 · Routes & assignments",
+        folder("06 · Routes & assignments",
                "Building the walk, ordering its stops, and deciding who walks it. "
-               "Only a household with a verified GPS pin can be put on a route.",
+               "A stop is a holding, and only a holding with a verified pin can be "
+               "put on a route.",
                routes_items),
-        folder("05 · Collection round & visits",
+        folder("07 · Collection round & visits",
                "What a collector's device talks to: the day's round, QR scanning, "
-               "recording collections and skips, and flushing the offline queue.",
+               "recording collections and skips per holding, and flushing the "
+               "offline queue. Unconfirmed holdings are assumed collected at the "
+               "city's cut-off unless a complaint says otherwise.",
                round_items),
-        folder("06 · Complaints",
-               "Ticket lifecycle with SLA timers, an immutable audit trail and "
-               "photo evidence. Status is never a plain field write — each move is "
-               "its own action endpoint.",
+        folder("08 · Complaints",
+               "Ticket lifecycle against a holding, with SLA timers, an immutable "
+               "audit trail and photo evidence. Status is never a plain field write "
+               "— each move is its own action endpoint.",
                complaint_items),
-        folder("07 · Billing, payments & cash",
-               "Monthly billing runs, payments including partials, collector cash "
-               "hand-ins and the reconciliation they feed. Recording a payment is "
-               "the only way a bill's status changes.",
+        folder("09 · Billing, payments & cash",
+               "Monthly billing runs (one bill per holding), payments including "
+               "partials, collector cash hand-ins and the reconciliation they feed. "
+               "Recording a payment is the only way a bill's status changes.",
                billing_items),
-        folder("08 · Fleet",
-               "Vans, document expiry, workshop jobs, fuel logs and GPS telemetry.",
+        folder("10 · Fleet",
+               "Vans (with their ward and dumping point), document expiry, workshop "
+               "jobs, fuel logs and GPS telemetry.",
                fleet_items),
-        folder("09 · Live map",
+        folder("11 · Live map",
                "The first-paint snapshot behind the live map. Incremental frames "
                "arrive over the websocket at `/ws/live/`.",
                live_items),
-        folder("10 · Reports & exports",
-               "Service delivery, revenue, bill status and reconciliation. Each "
-               "returns JSON, or a CSV/XLSX/PDF file when `?format=` is set.",
+        folder("12 · Reports & exports",
+               "Service delivery, revenue, bill status, reconciliation and the City "
+               "Corporation dashboard. Each returns JSON, or a CSV/XLSX/PDF file when "
+               "`?format=` is set.",
                report_items),
-        folder("11 · Sweep AI",
-               "The floating assistant: answers from a live ward-scoped snapshot of "
+        folder("13 · Users",
+               "Operator accounts, roles and scopes — including the City Viewer "
+               "confined to one city.",
+               user_items),
+        folder("14 · Sweep AI",
+               "The floating assistant: answers from a live, scoped snapshot of "
                "the database, and the snapshot itself.",
                ai_items),
     ],
@@ -1212,6 +1615,7 @@ environment = {
         {"key": "baseUrl", "value": "http://127.0.0.1:8000", "type": "default", "enabled": True},
         {"key": "phone", "value": "01900445566", "type": "default", "enabled": True},
         {"key": "pin", "value": "1470", "type": "secret", "enabled": True},
+        {"key": "password", "value": "", "type": "secret", "enabled": True},
         {"key": "accessToken", "value": "", "type": "secret", "enabled": True},
         {"key": "refreshToken", "value": "", "type": "secret", "enabled": True},
     ],

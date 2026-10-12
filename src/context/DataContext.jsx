@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import * as api from '../api/endpoints.js'
 import { ApiError } from '../api/client.js'
 import { useAuth } from './AuthContext.jsx'
+import { setWardFallbackNames, setZoneNames } from '../i18n/index.jsx'
 import {
   EMPTY_CATALOG, effectiveCharge as computeCharge, optLabel,
   tierCharge as lookupCharge, tierLabel as lookupTier, wardName as lookupWard, wardShort, zoneName,
@@ -27,12 +28,13 @@ export function genId(prefix) {
   return `${prefix}-draft-${draftCounter}`
 }
 
-// Deleting a row cascades server-side (a household's visits and bills go with
+// Deleting a row cascades server-side (a holding's visits and bills go with
 // it, a collector's assignment is removed, a route is unlinked). Rather than
 // replicate those rules in the browser, refetch what the delete could have
 // touched.
 const RELOAD_AFTER_REMOVE = {
-  households: ['households', 'routes', 'visits', 'bills', 'payments', 'complaints'],
+  holdings: ['holdings', 'households', 'routes', 'visits', 'bills', 'payments', 'complaints'],
+  households: ['households', 'complaints'],
   potentialCustomers: ['potentialCustomers'],
   collectors: ['collectors', 'assignments', 'vans', 'complaints', 'visits'],
   routes: ['routes', 'assignments'],
@@ -40,8 +42,8 @@ const RELOAD_AFTER_REMOVE = {
   vans: ['vans', 'maintenance', 'fuelLogs'],
   complaints: ['complaints'],
   visits: ['visits'],
-  bills: ['bills', 'payments', 'households'],
-  payments: ['payments', 'bills', 'households'],
+  bills: ['bills', 'payments', 'holdings'],
+  payments: ['payments', 'bills', 'holdings'],
   deposits: ['deposits'],
   maintenance: ['maintenance', 'vans'],
   fuelLogs: ['fuelLogs', 'vans'],
@@ -51,6 +53,9 @@ export function DataProvider({ children }) {
   const { user, ready: authReady } = useAuth()
   const [db, setDb] = useState(EMPTY_DB)
   const [catalog, setCatalog] = useState(EMPTY_CATALOG)
+  // Wards added in Setup have no translation yet; let `wardName` fall back to theirs.
+  useEffect(() => { setWardFallbackNames(catalog.wards) }, [catalog.wards])
+  useEffect(() => { setZoneNames(catalog.zones) }, [catalog.zones])
   const [loading, setLoading] = useState(false)
   const [ready, setReady] = useState(false)
   const [lastError, setLastError] = useState(null)
@@ -99,6 +104,13 @@ export function DataProvider({ children }) {
     }
     loadAll()
   }, [authReady, user, loadAll])
+
+  // Re-read the catalog after the Setup page changes a city or a type list, so
+  // every dropdown that reads it picks the change up without a full reload.
+  const reloadCatalog = useCallback(async () => {
+    const data = await api.catalog.load()
+    setCatalog({ ...EMPTY_CATALOG, ...data })
+  }, [])
 
   const reload = useCallback(async (...names) => {
     const wanted = names.flat().filter((name) => COLLECTIONS.includes(name))
@@ -199,6 +211,7 @@ export function DataProvider({ children }) {
     collectorById: (id) => db.collectors.find((row) => row.id === id),
     vanById: (id) => db.vans.find((row) => row.id === id),
     householdById: (id) => db.households.find((row) => row.id === id),
+    holdingById: (id) => db.holdings.find((row) => row.id === id),
     vanForDriver: (id) => db.vans.find((row) => row.driver === id),
     routeById: (id) => db.routes.find((row) => row.id === id),
     billById: (id) => db.bills.find((row) => row.id === id),
@@ -226,10 +239,11 @@ export function DataProvider({ children }) {
     clearError: () => setLastError(null),
     refresh: loadAll,
     reload,
+    reloadCatalog,
     create, update, upsert, remove, act,
     // The raw endpoint module, for the calls that are not plain CRUD.
     api,
-  }), [db, reference, helpers, catalog, loading, ready, lastError, loadAll, reload, create, update, upsert, remove, act])
+  }), [db, reference, helpers, catalog, loading, ready, lastError, loadAll, reload, reloadCatalog, create, update, upsert, remove, act])
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }

@@ -260,20 +260,19 @@ def live_snapshot(*, ward_ids=None, agency_id=None) -> dict:
       links, the stop count per route, today's visit counts per route) that are
       then joined in Python by id. Vans are tens of rows, so a dictionary lookup
       is cheaper than the correlated subqueries the equivalent annotation needs.
-    * **Households** are fetched with `.values()` rather than as models: the map
+    * **Holdings** are fetched with `.values()` rather than as models: the map
       needs six columns for a few thousand pins and never touches a method on
       them.
 
     Total cost is a fixed handful of queries regardless of fleet size, which
     matters because the map polls this endpoint on reconnect.
 
-    `ward_ids=None` means city-wide. When ward ids are given, households are
+    `ward_ids=None` means city-wide. When ward ids are given, holdings are
     filtered to those wards and vans are limited to those driven by a collector
     based in one of them — an unassigned van has no ward, so it is not something a
     ward-scoped supervisor is responsible for.
     """
-    from swms.customers.models import Household, HoldingStatus
-    from swms.customers.models import Household
+    from swms.customers.models import Holding, HoldingStatus
     from swms.fieldops.models import AssignmentRoute, Visit, VisitStatus
 
     now = timezone.now()
@@ -313,14 +312,14 @@ def live_snapshot(*, ward_ids=None, agency_id=None) -> dict:
     route_ids = [route.id for route in route_for_collector.values()]
 
     # --- 4. progress on those routes -------------------------------------- #
-    # Households, not stops: the plan is holding-wise but a visit is one family,
-    # so "8 of 12 collected" has to compare like with like.
+    # Holdings: a stop is a building and so is a visit, so "8 of 12 collected"
+    # compares like with like.
     stop_totals = {
-        row["holding__route_stop__route_id"]: row["total"]
-        for row in Household.objects.filter(
-            status=HoldingStatus.ACTIVE, holding__route_stop__route_id__in=route_ids
+        row["route_stop__route_id"]: row["total"]
+        for row in Holding.objects.filter(
+            status=HoldingStatus.ACTIVE, route_stop__route_id__in=route_ids
         )
-        .values("holding__route_stop__route_id")
+        .values("route_stop__route_id")
         .annotate(total=Count("id", distinct=True))
     }
     progress = {
@@ -389,39 +388,36 @@ def live_snapshot(*, ward_ids=None, agency_id=None) -> dict:
         )
 
     # --- 5. the pins ------------------------------------------------------- #
-    households = Household.objects.filter(
-        status=HoldingStatus.ACTIVE,
-        holding__lat__isnull=False,
-        holding__lng__isnull=False,
+    holdings = Holding.objects.filter(
+        status=HoldingStatus.ACTIVE, lat__isnull=False, lng__isnull=False
     )
     if ward_ids is not None:
-        households = households.filter(ward_id__in=ward_ids)
+        holdings = holdings.filter(ward_id__in=ward_ids)
     if agency_id is not None:
-        households = households.filter(holding__agency_id=agency_id)
-    household_payload = [
+        holdings = holdings.filter(agency_id=agency_id)
+    holding_payload = [
         {
             "id": row["id"],
-            # The pin comes from the building now; the payload keys are
-            # unchanged so the live map reads exactly what it always did.
-            "lat": _num(row["holding__lat"]),
-            "lng": _num(row["holding__lng"]),
-            "verified": row["holding__verified"],
+            "holdingNo": row["holding_no"],
+            "lat": _num(row["lat"]),
+            "lng": _num(row["lng"]),
+            "verified": row["verified"],
             "dues": row["dues"],
             "ward": row["ward_id"],
         }
-        for row in households.values("id", "holding__lat", "holding__lng", "holding__verified", "dues", "ward_id")
+        for row in holdings.values("id", "holding_no", "lat", "lng", "verified", "dues", "ward_id")
     ]
 
     return {
         "at": now.isoformat(),
         "centre": _centre_for(ward_ids),
         "vans": van_payload,
-        "households": household_payload,
+        "holdings": holding_payload,
         "counts": {
             "vans": len(van_payload),
             "tracked": sum(1 for row in van_payload if row["lat"] is not None),
             "live": sum(1 for row in van_payload if row["lat"] is not None and not row["stale"]),
-            "households": len(household_payload),
+            "holdings": len(holding_payload),
         },
     }
 

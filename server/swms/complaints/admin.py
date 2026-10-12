@@ -36,6 +36,7 @@ class ComplaintAdmin(admin.ModelAdmin):
     list_display = [
         "id",
         "type",
+        "holding",
         "household",
         "ward",
         "priority",
@@ -46,12 +47,12 @@ class ComplaintAdmin(admin.ModelAdmin):
         "breached",
     ]
     list_filter = ["status", "priority", "type", "channel", "ward"]
-    search_fields = ["id", "household__id", "household__head", "description"]
-    list_select_related = ["household", "ward", "assigned"]
+    search_fields = ["id", "holding__id", "holding__holding_no", "household__head", "description"]
+    list_select_related = ["holding", "household", "ward", "assigned"]
     date_hierarchy = "opened"
     # raw_id rather than autocomplete: the customer and staff apps register no
     # ModelAdmin of their own, and autocomplete needs the target admin to exist.
-    raw_id_fields = ["household", "assigned"]
+    raw_id_fields = ["holding", "household", "assigned"]
     # Set by Complaint.save() and by the lifecycle services, never by hand.
     readonly_fields = ["id", "ward", "resolved_at", "closed_at", "created_at", "updated_at"]
     inlines = [ComplaintActivityInline, ComplaintPhotoInline]

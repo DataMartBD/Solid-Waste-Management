@@ -48,6 +48,9 @@ class VisitStatus(models.TextChoices):
 class VisitSource(models.TextChoices):
     SCAN = "scan", "QR scan"
     MANUAL = "manual", "Manual entry"
+    #: Written by `close_collection_day` at the city's cut-off for a household
+    #: nobody confirmed. Collected unless the household complained.
+    AUTO = "auto", "Auto at cut-off"
 
 
 class SkipReason(models.TextChoices):
@@ -56,6 +59,8 @@ class SkipReason(models.TextChoices):
     LOCKED = "locked", "Premises locked"
     ACCESS = "access", "Could not access"
     REFUSED = "refused", "Householder refused"
+    #: The household reported a missed collection for the day.
+    COMPLAINT = "complaint", "Reported not collected"
 
 
 class Collector(TextKeyModel):
@@ -334,15 +339,15 @@ class AssignmentRoute(models.Model):
 
 
 class Visit(TextKeyModel):
-    """A collection attempt at one household on one day.
+    """A collection attempt at one holding on one day.
 
     There is no 'pending' status: a stop with no `Visit` row for today *is*
     pending. Correcting a skip updates the existing row rather than adding a
-    second one, which the `(household, served_on)` constraint guarantees.
+    second one, which the `(holding, served_on)` constraint guarantees.
     """
 
-    household = models.ForeignKey(
-        "customers.Household", on_delete=models.CASCADE, related_name="visits"
+    holding = models.ForeignKey(
+        "customers.Holding", on_delete=models.CASCADE, related_name="visits"
     )
     collector = models.ForeignKey(
         Collector, null=True, blank=True, on_delete=models.SET_NULL, related_name="visits"
@@ -400,14 +405,14 @@ class Visit(TextKeyModel):
         db_table = "visit"
         ordering = ["-at"]
         indexes = [
-            models.Index(fields=["household", "-served_on"]),
+            models.Index(fields=["holding", "-served_on"], name="visit_holding_day_idx"),
             models.Index(fields=["collector", "-served_on"]),
             models.Index(fields=["served_on", "status"]),
             models.Index(fields=["synced"]),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["household", "served_on"], name="visit_one_per_household_per_day"
+                fields=["holding", "served_on"], name="visit_one_per_holding_per_day"
             ),
             models.CheckConstraint(
                 condition=Q(status="collected") | ~Q(reason=""),
@@ -416,7 +421,7 @@ class Visit(TextKeyModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.id} {self.household_id} {self.status}"
+        return f"{self.id} {self.holding_id} {self.status}"
 
     def save(self, *args, **kwargs):
         if not self.id:
@@ -427,3 +432,50 @@ class Visit(TextKeyModel):
         if self.status == VisitStatus.COLLECTED:
             self.reason = ""
         super().save(*args, **kwargs)
+
+
+class DailyCollectionSummary(models.Model):
+    """One ward's collection day for one agency, frozen after the cut-off.
+
+    Rebuilt by `close_collection_day` and again whenever a late complaint turns
+    an auto-collected household into a missed one, so the city dashboard reads
+    a handful of rows instead of scanning every visit.
+
+    `confirmed` is what the agency proved (QR scan, app or web), `auto` is what
+    the cut-off assumed, and `missed` is what households complained about. The
+    three are kept apart so a city can see which agencies actually confirm.
+    """
+
+    day = models.DateField(db_index=True)
+    city = models.ForeignKey("catalog.City", on_delete=models.CASCADE, related_name="+")
+    ward = models.ForeignKey("catalog.Ward", on_delete=models.CASCADE, related_name="+")
+    agency = models.ForeignKey(
+        "agencies.Agency", null=True, blank=True, on_delete=models.CASCADE, related_name="+"
+    )
+
+    due = models.PositiveIntegerField(default=0, help_text="Holdings on an active route")
+    confirmed = models.PositiveIntegerField(default=0)
+    auto = models.PositiveIntegerField(default=0)
+    missed = models.PositiveIntegerField(default=0, help_text="Not collected, by complaint")
+    skipped = models.PositiveIntegerField(default=0, help_text="Skipped by the collector")
+    complaints = models.PositiveIntegerField(default=0)
+    closed_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "daily_collection_summary"
+        ordering = ["-day", "ward_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["day", "ward", "agency"],
+                name="daily_summary_one_per_ward_agency",
+                nulls_distinct=False,
+            )
+        ]
+        indexes = [models.Index(fields=["city", "-day"])]
+
+    def __str__(self) -> str:
+        return f"{self.day} {self.ward_id} {self.agency_id or '-'}"
+
+    @property
+    def collected(self) -> int:
+        return self.confirmed + self.auto

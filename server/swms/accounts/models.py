@@ -82,6 +82,17 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     emergency_contact = models.CharField(max_length=120, blank=True)
     avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
 
+    #: The city corporation or pourashova a city-wide user is confined to. With
+    #: `scope_kind=city` it narrows "city-wide" to this one city; left empty it
+    #: means every city, which is how accounts made before cities behave.
+    city = models.ForeignKey(
+        "catalog.City",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="users",
+    )
+
     #: Which agency this user belongs to. Null for KCC's own staff and viewers.
     #:
     #: Purely informational today — `visible_ward_ids()` does not consult it, so
@@ -186,11 +197,13 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         """
         from swms.catalog.models import Ward
 
-        if (
-            self.is_superuser
-            or self.role == Role.SUPER_ADMIN
-            or self.scope_kind in {ScopeKind.AGENCY, ScopeKind.CITY}
-        ):
+        if self.is_superuser or self.role == Role.SUPER_ADMIN:
+            return None
+        if self.scope_kind == ScopeKind.CITY and self.city_id:
+            return list(
+                Ward.objects.filter(zone__city_id=self.city_id).values_list("id", flat=True)
+            )
+        if self.scope_kind in {ScopeKind.AGENCY, ScopeKind.CITY}:
             return None
         if self.scope_kind == ScopeKind.ZONE and self.scope_zone:
             return list(

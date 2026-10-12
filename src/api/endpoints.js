@@ -32,6 +32,24 @@ export const catalog = {
   load: () => get('/catalog/'),
 }
 
+// Setup: cities and the two type lists behind the City and Agency dropdowns.
+// Writable by a super admin only; the server refuses everyone else.
+const setupList = (path) => ({
+  list: (params) => list(path, params),
+  create: (body) => post(path, body),
+  update: (id, body) => patch(`${path}${id}/`, body),
+  remove: (id) => del(`${path}${id}/`),
+})
+
+export const setup = {
+  cities: setupList('/cities/'),
+  zones: setupList('/zones/'),
+  wards: setupList('/wards/'),
+  dumpingPoints: setupList('/dumping-points/'),
+  cityTypes: setupList('/city-types/'),
+  agencyTypes: setupList('/agency-types/'),
+}
+
 // Operator accounts. Deliberately absent from RESOURCES: DataContext mirrors its
 // collections in memory for every signed-in user, and this one is readable only
 // by an agency admin — a collector mirroring it would just log 403s on load.
@@ -104,6 +122,14 @@ export const holdings = {
   households: (id) => get(`/holdings/${id}/households/`),
   // The route planner's to-do list: buildings not yet on any round.
   unplanned: (params) => get('/holdings/unplanned/', params),
+  // Bulk upload from Excel/CSV. `commit: false` previews; `true` writes the valid rows.
+  importFile: (file, commit) => {
+    const body = new FormData()
+    body.append('file', file)
+    body.append('commit', commit ? 'true' : 'false')
+    return request('/holdings/import/', { method: 'POST', body })
+  },
+  importTemplate: () => download('/holdings/import-template/', { filename: 'holdings-upload-template.xlsx' }),
 }
 
 export const households = {
@@ -268,6 +294,7 @@ export const reports = {
   complaintSummary: (params) => get('/reports/complaint-summary/', params),
   customerFunnel: () => get('/reports/customer-funnel/'),
   dashboard: (params) => get('/reports/dashboard/', params),
+  cityCollection: report('city-collection'),
 }
 
 export const ai = {

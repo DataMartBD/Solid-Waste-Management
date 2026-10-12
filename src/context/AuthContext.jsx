@@ -15,7 +15,7 @@ export const ROLE_HOME = {
   Collector: '/app/collection',
   Supervisor: '/app/dashboard',
   'Agency Admin': '/app/dashboard',
-  'KCC Viewer': '/app/reports',
+  'City Viewer': '/app/city',
 }
 
 export const normalizePhone = (phone) => String(phone || '').replace(/\D/g, '').replace(/^88/, '')

@@ -28,6 +28,8 @@ const ADMINS = ['agency_admin', 'super_admin']
 //: path -> roles allowed. A path absent from this map is open to any signed-in user.
 export const ROUTE_ACCESS = {
   '/app/dashboard': ALL,
+  // One city's collection, for the City Viewer and the office alike.
+  '/app/city': ['kcc_viewer', ...OFFICE],
   '/app/live': ALL,
   // The property register sits alongside Households and answers to the same
   // roles. It was reachable by every signed-in user until this entry existed —
@@ -66,7 +68,10 @@ export const ROUTE_ACCESS = {
   // page, the server restricts reading too, because the list is every
   // operator's phone number, national ID and next of kin.
   '/app/users': ADMINS,
-  // City-wide oversight is exactly what the KCC viewer exists for.
+  // Cities and the type lists are the corporation's own master data: only a
+  // super admin writes them, so only a super admin is shown the page.
+  '/app/setup': ['super_admin'],
+  // City oversight is exactly what the City Viewer exists for.
   '/app/reports': ['kcc_viewer', ...OFFICE],
   '/app/reports-customer': ['kcc_viewer', ...OFFICE],
   '/app/profile': ALL,

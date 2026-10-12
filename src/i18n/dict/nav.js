@@ -9,6 +9,8 @@ export default {
     'nav.group.system': 'System',
 
     'nav.dashboard': 'Dashboard',
+    'nav.city': 'City Collection',
+    'nav.setup': 'Setup',
     'nav.live': 'Live Map',
     'nav.holdings': 'Holding Master',
     'nav.surveys': 'Surveys',
@@ -47,6 +49,8 @@ export default {
     'nav.group.system': 'সিস্টেম',
 
     'nav.dashboard': 'ড্যাশবোর্ড',
+    'nav.city': 'সিটি বর্জ্য সংগ্রহ',
+    'nav.setup': 'সেটআপ',
     'nav.live': 'লাইভ ম্যাপ',
     'nav.holdings': 'হোল্ডিং মাস্টার',
     'nav.surveys': 'জরিপ',

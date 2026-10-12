@@ -44,7 +44,7 @@ const SCOPES = ['ward', 'zone', 'agency', 'city']
 function blankUser(agencies) {
   return {
     phone: '', name: '', role: 'collector',
-    scopeKind: 'ward', scopeZone: '', scopeWards: [],
+    scopeKind: 'ward', scopeZone: '', scopeWards: [], city: '',
     agency: agencies?.length === 1 ? agencies[0].id : '',
     email: '', altPhone: '', nid: '', bloodGroup: '', emergencyContact: '',
     password: '',
@@ -237,6 +237,7 @@ export default function Users() {
           canGrantSuper={me?.roleKey === 'super_admin'}
           wards={catalog?.wards || []}
           zones={catalog?.zones || []}
+          cities={catalog?.cities || []}
           agencies={agencies || []}
           bloodGroups={catalog?.bloodGroups || []}
           onClose={() => setEditing(null)}
@@ -252,9 +253,9 @@ export default function Users() {
 }
 
 function UserForm({
-  initial, isMe, canGrantSuper, wards, zones, agencies, bloodGroups, onClose, onSaved,
+  initial, isMe, canGrantSuper, wards, zones, cities, agencies, bloodGroups, onClose, onSaved,
 }) {
-  const { t } = useLang()
+  const { t, zoneName, localName } = useLang()
   const isNew = !initial.id
   const [form, setForm] = useState({ ...blankUser(agencies), ...initial })
   const [busy, setBusy] = useState(false)
@@ -289,6 +290,8 @@ function UserForm({
         scopeKind: form.scopeKind,
         scopeZone: form.scopeKind === 'zone' ? form.scopeZone : '',
         scopeWards: form.scopeKind === 'ward' ? form.scopeWards : [],
+        // Only a city-wide scope can be narrowed to one city; empty means every city.
+        city: form.scopeKind === 'city' ? (form.city || null) : null,
         // A super admin answers to no contractor, so the box is cleared rather
         // than merely ignored — otherwise switching an agency admin up to super
         // admin would carry their old agency along and the server would refuse.
@@ -309,6 +312,7 @@ function UserForm({
         delete body.scopeKind
         delete body.scopeZone
         delete body.scopeWards
+        delete body.city
         delete body.agency
       }
       const saved = isNew ? await api.create(body) : await api.update(initial.id, body)
@@ -384,9 +388,21 @@ function UserForm({
                 <Field half as="select" label={t('users.field.scopeZone')} value={form.scopeZone}
                   onChange={set('scopeZone')} disabled={busy || isMe}
                   options={[{ value: '', label: '—' },
-                    ...zones.map((z) => ({ value: z.id, label: z.name }))]} />
+                    ...zones.map((z) => ({ value: z.id, label: zoneName(z.id) }))]} />
               </FormRow>
               <FieldNote>{fieldError('scopeZone')}</FieldNote>
+            </>
+          )}
+
+          {form.scopeKind === 'city' && (
+            <>
+              <FormRow>
+                <Field half as="select" label={t('users.field.city')} value={form.city || ''}
+                  onChange={set('city')} disabled={busy || isMe}
+                  options={[{ value: '', label: t('users.allCities') },
+                    ...cities.map((c) => ({ value: c.id, label: localName(c) }))]} />
+              </FormRow>
+              <FieldNote>{fieldError('city')}</FieldNote>
             </>
           )}
 
@@ -419,7 +435,7 @@ function UserForm({
                 : form.role === 'agency_admin' ? t('users.agencyRequired')
                   : t('users.agencyHint')}
               options={[{ value: '', label: t('users.noAgency') },
-                ...agencies.map((a) => ({ value: a.id, label: a.name }))]} />
+                ...agencies.map((a) => ({ value: a.id, label: localName(a) }))]} />
           </FormRow>
           <FieldNote>{fieldError('agency')}</FieldNote>
         </FormSection>

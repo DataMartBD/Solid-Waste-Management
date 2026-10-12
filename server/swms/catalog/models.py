@@ -5,24 +5,101 @@ from the database keeps a single source of truth, and every row keeps **both**
 `key` (the i18n lookup the Bangla dictionaries use) and `label` (English
 fallback) because the UI needs both.
 
-Geography is normalised into Zone → Ward → Road. The mock stored `zone` as a
-bare string on the ward and `road` as free text on the household; here both are
-real foreign keys, while the API still speaks the old shapes.
+Geography is normalised into City → Zone → Ward → Road, the same administrative
+area Clean Care puts on a citizen's profile (City Corporation, Zone, Ward,
+Address). The mock stored `zone` as a bare string on the ward and `road` as free
+text on the household; here both are real foreign keys, while the API still
+speaks the old shapes.
 """
 
 from __future__ import annotations
+
+import datetime as dt
 
 from django.db import models
 
 from swms.common.models import OptionModel
 
 
+class CityType(OptionModel):
+    """What kind of local government a city is — City Corporation, Pourashova…
+
+    A setup list rather than fixed choices, so a new kind can be added from
+    admin without a release.
+    """
+
+    class Meta(OptionModel.Meta):
+        db_table = "city_type"
+        abstract = False
+
+
+class AgencyType(OptionModel):
+    """How an agency is constituted: private company, NGO, the city's own
+    in-house service (City Corporation, Pourashova)… Maintained in setup."""
+
+    class Meta(OptionModel.Meta):
+        db_table = "agency_type"
+        abstract = False
+
+
+class City(models.Model):
+    """A city corporation or pourashova — the top of the service geography.
+
+    Everything below it (zones, wards, roads) and every contractor working
+    there hangs off one of these, so a second city is a new row rather than a
+    second deployment.
+
+    It also owns the city's collection day. Agencies may confirm visits by QR,
+    app or web, but at `collection_cutoff` every household nobody complained
+    about counts as collected. A complaint arriving by `complaint_deadline` the
+    next morning still turns that day into "not collected".
+    """
+
+    id = models.CharField(max_length=8, primary_key=True, help_text="Short code, e.g. 'KCC'")
+    name = models.CharField(max_length=120)
+    name_bn = models.CharField(max_length=120, blank=True)
+    city_type = models.ForeignKey(
+        CityType, null=True, blank=True, on_delete=models.PROTECT, related_name="cities"
+    )
+    #: National district, as `GeoLocation.district_name` spells it.
+    district = models.CharField(max_length=64, blank=True)
+    lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+
+    collection_cutoff = models.TimeField(
+        default=dt.time(21, 0),
+        help_text="After this time, uncomplained households count as collected",
+    )
+    complaint_deadline = models.TimeField(
+        default=dt.time(12, 0),
+        help_text="Next-day time until which a complaint can still mark a day not collected",
+    )
+
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "city"
+        ordering = ["sort_order", "id"]
+        verbose_name_plural = "cities"
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Zone(models.Model):
     """A collection area, e.g. Z-03 'Sonadanga'. Drives the waste-by-zone chart."""
 
     id = models.CharField(max_length=8, primary_key=True)
+    #: Nullable only so rows can exist before a city is assigned; migration
+    #: 0004 puts every existing zone under KCC.
+    city = models.ForeignKey(
+        City, null=True, blank=True, on_delete=models.PROTECT, related_name="zones"
+    )
     key = models.CharField(max_length=96, blank=True)
     name = models.CharField(max_length=64)
+    #: Shown when the app is in Bangla; empty falls back to `name`.
+    name_bn = models.CharField(max_length=64, blank=True, db_default="")
     sort_order = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
@@ -39,6 +116,9 @@ class Ward(models.Model):
     id = models.CharField(max_length=8, primary_key=True)
     key = models.CharField(max_length=96, blank=True)
     name = models.CharField(max_length=96)
+    #: Shown in Bangla mode for a ward with no dictionary entry — every ward of a
+    #: city added from the Setup page. KCC's wards are translated in the app.
+    name_bn = models.CharField(max_length=96, blank=True, db_default="")
     zone = models.ForeignKey(Zone, on_delete=models.PROTECT, related_name="wards")
     # Centre point: seeds scatter households around it and the live map centres on it.
     lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
@@ -52,6 +132,10 @@ class Ward(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def city_id(self) -> str | None:
+        return self.zone.city_id
 
     @property
     def short_label(self) -> str:
@@ -106,6 +190,48 @@ class Road(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.ward_id})"
+
+
+class DumpingPointKind(models.TextChoices):
+    DUMPING_AREA = "dumping_area", "Dumping area"
+    DISPOSAL_SITE = "disposal_site", "Disposal site"
+    TRANSFER_STATION = "transfer_station", "Transfer station"
+
+
+class DumpingPoint(models.Model):
+    """Where collected waste is taken: a dumping area, disposal site or transfer station.
+
+    Each one belongs to a city and serves one or more of its wards — the
+    client's "different dumping / disposal points" per ward. A van can be told
+    which one it unloads at.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    name = models.CharField(max_length=120)
+    name_bn = models.CharField(max_length=120, blank=True, db_default="")
+    kind = models.CharField(
+        max_length=20, choices=DumpingPointKind.choices, default=DumpingPointKind.DUMPING_AREA
+    )
+    city = models.ForeignKey(City, on_delete=models.PROTECT, related_name="dumping_points")
+    #: The wards whose waste goes here.
+    wards = models.ManyToManyField(Ward, blank=True, related_name="dumping_points")
+    lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    capacity_tonnes = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True, help_text="Daily capacity"
+    )
+    notes = models.TextField(blank=True)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "dumping_point"
+        ordering = ["city_id", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["city", "name"], name="dumping_point_unique_per_city")
+        ]
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class GeoLocation(models.Model):

@@ -740,12 +740,13 @@ function ServiceCollection() {
 // screen. The reference lists come from /api/catalog/ through useData().
 function CustomerReports() {
   const { t, n, taka, percent, date, optLabel, wardName } = useLang()
-  const { households, potentialCustomers, tiers, potentialReasons, currentPractices, effectiveCharge } = useData()
+  // The register is holding-wise: the charge, the bill and the dues are the building's.
+  const { holdings, potentialCustomers, tiers, potentialReasons, currentPractices, effectiveCharge } = useData()
   const [kind, setKind] = useState('existing') // existing | potential
   const [groupBy, setGroupBy] = useState('ward')
 
   const groups = useMemo(() => {
-    const src = kind === 'existing' ? households : potentialCustomers
+    const src = kind === 'existing' ? holdings : potentialCustomers
     const map = new Map()
     src.forEach((r) => {
       const key = groupBy === 'ward' ? r.ward : r.road
@@ -754,7 +755,8 @@ function CustomerReports() {
       if (kind === 'existing') {
         if (r.status === 'active') g.active += 1
         g.dues += r.dues || 0
-        if (r.lastVisit) g.served += 1
+        // On a round means it is collected from.
+        if (r.routeId) g.served += 1
         g.revenue += effectiveCharge(r)
       } else {
         g.revenue += effectiveCharge(r)
@@ -762,7 +764,7 @@ function CustomerReports() {
       map.set(key, g)
     })
     return [...map.values()].sort((a, b) => b.count - a.count)
-  }, [kind, groupBy, households, potentialCustomers, effectiveCharge])
+  }, [kind, groupBy, holdings, potentialCustomers, effectiveCharge])
 
   // Ward names are official KCC records — they stay as seeded, in either language.
   const groupNoun = t(groupBy === 'ward' ? 'reports.group.ward' : 'reports.group.road')
@@ -786,11 +788,12 @@ function CustomerReports() {
   // what lands in the download cannot drift apart.
   const registerCols = [
     { key: 'id', label: t('reports.col.id') },
-    { key: 'head', label: t('reports.col.head') },
+    { key: 'head', label: t('reports.col.head'), get: (r) => r.ownerName },
     { key: 'ward', label: t('reports.col.ward'), get: (r) => wardName(r.ward) },
     { key: 'road', label: t('reports.col.road') },
-    { key: 'holding', label: t('reports.col.holding') },
+    { key: 'holding', label: t('reports.col.holding'), get: (r) => r.holdingNo },
     { key: 'tier', label: t('reports.col.tier'), get: (r) => optLabel(tiers, r.tier) },
+    { key: 'charge', label: t('reports.customers.col.charge'), get: (r) => taka(effectiveCharge(r)) },
     { key: 'dues', label: t('reports.col.dues'), get: (r) => taka(r.dues > 0 ? r.dues : 0) },
     { key: 'status', label: t('reports.col.status'), get: (r) => t(`status.${r.status}`) },
   ]
@@ -806,7 +809,7 @@ function CustomerReports() {
     { key: 'practice', label: t('reports.col.practice'), get: (r) => optLabel(currentPractices, r.currentPractice) },
     { key: 'surveyed', label: t('reports.col.surveyed'), get: (r) => date(r.surveyedAt) },
   ]
-  const detailRows = kind === 'existing' ? households : potentialCustomers
+  const detailRows = kind === 'existing' ? holdings : potentialCustomers
   const detailCols = kind === 'existing' ? registerCols : surveyCols
   const detailTitle = t(kind === 'existing' ? 'reports.customers.registerTitle' : 'reports.customers.surveyTitle')
 
@@ -958,7 +961,7 @@ function KpiScorecard() {
   const context = {
     efficiency: t('reports.kpi.of', { done: n(kpis.servedStops), total: n(kpis.scheduledStops) }),
     chargeRate: t('reports.kpi.of', { done: taka(kpis.received), total: taka(kpis.billed) }),
-    coverage: t('reports.kpi.of', { done: n(kpis.coveredHouseholds), total: n(kpis.activeHouseholds) }),
+    coverage: t('reports.kpi.of', { done: n(kpis.coveredHoldings), total: n(kpis.activeHoldings) }),
   }
   const rows = KPI_TARGETS.map((r) => {
     const value = kpis[r.field] ?? 0

@@ -10,9 +10,15 @@ from pathlib import Path
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import IntegrityError, transaction
+from django.db.models import ProtectedError
 from django.test import TestCase
+from django.urls import reverse
+from rest_framework.test import APIClient
 
-from .models import Block, GeoLocation, Ward, Zone
+from swms.accounts.models import ScopeKind, User
+from swms.common.roles import Role
+
+from .models import AgencyType, Block, City, CityType, GeoLocation, Ward, Zone
 from .views import geography
 
 
@@ -246,3 +252,213 @@ class GeographyPayloadTests(TestCase):
         )
         _, thanas = geography()
         self.assertEqual([t["name"] for t in thanas["Khulna"]], ["Batiaghata", "Dumuria"])
+
+
+class CityTests(TestCase):
+    """The city sits above the zones and owns the collection-day times."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.kcc = City.objects.create(id="KCC", name="Khulna City Corporation")
+        cls.scc = City.objects.create(id="SCC", name="Sylhet City Corporation")
+        cls.zone = Zone.objects.create(id="Z-03", name="Sonadanga", city=cls.kcc)
+        cls.ward = Ward.objects.create(id="W-14", name="Ward 14 — Sonadanga", zone=cls.zone)
+
+    def setUp(self):
+        self.client = APIClient()
+        self.client.force_authenticate(User.objects.create_user(
+            phone="01900445566", name="Admin", role=Role.SUPER_ADMIN,
+            scope_kind=ScopeKind.CITY,
+        ))
+
+    def test_a_new_city_defaults_to_nine_pm_and_noon(self):
+        self.assertEqual(str(self.kcc.collection_cutoff), "21:00:00")
+        self.assertEqual(str(self.kcc.complaint_deadline), "12:00:00")
+
+    def test_a_ward_knows_its_city_through_its_zone(self):
+        self.assertEqual(self.ward.city_id, "KCC")
+
+    def test_a_city_with_zones_cannot_be_deleted(self):
+        with self.assertRaises(ProtectedError):
+            self.kcc.delete()
+
+    def test_the_bundle_lists_cities_and_each_zone_names_its_city(self):
+        payload = self.client.get(reverse("catalog-bundle")).json()
+        self.assertEqual([c["id"] for c in payload["cities"]], ["KCC", "SCC"])
+        self.assertEqual(payload["zones"][0]["city"], "KCC")
+
+    def test_zones_filter_by_city(self):
+        Zone.objects.create(id="Z-90", name="Zindabazar", city=self.scc)
+        rows = self.client.get(reverse("zone-list"), {"city": "SCC"}).json()
+        rows = rows.get("results", rows) if isinstance(rows, dict) else rows
+        self.assertEqual([z["id"] for z in rows], ["Z-90"])
+
+    def test_a_city_can_be_created_with_its_own_cutoff(self):
+        response = self.client.post(
+            reverse("city-list"),
+            {"id": "RPS", "name": "Rangpur Pourashova", "cityType": "pourashova",
+             "collectionCutoff": "20:30"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(str(City.objects.get(pk="RPS").collection_cutoff), "20:30:00")
+
+
+class TypeSetupListTests(TestCase):
+    """City and agency types are setup rows, not choices fixed in code."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.client.force_authenticate(User.objects.create_user(
+            phone="01900445566", name="Admin", role=Role.SUPER_ADMIN,
+            scope_kind=ScopeKind.CITY,
+        ))
+
+    def test_the_standard_types_are_loaded(self):
+        self.assertEqual(
+            list(CityType.objects.values_list("id", flat=True)),
+            ["city_corporation", "pourashova"],
+        )
+        self.assertTrue(AgencyType.objects.filter(pk="city_corporation").exists())
+        self.assertTrue(AgencyType.objects.filter(pk="pourashova").exists())
+
+    def test_the_bundle_carries_both_lists(self):
+        payload = self.client.get(reverse("catalog-bundle")).json()
+        self.assertIn("pourashova", [row["id"] for row in payload["cityTypes"]])
+        self.assertIn("private", [row["id"] for row in payload["agencyTypes"]])
+
+    def test_an_inactive_type_drops_out_of_the_dropdown(self):
+        AgencyType.objects.filter(pk="cbo").update(active=False)
+        payload = self.client.get(reverse("catalog-bundle")).json()
+        self.assertNotIn("cbo", [row["id"] for row in payload["agencyTypes"]])
+
+    def test_a_new_type_can_be_added_in_setup_and_used(self):
+        response = self.client.post(
+            reverse("city-type-list"),
+            {"id": "union_parishad", "key": "opt.cityType.union_parishad",
+             "label": "Union Parishad"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        response = self.client.post(
+            reverse("city-list"),
+            {"id": "UP1", "name": "Some Union", "cityType": "union_parishad"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(City.objects.get(pk="UP1").city_type_id, "union_parishad")
+
+    def test_an_unknown_type_is_refused(self):
+        response = self.client.post(
+            reverse("city-list"), {"id": "XX", "name": "X", "cityType": "nope"}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_a_type_in_use_cannot_be_deleted(self):
+        City.objects.create(id="KCC", name="Khulna", city_type_id="city_corporation")
+        with self.assertRaises(ProtectedError):
+            CityType.objects.get(pk="city_corporation").delete()
+
+    def test_only_a_super_admin_edits_the_lists(self):
+        viewer = APIClient()
+        viewer.force_authenticate(User.objects.create_user(
+            phone="01900445567", name="V", role=Role.KCC_VIEWER, scope_kind=ScopeKind.CITY,
+        ))
+        response = viewer.post(
+            reverse("agency-type-list"), {"id": "x", "key": "k", "label": "X"}, format="json"
+        )
+        self.assertEqual(response.status_code, 403)
+
+
+class ZoneWardSetupTests(TestCase):
+    """Zones and wards for a new city, as the Setup page creates them."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.kcc = City.objects.create(id="KCC", name="Khulna City Corporation")
+        cls.scc = City.objects.create(id="SCC", name="Sylhet City Corporation")
+        cls.zone = Zone.objects.create(id="Z-03", name="Sonadanga", city=cls.kcc)
+        Ward.objects.create(id="W-14", name="Ward 14 — Sonadanga", zone=cls.zone)
+
+    def setUp(self):
+        self.client = APIClient()
+        self.client.force_authenticate(User.objects.create_user(
+            phone="01900445566", name="Admin", role=Role.SUPER_ADMIN,
+            scope_kind=ScopeKind.CITY,
+        ))
+
+    def rows(self, response):
+        body = response.json()
+        return body.get("results", body) if isinstance(body, dict) else body
+
+    def test_a_new_city_gets_a_zone_and_a_ward(self):
+        response = self.client.post(
+            reverse("zone-list"), {"id": "SCC-Z1", "name": "Zindabazar", "city": "SCC"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        response = self.client.post(
+            reverse("ward-list"),
+            {"id": "SCC-W22", "key": "opt.ward.SCC-W22", "name": "Ward 22",
+             "zone": "SCC-Z1", "lat": 24.8949, "lng": 91.8687},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(response.json()["city"], "SCC")
+        self.assertEqual(Ward.objects.get(pk="SCC-W22").city_id, "SCC")
+
+    def test_a_zone_carries_its_bangla_name(self):
+        response = self.client.post(
+            reverse("zone-list"),
+            {"id": "SCC-Z1", "name": "Zindabazar", "nameBn": "জিন্দাবাজার", "city": "SCC"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(Zone.objects.get(pk="SCC-Z1").name_bn, "জিন্দাবাজার")
+        payload = self.client.get(reverse("catalog-bundle")).json()
+        zone = next(z for z in payload["zones"] if z["id"] == "SCC-Z1")
+        self.assertEqual(zone["nameBn"], "জিন্দাবাজার")
+
+    def test_a_ward_carries_its_bangla_name(self):
+        zone = Zone.objects.create(id="SCC-Z1", name="Zindabazar", city=self.scc)
+        response = self.client.post(
+            reverse("ward-list"),
+            {"id": "SCC-W22", "name": "Ward 22 — Zindabazar", "nameBn": "ওয়ার্ড ২২ — জিন্দাবাজার",
+             "zone": zone.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(Ward.objects.get(pk="SCC-W22").name_bn, "ওয়ার্ড ২২ — জিন্দাবাজার")
+        payload = self.client.get(reverse("catalog-bundle")).json()
+        ward = next(w for w in payload["wards"] if w["id"] == "SCC-W22")
+        self.assertEqual(ward["nameBn"], "ওয়ার্ড ২২ — জিন্দাবাজার")
+
+    def test_wards_filter_by_city(self):
+        zone = Zone.objects.create(id="SCC-Z1", name="Zindabazar", city=self.scc)
+        Ward.objects.create(id="SCC-W22", name="Ward 22", zone=zone)
+        rows = self.rows(self.client.get(reverse("ward-list"), {"zone__city": "SCC"}))
+        self.assertEqual([w["id"] for w in rows], ["SCC-W22"])
+
+    def test_a_ward_code_already_used_by_another_city_is_refused(self):
+        zone = Zone.objects.create(id="SCC-Z1", name="Zindabazar", city=self.scc)
+        response = self.client.post(
+            reverse("ward-list"), {"id": "W-14", "name": "Ward 14", "zone": zone.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_a_hidden_ward_leaves_the_dropdowns(self):
+        response = self.client.patch(
+            reverse("ward-detail", args=["W-14"]), {"active": False}, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.json())
+        payload = self.client.get(reverse("catalog-bundle")).json()
+        self.assertNotIn("W-14", [w["id"] for w in payload["wards"]])
+        listed = self.rows(self.client.get(reverse("ward-list")))
+        self.assertFalse(next(w for w in listed if w["id"] == "W-14")["active"])
+
+    def test_an_unknown_zone_is_refused(self):
+        response = self.client.post(
+            reverse("ward-list"), {"id": "X-1", "name": "X", "zone": "NOPE"}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)

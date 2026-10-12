@@ -115,7 +115,8 @@ class ComplaintFilter(filters.FilterSet):
     ward = filters.CharFilter(field_name="ward_id")
     zone = filters.CharFilter(field_name="ward__zone_id")
     assigned = filters.CharFilter(field_name="assigned_id")
-    hh = filters.CharFilter(field_name="household_id")
+    holding = filters.CharFilter(field_name="holding_id")
+    household = filters.CharFilter(field_name="household_id")
     #: The page's all / active / done segmented control.
     active = filters.BooleanFilter(method="filter_active")
     breached = filters.BooleanFilter(method="filter_breached")
@@ -124,7 +125,10 @@ class ComplaintFilter(filters.FilterSet):
 
     class Meta:
         model = Complaint
-        fields = ["ward", "zone", "status", "priority", "type", "channel", "assigned", "hh"]
+        fields = [
+            "ward", "zone", "status", "priority", "type", "channel", "assigned",
+            "holding", "household",
+        ]
 
     def filter_active(self, queryset, name, value):
         if value:
@@ -146,18 +150,21 @@ class ComplaintViewSet(SwmsModelViewSet):
 
     serializer_class = ComplaintSerializer
     filterset_class = ComplaintFilter
-    search_fields = ["id", "household__head", "household__id", "description"]
+    search_fields = [
+        "id", "holding__id", "holding__holding_no", "holding__owner_name",
+        "household__head", "description",
+    ]
     #: Ordering is triage order unless the client asks for something else.
     ordering_fields = ["opened", "priority", "status", "sla", "id"]
     ward_scope_field = "ward_id"
-    agency_scope_field = "household__holding__agency_id"
+    agency_scope_field = "holding__agency_id"
     # Collectors add notes and progress the jobs on their own round; ward scoping
     # already stops them seeing another ward's tickets.
     write_roles = OPERATIONAL_WRITERS | {Role.COLLECTOR}
 
     def get_queryset(self):
         queryset = Complaint.objects.select_related(
-            "household", "household__road", "ward", "ward__zone", "assigned"
+            "holding", "holding__road", "household", "ward", "ward__zone", "assigned"
         ).prefetch_related("activity", "photos")
         return triage_order(self.scope_queryset(queryset))
 

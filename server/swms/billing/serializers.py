@@ -1,8 +1,8 @@
 """Bill, payment and deposit serializers.
 
-The JSON keys are the ones the React pages already bind to, so Billing.jsx and
-ReportsCustomer.jsx keep working unchanged: a bill speaks `hh`, `head`, `period`,
-`issuedAt`, `amount`, `ward`, `status`, `method`; a payment speaks `bill`, `hh`,
+The JSON keys are the ones Billing.jsx and ReportsCustomer.jsx bind to. Billing
+is holding-wise: a bill speaks `holding`, `head`, `period`,
+`issuedAt`, `amount`, `ward`, `status`, `method`; a payment speaks `bill`, `holding`,
 `collector`, `amount`, `method`, `at`; a deposit speaks `collector`, `period`,
 `method`, `amount`, `at`, `ref`.
 
@@ -23,7 +23,7 @@ from swms.catalog.models import PaymentMode, Ward
 from swms.agencies.models import Agency
 from swms.common.scoping import guard
 from swms.common.serializers import SwmsModelSerializer
-from swms.customers.models import Household
+from swms.customers.models import Holding
 from swms.fieldops.models import Collector
 
 from .models import Bill, BillingRun, Deposit, Payment, Remittance
@@ -71,9 +71,9 @@ class PaymentSerializer(SwmsModelSerializer):
     write_once_fields = ("bill",)
 
     bill = serializers.PrimaryKeyRelatedField(queryset=Bill.objects.all())
-    # The household is whichever one the bill belongs to. Accepting it from the
-    # client would let a payment claim a household its bill does not charge.
-    hh = serializers.CharField(source="household_id", read_only=True)
+    # The holding is whichever one the bill belongs to. Accepting it from the
+    # client would let a payment claim a holding its bill does not charge.
+    holding = serializers.CharField(source="holding_id", read_only=True)
     collector = serializers.PrimaryKeyRelatedField(
         queryset=Collector.objects.all(), allow_null=True, required=False
     )
@@ -88,7 +88,7 @@ class PaymentSerializer(SwmsModelSerializer):
         fields = [
             "id",
             "bill",
-            "hh",
+            "holding",
             "collector",
             "amount",
             "method",
@@ -111,15 +111,16 @@ class PaymentSerializer(SwmsModelSerializer):
 
 
 class BillSerializer(SwmsModelSerializer):
-    """A household's charge for one month, plus what has been received on it."""
+    """A holding's charge for one month, plus what has been received on it."""
 
-    #: Which household and which month a charge is for is settled at issue time.
-    write_once_fields = ("household", "period")
+    #: Which holding and which month a charge is for is settled at issue time.
+    write_once_fields = ("holding", "period")
 
-    hh = serializers.PrimaryKeyRelatedField(source="household", queryset=Household.objects.all())
-    # Copied through from the household rather than stored — the mock kept its own
-    # copy on every bill, which went stale the moment a name was corrected.
-    head = serializers.CharField(source="household.head", read_only=True)
+    holding = serializers.PrimaryKeyRelatedField(queryset=Holding.objects.all())
+    holdingNo = serializers.CharField(source="holding.holding_no", read_only=True)
+    # The holding's owner, read through rather than stored — a copy on every bill
+    # would go stale the moment a name was corrected.
+    head = serializers.CharField(source="holding.owner_name", read_only=True)
     ward = serializers.PrimaryKeyRelatedField(queryset=Ward.objects.all())
     issuedAt = serializers.DateField(source="issued_at")
     dueOn = serializers.DateField(source="due_on", read_only=True)
@@ -143,7 +144,8 @@ class BillSerializer(SwmsModelSerializer):
         model = Bill
         fields = [
             "id",
-            "hh",
+            "holding",
+            "holdingNo",
             "head",
             "period",
             "issuedAt",
@@ -292,6 +294,7 @@ class RemittanceSerializer(SwmsModelSerializer):
 
     agency = serializers.PrimaryKeyRelatedField(queryset=Agency.objects.all())
     agencyName = serializers.CharField(source="agency.name", read_only=True)
+    agencyNameBn = serializers.CharField(source="agency.name_bn", read_only=True)
     method = serializers.PrimaryKeyRelatedField(queryset=PaymentMode.objects.all())
     at = serializers.DateTimeField(required=False)
     receivedBy = serializers.CharField(source="received_by.name", read_only=True, default=None)
@@ -299,7 +302,7 @@ class RemittanceSerializer(SwmsModelSerializer):
     class Meta:
         model = Remittance
         fields = [
-            "id", "agency", "agencyName", "period", "method",
+            "id", "agency", "agencyName", "agencyNameBn", "period", "method",
             "amount", "at", "ref", "note", "receivedBy",
         ]
         read_only_fields = ["id"]

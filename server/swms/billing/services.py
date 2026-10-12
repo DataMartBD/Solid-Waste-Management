@@ -21,7 +21,7 @@ from django.utils import timezone
 
 from swms.common.exceptions import DomainError
 from swms.common.ids import bill_id
-from swms.customers.models import HoldingStatus, Household
+from swms.customers.models import Holding, HoldingStatus
 
 from .models import (
     Bill,
@@ -30,7 +30,7 @@ from .models import (
     Deposit,
     Payment,
     Remittance,
-    refresh_household_dues,
+    refresh_holding_dues,
 )
 
 # --------------------------------------------------------------------------- #
@@ -128,15 +128,16 @@ def generate_bills(
 ) -> dict:
     """Issue one month's charges. Safe to run twice.
 
-    Who gets billed: every **active** household that has a route stop. An
-    unrouted holding is not on anybody's round, so nobody serves it and it is
-    not charged — the mock generated bills the same way (`households.filter(h =>
-    owner[h.id] && h.status === 'active')`), and billing a holding we never visit
-    is precisely the "billed but not served" exception the reconciliation report
-    is built to surface.
+    Who gets billed: every **active holding** that has a route stop and a
+    charge. Billing is holding-wise — one bill per building per month, whatever
+    families live in it. An unrouted holding is not on anybody's round, so nobody
+    serves it and it is not charged; billing a holding we never visit is
+    precisely the "billed but not served" exception the reconciliation report is
+    built to surface. A holding with no tier and no agreed charge has not been
+    signed up for service, so it is not billed either.
 
-    Idempotence comes from the `(household, period)` unique constraint plus the
-    exclusion below, so re-running a month tops up households signed up since the
+    Idempotence comes from the `(holding, period)` unique constraint plus the
+    exclusion below, so re-running a month tops up holdings signed up since the
     first run and touches nothing else. The `BillingRun` row is upserted and its
     totals describe *the month*, not this invocation, so they stay true whichever
     way the run was reached.
@@ -150,11 +151,9 @@ def generate_bills(
         raise DomainError("Due days cannot be negative.", code="bad_due_days")
     due_on = issued_on + timedelta(days=due_days)
 
-    already_billed = Bill.objects.filter(period=period).values("household_id")
+    already_billed = Bill.objects.filter(period=period).values("holding_id")
     candidates = (
-        Household.objects.filter(
-            status=HoldingStatus.ACTIVE, holding__route_stop__isnull=False
-        )
+        Holding.objects.filter(status=HoldingStatus.ACTIVE, route_stop__isnull=False)
         .exclude(pk__in=already_billed)
         .select_related("tier")
         .order_by("pk")
@@ -162,17 +161,18 @@ def generate_bills(
 
     rows = [
         Bill(
-            id=bill_id(period, household.pk),
-            household_id=household.pk,
-            ward_id=household.ward_id,
+            id=bill_id(period, holding.pk),
+            holding_id=holding.pk,
+            ward_id=holding.ward_id,
             period=period,
             issued_at=issued_on,
             due_on=due_on,
-            # A negotiated charge beats the tier's standard rate; `effective_charge`
+            # An agreed charge beats the tier's standard rate; `effective_charge`
             # is the single place that decision is made.
-            amount=household.effective_charge,
+            amount=holding.effective_charge,
         )
-        for household in candidates
+        for holding in candidates
+        if holding.effective_charge > 0
     ]
 
     skipped = Bill.objects.filter(period=period).count()
@@ -213,9 +213,9 @@ def generate_bills(
         run.total_amount = totals["amount"] or 0
         run.save(update_fields=["bill_count", "total_amount", "updated_at"])
 
-        # Charging a household moves its balance, so the cached dues follow.
-        for household_id in {row.household_id for row in rows}:
-            refresh_household_dues(household_id)
+        # Charging a holding moves its balance, so the cached dues follow.
+        for holding_id in {row.holding_id for row in rows}:
+            refresh_holding_dues(holding_id)
 
     summary["billCount"] = run.bill_count
     summary["totalAmount"] = run.total_amount
@@ -242,7 +242,7 @@ def record_payment(
     """Take money against a bill. The only thing that can settle one.
 
     `Payment.save()` already calls `Bill.recalculate()`, which restates the
-    bill's status and method and refreshes the household's dues — so this
+    bill's status and method and refreshes the holding's dues — so this
     function deliberately does none of that itself. Duplicating it would mean two
     places could disagree about what a payment implies.
     """
@@ -264,7 +264,7 @@ def record_payment(
     with transaction.atomic():
         payment = Payment(
             bill=bill,
-            household_id=bill.household_id,
+            holding_id=bill.holding_id,
             collector=collector,
             amount=amount,
             method=method,
@@ -286,7 +286,7 @@ def void_payment(payment: Payment, *, user) -> Bill:
     realistic error is a collector keying 500 instead of 50 on a phone, noticed
     within the hour by the ward office, before any statement or hand-in has been
     produced from it. Leaving a +500/-500 pair behind would put two rows in the
-    household's payment history for money that never changed hands, and every
+    holding's payment history for money that never changed hands, and every
     report in `reports.js` sums `payments` without inspecting sign, so each of
     them would need to learn about reversals to keep telling the truth.
 
@@ -299,12 +299,12 @@ def void_payment(payment: Payment, *, user) -> Bill:
     respect sign; the rest of the module would not move.
     """
     bill = payment.bill
-    household_id = payment.household_id
+    holding_id = payment.holding_id
     with transaction.atomic():
         payment.delete()
         # Recompute from what is left, exactly as recording a payment does.
         bill.recalculate()
-        refresh_household_dues(household_id)
+        refresh_holding_dues(holding_id)
     bill.refresh_from_db()
     return bill
 
@@ -530,7 +530,7 @@ def agency_cash_position(period: str, *, agency=None) -> dict:
     Three figures and two gaps, because the cash makes two hops and each can
     stall independently:
 
-    * ``collected``  households paid the agency's collectors
+    * ``collected``  holdings paid the agency's collectors
     * ``deposited``  collectors handed it to their agency
     * ``remitted``   the agency handed it to KCC
 

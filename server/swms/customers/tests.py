@@ -65,12 +65,10 @@ class HoldingData(TestCase):
             unit=unit,
             head=f"Head {unit or 'ground'}",
             status=status,
-            tier=cls.tier,
             customer_type=cls.customer_type,
             storage=cls.storage,
             holding_type=cls.holding_type,
             suitable_time=cls.suitable_time,
-            payment_mode=cls.payment_mode,
         )
 
 
@@ -167,20 +165,23 @@ class MirrorTests(HoldingData):
         self.assertFalse(household.verified)
         self.assertIsNone(household.lat)
 
-    def test_verifying_the_building_makes_every_flat_routable(self):
+    def test_verifying_the_building_makes_it_routable_for_every_flat(self):
+        """Routing is holding-wise; each family reads the building's pin."""
         from .services import verify_location
 
         holding = self.make_holding(verified=False)
         a = self.make_household(holding, "1A")
         b = self.make_household(holding, "1B")
-        self.assertFalse(a.is_routable)
+        self.assertFalse(holding.is_routable)
 
         verify_location(holding, lat=22.84, lng=89.53, accuracy=8, placed_by_hand=False)
 
+        holding.refresh_from_db()
         a.refresh_from_db()
         b.refresh_from_db()
-        self.assertTrue(a.is_routable)
-        self.assertTrue(b.is_routable)
+        self.assertTrue(holding.is_routable)
+        self.assertTrue(a.verified)
+        self.assertTrue(b.verified)
 
 
 class ServiceStatusTests(HoldingData):

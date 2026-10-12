@@ -30,13 +30,15 @@ class AgencyAdmin(admin.ModelAdmin):
         "collector_count",
         "active",
     ]
-    list_filter = ["status", "agency_type", "active"]
-    search_fields = ["id", "name", "short_code", "contact_person", "phone", "contract_no"]
+    list_filter = ["city", "status", "agency_type", "active"]
+    search_fields = ["id", "name", "name_bn", "short_code", "contact_person", "phone", "contract_no"]
     filter_horizontal = ["service_wards"]
     readonly_fields = ["id", "created_at", "updated_at"]
     inlines = [CollectorEmploymentInline]
     fieldsets = (
-        (None, {"fields": ("id", "name", "short_code", "agency_type", "status", "active")}),
+        (None, {"fields": (
+            "id", "name", "name_bn", "short_code", "agency_type", "city", "status", "active",
+        )}),
         ("Registration", {"fields": ("trade_licence_no", "registration_no", "tin", "bin")}),
         ("Contact", {"fields": ("contact_person", "phone", "alt_phone", "email", "address")}),
         ("Contract", {"fields": ("contract_no", "contract_start", "contract_end", "service_wards")}),

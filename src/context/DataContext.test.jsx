@@ -6,7 +6,7 @@ import { DataProvider, useData } from './DataContext.jsx'
 // stubbed. Each resource needs `list` (loaded on mount) plus whichever writes the
 // test exercises.
 const RESOURCES = [
-  'households', 'potentialCustomers', 'collectors', 'routes', 'assignments',
+  'holdings', 'households', 'potentialCustomers', 'collectors', 'routes', 'assignments',
   'vans', 'complaints', 'bills', 'payments', 'deposits', 'visits',
   'maintenance', 'fuelLogs',
 ]
@@ -14,7 +14,7 @@ const RESOURCES = [
 vi.mock('../api/endpoints.js', () => {
   const resources = {}
   const RESOURCE_NAMES = [
-    'households', 'potentialCustomers', 'collectors', 'routes', 'assignments',
+    'holdings', 'households', 'potentialCustomers', 'collectors', 'routes', 'assignments',
     'vans', 'complaints', 'bills', 'payments', 'deposits', 'visits',
     'maintenance', 'fuelLogs',
   ]
@@ -164,18 +164,22 @@ describe('writes', () => {
   })
 
   it('refetches what a delete could have cascaded to', async () => {
-    api.households.list.mockResolvedValue([HOUSEHOLD])
+    const HOLDING = { id: 'HLD-KCC-000001', holdingNo: '142/B', ward: 'W-14' }
+    api.holdings.list.mockResolvedValue([HOLDING])
     const { result } = await setupReady()
-    api.households.remove.mockResolvedValueOnce(null)
-    api.households.list.mockResolvedValue([])
+    api.holdings.remove.mockResolvedValueOnce(null)
+    api.holdings.list.mockResolvedValue([])
 
-    await act(async () => { await result.current.remove('households', HOUSEHOLD.id) })
+    await act(async () => { await result.current.remove('holdings', HOLDING.id) })
 
-    expect(api.households.remove).toHaveBeenCalledWith(HOUSEHOLD.id)
-    // The server cascade also touches routes, visits, bills, payments and complaints.
+    expect(api.holdings.remove).toHaveBeenCalledWith(HOLDING.id)
+    // Everything is holding-wise, so the server cascade touches its families,
+    // routes, visits, bills, payments and complaints.
+    expect(api.households.list).toHaveBeenCalledTimes(2)
     expect(api.routes.list).toHaveBeenCalledTimes(2)
     expect(api.visits.list).toHaveBeenCalledTimes(2)
-    expect(result.current.households).toEqual([])
+    expect(api.bills.list).toHaveBeenCalledTimes(2)
+    expect(result.current.holdings).toEqual([])
   })
 })
 

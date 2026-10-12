@@ -22,7 +22,7 @@ class WardScopedQuerysetMixin:
     Two independent axes, both narrowing:
 
     `ward_scope_field` is the ORM path from this model to a ward id, e.g.
-    `"ward_id"` on Household or `"household__ward_id"` on Payment. Setting it to
+    `"ward_id"` on Holding or `"holding__ward_id"` on Payment. Setting it to
     None (the default) means the model is not ward-scoped — reference data and
     staff lists are city-wide.
 

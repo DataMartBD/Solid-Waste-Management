@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { DICT, LANGUAGES, translate } from './index.jsx'
+import { createElement } from 'react'
+import { renderHook, act } from '@testing-library/react'
+import {
+  DICT, LANGUAGES, LanguageProvider, setWardFallbackNames, setZoneNames, translate, useLang,
+} from './index.jsx'
 import {
   toBnDigits, toLatinDigits, digitsOnly, formatNumber, formatDigits, formatTaka,
   formatDate, formatDateTime, formatTime, formatPeriod, formatPercent,
@@ -196,5 +200,65 @@ describe('date formatting', () => {
     expect(formatDate(null, 'en')).toBe('—')
     expect(formatDate('not-a-date', 'bn')).toBe('—')
     expect(formatDateTime('', 'en')).toBe('—')
+  })
+})
+
+describe('wardName()', () => {
+  // Wards of a city added from Setup have no dictionary entry; their own names
+  // stand in, Bangla when the app is in Bangla and the ward has one.
+  const wrapper = ({ children }) => createElement(LanguageProvider, null, children)
+
+  it('uses the dictionary for a translated ward, and the ward record for the rest', async () => {
+    setWardFallbackNames([
+      { id: 'SCC-W22', name: 'Ward 22 — Zindabazar', nameBn: 'ওয়ার্ড ২২ — জিন্দাবাজার' },
+      { id: 'SCC-W23', name: 'Ward 23', nameBn: '' },
+    ])
+    const { result } = renderHook(() => useLang(), { wrapper })
+    act(() => result.current.setLang('en'))
+    expect(result.current.wardName('W-14')).toBe('Ward 14 — Sonadanga')
+    expect(result.current.wardName('SCC-W22')).toBe('Ward 22 — Zindabazar')
+
+    act(() => result.current.setLang('bn'))
+    expect(result.current.wardName('W-14')).toBe('ওয়ার্ড ১৪ — সোনাডাঙ্গা')
+    expect(result.current.wardName('SCC-W22')).toBe('ওয়ার্ড ২২ — জিন্দাবাজার')
+    // No Bangla name: the English one rather than a raw key.
+    expect(result.current.wardName('SCC-W23')).toBe('Ward 23')
+    expect(result.current.wardName('NOPE')).toBe('NOPE')
+  })
+})
+
+describe('zoneName()', () => {
+  const wrapper = ({ children }) => createElement(LanguageProvider, null, children)
+
+  it('shows the Bangla name in Bangla mode, and the English one otherwise', () => {
+    setZoneNames([
+      { id: 'SCC-Z1', name: 'Zindabazar', nameBn: 'জিন্দাবাজার' },
+      { id: 'Z-03', name: 'Sonadanga', nameBn: '' },
+    ])
+    const { result } = renderHook(() => useLang(), { wrapper })
+    act(() => result.current.setLang('en'))
+    expect(result.current.zoneName('SCC-Z1')).toBe('Zindabazar')
+
+    act(() => result.current.setLang('bn'))
+    expect(result.current.zoneName('SCC-Z1')).toBe('জিন্দাবাজার')
+    // No Bangla name yet: the English one, never the code.
+    expect(result.current.zoneName('Z-03')).toBe('Sonadanga')
+    expect(result.current.zoneName('NOPE')).toBe('NOPE')
+  })
+})
+
+describe('localName()', () => {
+  const wrapper = ({ children }) => createElement(LanguageProvider, null, children)
+
+  it('picks the Bangla name of a city in Bangla mode', () => {
+    const kcc = { id: 'KCC', name: 'Khulna City Corporation', nameBn: 'খুলনা সিটি কর্পোরেশন' }
+    const plain = { id: 'SCC', name: 'Sylhet City Corporation', nameBn: '' }
+    const { result } = renderHook(() => useLang(), { wrapper })
+    act(() => result.current.setLang('en'))
+    expect(result.current.localName(kcc)).toBe('Khulna City Corporation')
+    act(() => result.current.setLang('bn'))
+    expect(result.current.localName(kcc)).toBe('খুলনা সিটি কর্পোরেশন')
+    expect(result.current.localName(plain)).toBe('Sylhet City Corporation')
+    expect(result.current.localName(null)).toBe('—')
   })
 })

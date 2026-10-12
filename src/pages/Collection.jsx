@@ -114,7 +114,7 @@ export default function Collection() {
     if (filter === 'pending' && s.visitStatus === VISIT_STATUS.collected) return false
     if (!q) return true
     const needle = q.toLowerCase()
-    return [s.head, s.holding, s.road, s.qr, s.hh].some((v) => String(v || '').toLowerCase().includes(needle))
+    return [s.head, s.holdingNo, s.road, s.qr, s.holding].some((v) => String(v || '').toLowerCase().includes(needle))
   }), [stops, filter, q])
 
   // Break the round back into its routes for the table. The filters and the
@@ -148,36 +148,36 @@ export default function Collection() {
   // holding, so correcting a skip into a collection is the same call — there is
   // no client-side id to reuse any more.
   const record = useCallback(async (stop, status, extra = {}) => {
-    if (working.has(stop.hh)) return null
-    setWorking((prev) => new Set(prev).add(stop.hh))
+    if (working.has(stop.holding)) return null
+    setWorking((prev) => new Set(prev).add(stop.holding))
     try {
       const where = status === VISIT_STATUS.collected ? await readPosition() : {}
       const res = await act(
-        api.visits.create({ hh: stop.hh, status, ...where, ...extra }),
+        api.visits.create({ holding: stop.holding, status, ...where, ...extra }),
         { refresh: ['visits'] },
       )
       if (!res.ok) setFlash({ tone: 'bad', text: errorText(res.error) })
       else await loadRound()
       return res
     } finally {
-      setWorking((prev) => { const next = new Set(prev); next.delete(stop.hh); return next })
+      setWorking((prev) => { const next = new Set(prev); next.delete(stop.holding); return next })
     }
   }, [act, api, loadRound, working])
 
   async function collect(stop, source = 'manual') {
     const res = await record(stop, VISIT_STATUS.collected, { source })
     if (!res?.ok) return
-    setFlash({ tone: 'ok', text: t('collection.result.ok', { name: stop.head, holding: digits(stop.holding) }) })
+    setFlash({ tone: 'ok', text: t('collection.result.ok', { name: stop.head, holding: digits(stop.holdingNo) }) })
   }
 
   // Undo removes the visit outright — a record with status "pending" would be a
   // third state the rest of the app does not model. There is exactly one record
   // per holding per day now, so the stop carries the only id to delete.
   async function undo(stop) {
-    if (!stop.visitId || working.has(stop.hh)) return
-    setWorking((prev) => new Set(prev).add(stop.hh))
+    if (!stop.visitId || working.has(stop.holding)) return
+    setWorking((prev) => new Set(prev).add(stop.holding))
     const res = await remove('visits', stop.visitId)
-    setWorking((prev) => { const next = new Set(prev); next.delete(stop.hh); return next })
+    setWorking((prev) => { const next = new Set(prev); next.delete(stop.holding); return next })
     if (!res.ok) { setFlash({ tone: 'bad', text: errorText(res.error) }); return }
     setFlash(null)
     await loadRound()
@@ -194,7 +194,7 @@ export default function Collection() {
       // collector-role caller, so a supervisor uploading a queue would otherwise
       // strip the attribution off every record.
       api.visits.bulk(queuedVisits.map((v) => ({
-        hh: v.hh, collector: v.collector, status: v.status, at: v.at, accuracy: v.accuracy,
+        holding: v.holding, collector: v.collector, status: v.status, at: v.at, accuracy: v.accuracy,
         lat: v.lat, lng: v.lng, source: v.source || '', reason: v.reason || '', note: v.note || '',
       }))),
       { refresh: ['visits'] },
@@ -209,7 +209,7 @@ export default function Collection() {
     await loadRound()
   }
 
-  // The server resolves a scan against this round, then against every household,
+  // The server resolves a scan against this round, then against every holding,
   // so a wrong-round scan can say so instead of just failing. It answers 200
   // either way — a worn label is something the collector acts on, not an error.
   const onDetect = useCallback(async (raw) => {
@@ -224,7 +224,7 @@ export default function Collection() {
     if (result.reason === 'alreadyCollected') {
       setFlash({ tone: 'warn', text: t('collection.result.alreadyCollected', { name: result.stop.head, time: time(result.stop.at) }) })
     } else if (result.reason === 'otherRoute') {
-      setFlash({ tone: 'warn', text: t('collection.result.otherRoute', { holding: digits(result.household.holding), ward: wardName(result.household.ward) }) })
+      setFlash({ tone: 'warn', text: t('collection.result.otherRoute', { holding: digits(result.holding.holdingNo), ward: wardName(result.holding.ward) }) })
     } else if (result.reason === 'unknown') {
       setFlash({ tone: 'bad', text: t('collection.result.unknown', { code: result.code }) })
     } else {
@@ -333,14 +333,17 @@ export default function Collection() {
                   </tr>
                   {g.stops.map((s) => {
                     const done = s.visitStatus === VISIT_STATUS.collected
-                    const busy = working.has(s.hh)
+                    const busy = working.has(s.holding)
                     return (
-                      <tr key={s.hh}>
+                      <tr key={s.holding}>
                         <td>
                           <div style={{ fontWeight: 600 }}>{s.head}</div>
                           <div className="tiny muted-3">{s.road}</div>
                         </td>
-                        <td>{s.holding}</td>
+                        <td>
+                          {s.holdingNo}
+                          {s.units > 1 && <div className="tiny muted-3">{t('collection.units', { count: n(s.units) })}</div>}
+                        </td>
                         <td className="mono small">{s.qr || <span className="muted-3">—</span>}</td>
                         <td className="small">
                           {s.at ? <>
@@ -396,7 +399,7 @@ export default function Collection() {
       {skipping && (
         <SkipModal
           stop={skipping}
-          busy={working.has(skipping.hh)}
+          busy={working.has(skipping.holding)}
           onClose={() => setSkipping(null)}
           onConfirm={async (reason) => {
             // The server rejects a skip with no reason, so the picker's default
@@ -444,7 +447,7 @@ function SkipModal({ stop, busy, onClose, onConfirm }) {
   const [reason, setReason] = useState(SKIP_REASONS[0])
 
   return (
-    <Modal title={t('collection.skipReason')} subtitle={`${stop.head} · ${stop.holding}`} onClose={onClose} width={440}>
+    <Modal title={t('collection.skipReason')} subtitle={`${stop.head} · ${stop.holdingNo}`} onClose={onClose} width={440}>
       <Field
         label={t('collection.skipReason')}
         as="select" value={reason} disabled={busy} onChange={(e) => setReason(e.target.value)}

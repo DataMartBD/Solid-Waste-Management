@@ -32,7 +32,7 @@ class AgencyFilter(filters.FilterSet):
 
     class Meta:
         model = Agency
-        fields = ["status", "active", "ward", "agencyType"]
+        fields = ["status", "active", "city", "ward", "agencyType"]
 
 
 class AgencyViewSet(SwmsModelViewSet):

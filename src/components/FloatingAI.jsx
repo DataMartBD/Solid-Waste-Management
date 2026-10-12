@@ -12,7 +12,7 @@ import { useLang } from '../i18n/index.jsx'
 // `key` is the label shown on the chip; `q` is the English phrase actually sent,
 // so a translated chip still hits the server's rule matcher.
 const SUGGESTIONS = [
-  { key: 'ai.sug.dues', q: 'How many households have dues?' },
+  { key: 'ai.sug.dues', q: 'How many holdings have dues?' },
   { key: 'ai.sug.vans', q: 'Which vans need service?' },
   { key: 'ai.sug.complaints', q: 'Show open complaints' },
   { key: 'ai.sug.rate', q: 'Collection rate this period' },

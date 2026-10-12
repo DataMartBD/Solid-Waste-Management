@@ -36,7 +36,7 @@ from swms.accounts.models import User
 from swms.accounts.validators import validate_pin
 from swms.ai.models import AiQuery
 from swms.billing.models import Bill, BillingRun, Deposit, Payment, Remittance
-from swms.catalog.models import Block, Road, Tier, Ward, Zone
+from swms.catalog.models import Block, City, DumpingPoint, Road, Tier, Ward, Zone
 from swms.common.ids import IdSequence
 from swms.complaints.models import Complaint, ComplaintActivity
 from swms.agencies.models import Agency, CollectorEmployment
@@ -89,6 +89,10 @@ _TEARDOWN = [
     Road,
     Ward,
     Zone,
+    # PROTECTs City, so it goes first.
+    DumpingPoint,
+    # After Zone and Agency, which both PROTECT it.
+    City,
     Tier,
     *load.OPTION_MODELS,
 ]
@@ -305,13 +309,14 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"\nSeeded in {elapsed:.1f}s.\n"))
         # ASCII only: this prints to a Windows console under cp1252 more often than not.
-        self.stdout.write("Demo logins - request an OTP, then use the PIN:")
+        self.stdout.write(
+            f"Demo logins - password {mock.DEMO_PASSWORD}, or PIN {mock.DEMO_PIN} on a device:"
+        )
         for user in users:
             if user.is_superuser:
                 continue
             self.stdout.write(
-                f"  {user.phone}  PIN {mock.DEMO_PIN}  "
-                f"{user.name} - {user.role_label}, {user.scope_label}"
+                f"  {user.phone}  {user.name} - {user.role_label}, {user.scope_label}"
             )
         self.stdout.write(
             f"\n/admin superuser: {mock.SUPERUSER_PHONE} / {mock.SUPERUSER_PASSWORD}"

@@ -100,7 +100,12 @@ class HoldingBackfillTests(TransactionTestCase):
         )
 
     def tearDown(self):
-        self._migrate(AFTER)
+        # Back to the newest schema, not just AFTER: later migrations in every
+        # app (holding-wise billing and visits among them) depend on it, and
+        # the rest of the suite reads it.
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())
 
     def test_backfill_groups_by_address_and_links_every_row(self):
         self._migrate(AFTER)

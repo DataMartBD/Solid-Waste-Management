@@ -27,7 +27,7 @@ from django.utils import timezone
 from swms.billing.models import Bill, Deposit, Payment
 from swms.catalog.models import Ward, Zone
 from swms.complaints.models import ACTIVE_STATUSES, Complaint
-from swms.customers.models import Household, HoldingStatus, PotentialCustomer
+from swms.customers.models import Holding, HoldingStatus, Household, PotentialCustomer
 from swms.fieldops.models import RouteStop, Visit, VisitStatus
 from swms.fleet.models import Van, VanStatus
 
@@ -71,9 +71,10 @@ def _pct(numerator, denominator) -> int:
 #: ``None`` means the model genuinely has no agency: wards and zones are the
 #: city's own geography, shared by every contractor.
 AGENCY_PATHS = {
-    Bill: "household__holding__agency_id",
-    Complaint: "household__holding__agency_id",
+    Bill: "holding__agency_id",
+    Complaint: "holding__agency_id",
     Deposit: "agency_id",
+    Holding: "agency_id",
     Household: "holding__agency_id",
     Payment: "agency_id",
     PotentialCustomer: "holding__agency_id",
@@ -109,18 +110,16 @@ def _scoped(queryset, ward_ids, path="ward_id", *, agency_id=None):
     return queryset.filter(**{agency_path: agency_id})
 
 
-def _planned_households(ward_ids, agency_id=None):
-    """Active families whose building is on a live round.
+def _planned_holdings(ward_ids, agency_id=None):
+    """Active holdings on a live round.
 
-    Counted in families, not stops. Since the plan went holding-wise a stop is
-    a *building*, so comparing stops with visits would divide a block's twelve
-    collections by its one stop. Everything downstream compares this against
-    `Visit` rows, which are one per family per day.
+    Everything is holding-wise: a stop is a building and a visit is one per
+    building per day, so this is compared directly against `Visit` rows.
     """
     return _scoped(
-        Household.objects.filter(
+        Holding.objects.filter(
             status=HoldingStatus.ACTIVE,
-            holding__route_stop__route__active=True,
+            route_stop__route__active=True,
         ),
         ward_ids,
         agency_id=agency_id,
@@ -153,7 +152,7 @@ def waste_collection(
     assigned to somebody else — cover work made visible.
     """
     mode = periods.normalise_mode(mode)
-    visits = _scoped(Visit.objects.all(), ward_ids, "household__ward_id", agency_id=agency_id)
+    visits = _scoped(Visit.objects.all(), ward_ids, "holding__ward_id", agency_id=agency_id)
     if date_from:
         visits = visits.filter(served_on__gte=date_from)
     if date_to:
@@ -242,7 +241,7 @@ def service_series(
     visits = _scoped(
         Visit.objects.filter(served_on__gte=start, served_on__lte=end),
         ward_ids,
-        "household__ward_id", agency_id=agency_id)
+        "holding__ward_id", agency_id=agency_id)
     served_by_day = {
         row["served_on"]: row
         for row in visits.values("served_on").annotate(
@@ -258,7 +257,7 @@ def service_series(
     }
 
     payments = _scoped(
-        Payment.objects.all(), ward_ids, "household__ward_id", agency_id=agency_id).filter(**_datetime_window("at", start, end))
+        Payment.objects.all(), ward_ids, "holding__ward_id", agency_id=agency_id).filter(**_datetime_window("at", start, end))
     collected_by_day = {
         periods.label(row["day"], periods.DAILY): row["collected"]
         for row in payments.annotate(day=periods.trunc("at", periods.DAILY))
@@ -266,7 +265,7 @@ def service_series(
         .annotate(collected=Coalesce(Sum("amount"), 0))
     }
 
-    scheduled = _planned_households(ward_ids, agency_id).count()
+    scheduled = _planned_holdings(ward_ids, agency_id).count()
 
     out = []
     for offset in range(days):
@@ -322,9 +321,11 @@ def waste_by_zone(*, period: str | None = None, ward_ids: list[str] | None = Non
     agency_id: str | None = None) -> list[dict]:
     """Estimated tonnage per zone for a month.
 
-    Nothing weighs the waste, so this multiplies collected stops by the per-
-    customer-type averages in ESTIMATED_KG_PER_COLLECTION. `estimated: True` is
-    returned on every row so the UI can label it honestly.
+    Nothing weighs the waste, so this multiplies each collected holding by its
+    active families and the per-customer-type averages in
+    ESTIMATED_KG_PER_COLLECTION (a holding with no family recorded counts as
+    one). `estimated: True` is returned on every row so the UI can label it
+    honestly.
     """
     period = period if periods.is_month(period) else periods.current_month()
     start, end = periods.month_bounds(period)
@@ -333,22 +334,31 @@ def waste_by_zone(*, period: str | None = None, ward_ids: list[str] | None = Non
             status=VisitStatus.COLLECTED, served_on__gte=start, served_on__lte=end
         ),
         ward_ids,
-        "household__ward_id", agency_id=agency_id)
+        "holding__ward_id", agency_id=agency_id)
     rows = visits.values(
-        "household__ward__zone_id", "household__ward__zone__name", "household__customer_type_id"
+        "holding_id", "holding__ward__zone_id", "holding__ward__zone__name"
     ).annotate(stops=Count("id"))
+
+    # Kilos per collection at each holding: the sum over its active families.
+    per_holding: dict[str, float] = defaultdict(float)
+    for holding_id, customer_type in Household.objects.filter(
+        status=HoldingStatus.ACTIVE, holding_id__in={row["holding_id"] for row in rows}
+    ).values_list("holding_id", "customer_type_id"):
+        per_holding[holding_id] += ESTIMATED_KG_PER_COLLECTION.get(
+            customer_type, DEFAULT_KG_PER_COLLECTION
+        )
 
     totals: dict[tuple[str, str], float] = defaultdict(float)
     for row in rows:
-        kg = ESTIMATED_KG_PER_COLLECTION.get(
-            row["household__customer_type_id"], DEFAULT_KG_PER_COLLECTION
-        )
-        key = (row["household__ward__zone_id"], row["household__ward__zone__name"])
+        kg = per_holding.get(row["holding_id"]) or DEFAULT_KG_PER_COLLECTION
+        key = (row["holding__ward__zone_id"], row["holding__ward__zone__name"])
         totals[key] += row["stops"] * kg
 
     known = {zone.id: zone.name for zone in Zone.objects.all()}
+    known_bn = dict(Zone.objects.values_list("id", "name_bn"))
     out = [
         {"zoneId": zone_id, "zone": name or known.get(zone_id, zone_id),
+         "zoneBn": known_bn.get(zone_id, ""),
          "tonnes": round(kilos / 1000, 2), "estimated": True}
         for (zone_id, name), kilos in totals.items()
     ]
@@ -362,13 +372,18 @@ def ward_collection(*, period: str | None = None, ward_ids: list[str] | None = N
     start, end = periods.month_bounds(period)
 
     wards = _scoped(Ward.objects.filter(active=True), ward_ids, "id", agency_id=agency_id).select_related("zone")
+    holdings = dict(
+        _scoped(Holding.objects.filter(status=HoldingStatus.ACTIVE), ward_ids, agency_id=agency_id)
+        .values_list("ward_id")
+        .annotate(total=Count("id"))
+    )
     households = dict(
         _scoped(Household.objects.filter(status=HoldingStatus.ACTIVE), ward_ids, agency_id=agency_id)
         .values_list("ward_id")
         .annotate(total=Count("id"))
     )
     scheduled = dict(
-        _planned_households(ward_ids, agency_id)
+        _planned_holdings(ward_ids, agency_id)
         .values_list("ward_id")
         .annotate(total=Count("id"))
     )
@@ -378,8 +393,8 @@ def ward_collection(*, period: str | None = None, ward_ids: list[str] | None = N
                 status=VisitStatus.COLLECTED, served_on__gte=start, served_on__lte=end
             ),
             ward_ids,
-            "household__ward_id", agency_id=agency_id)
-        .values_list("household__ward_id")
+            "holding__ward_id", agency_id=agency_id)
+        .values_list("holding__ward_id")
         .annotate(total=Count("id"))
     )
     billed = dict(
@@ -388,9 +403,9 @@ def ward_collection(*, period: str | None = None, ward_ids: list[str] | None = N
         .annotate(total=Coalesce(Sum("amount"), 0))
     )
     collected = dict(
-        _scoped(Payment.objects.all(), ward_ids, "household__ward_id", agency_id=agency_id)
+        _scoped(Payment.objects.all(), ward_ids, "holding__ward_id", agency_id=agency_id)
         .filter(**periods.month_range_filter("at", period))
-        .values_list("household__ward_id")
+        .values_list("holding__ward_id")
         .annotate(total=Coalesce(Sum("amount"), 0))
     )
 
@@ -399,6 +414,7 @@ def ward_collection(*, period: str | None = None, ward_ids: list[str] | None = N
             "ward": ward.id,
             "name": ward.name,
             "zone": ward.zone_id,
+            "holdings": holdings.get(ward.id, 0),
             "households": households.get(ward.id, 0),
             "scheduled": scheduled.get(ward.id, 0),
             "served": served.get(ward.id, 0),
@@ -470,7 +486,7 @@ def bill_collection(
         target["billed"] += row["billed"]
         target["bills"] += row["count"]
 
-    payments = _scoped(Payment.objects.all(), ward_ids, "household__ward_id", agency_id=agency_id)
+    payments = _scoped(Payment.objects.all(), ward_ids, "holding__ward_id", agency_id=agency_id)
     if period_from:
         payments = payments.filter(bill__period__gte=period_from)
     if period_to:
@@ -570,16 +586,16 @@ def customer_collection(
     agency_id: str | None = None,
     period_from: str | None = None,
     period_to: str | None = None,
-    household: str | None = None,
+    holding: str | None = None,
 ) -> list[dict]:
-    """Billed and received per household, per period.
+    """Billed and received per holding, per period.
 
     The per-collector view answers "is my team collecting?". This one answers
     "who has not paid?" — the list a ward office actually acts on.
     """
     mode = periods.normalise_mode(mode)
     bills = _scoped(Bill.objects.all(), ward_ids, agency_id=agency_id)
-    payments = _scoped(Payment.objects.all(), ward_ids, "household__ward_id", agency_id=agency_id)
+    payments = _scoped(Payment.objects.all(), ward_ids, "holding__ward_id", agency_id=agency_id)
     if period_from:
         bills, payments = bills.filter(period__gte=period_from), payments.filter(
             bill__period__gte=period_from
@@ -588,23 +604,23 @@ def customer_collection(
         bills, payments = bills.filter(period__lte=period_to), payments.filter(
             bill__period__lte=period_to
         )
-    if household:
-        bills, payments = bills.filter(household_id=household), payments.filter(
-            household_id=household
+    if holding:
+        bills, payments = bills.filter(holding_id=holding), payments.filter(
+            holding_id=holding
         )
 
     rows: dict[tuple[str, str], dict] = {}
 
-    def touch(period, hh, meta):
-        key = (period, hh)
+    def touch(period, holding_id, meta):
+        key = (period, holding_id)
         if key not in rows:
             rows[key] = {
                 "period": period,
-                "hh": hh,
-                "head": meta.get("head") or hh,
+                "holding": holding_id,
+                "head": meta.get("head") or holding_id,
                 "ward": meta.get("ward"),
                 "road": meta.get("road"),
-                "holding": meta.get("holding"),
+                "holdingNo": meta.get("holdingNo"),
                 "billed": 0,
                 "received": 0,
                 "bills": 0,
@@ -615,23 +631,23 @@ def customer_collection(
     for row in bills.values(
         "period",
         "issued_at",
-        "household_id",
-        "household__head",
-        "household__ward_id",
-        "household__road__name",
-        "household__holding_no",
+        "holding_id",
+        "holding__owner_name",
+        "holding__ward_id",
+        "holding__road__name",
+        "holding__holding_no",
     ).annotate(billed=Coalesce(Sum("amount"), 0), count=Count("id")):
         period = periods.bill_label(row["period"], row["issued_at"], mode)
         if period is None:
             continue
         target = touch(
             period,
-            row["household_id"],
+            row["holding_id"],
             {
-                "head": row["household__head"],
-                "ward": row["household__ward_id"],
-                "road": row["household__road__name"],
-                "holding": row["household__holding_no"],
+                "head": row["holding__owner_name"],
+                "ward": row["holding__ward_id"],
+                "road": row["holding__road__name"],
+                "holdingNo": row["holding__holding_no"],
             },
         )
         target["billed"] += row["billed"]
@@ -641,11 +657,11 @@ def customer_collection(
         payments.annotate(bucket=periods.trunc("at", mode))
         .values(
             "bucket",
-            "household_id",
-            "household__head",
-            "household__ward_id",
-            "household__road__name",
-            "household__holding_no",
+            "holding_id",
+            "holding__owner_name",
+            "holding__ward_id",
+            "holding__road__name",
+            "holding__holding_no",
         )
         .annotate(received=Coalesce(Sum("amount"), 0), count=Count("id"))
     ):
@@ -654,12 +670,12 @@ def customer_collection(
             continue
         target = touch(
             period,
-            row["household_id"],
+            row["holding_id"],
             {
-                "head": row["household__head"],
-                "ward": row["household__ward_id"],
-                "road": row["household__road__name"],
-                "holding": row["household__holding_no"],
+                "head": row["holding__owner_name"],
+                "ward": row["holding__ward_id"],
+                "road": row["holding__road__name"],
+                "holdingNo": row["holding__holding_no"],
             },
         )
         target["received"] += row["received"]
@@ -673,7 +689,7 @@ def customer_collection(
         }
         for row in rows.values()
     ]
-    out.sort(key=lambda r: (r["period"], str(r["hh"])))
+    out.sort(key=lambda r: (r["period"], str(r["holding"])))
     return out
 
 
@@ -688,7 +704,7 @@ def customer_bill_status(
     the first would misstate how the money arrived.
     """
     today = timezone.localdate()
-    bills = _scoped(Bill.objects.select_related("household", "household__road"), ward_ids, agency_id=agency_id)
+    bills = _scoped(Bill.objects.select_related("holding", "holding__road"), ward_ids, agency_id=agency_id)
     if period:
         bills = bills.filter(period=period)
     bills = bills.annotate(planned=planned_owner_subquery())
@@ -705,16 +721,16 @@ def customer_bill_status(
         entries = sorted(by_bill.get(bill.id, []), key=lambda row: row[2])
         received = sum(amount for _, amount, _ in entries)
         methods = list(dict.fromkeys(method for method, _, _ in entries if method))
-        household = bill.household
+        holding = bill.holding
         out.append(
             {
                 "bill": bill.id,
                 "period": bill.period,
-                "hh": bill.household_id,
-                "head": household.head,
-                "ward": household.ward_id,
-                "road": household.road.name if household.road_id else None,
-                "holding": household.holding_no,
+                "holding": bill.holding_id,
+                "head": holding.owner_name,
+                "ward": holding.ward_id,
+                "road": holding.road.name if holding.road_id else None,
+                "holdingNo": holding.holding_no,
                 "collector": bill.planned,
                 "billed": bill.amount,
                 "received": received,
@@ -725,7 +741,7 @@ def customer_bill_status(
                 "instalments": len(entries),
             }
         )
-    out.sort(key=lambda r: str(r["hh"]))
+    out.sort(key=lambda r: str(r["holding"]))
     return out
 
 
@@ -761,7 +777,7 @@ def reconciliation(*, period: str | None = None, ward_ids: list[str] | None = No
 
     1. Was every holding we billed actually served, and every holding we served
        actually billed? The mismatches are where revenue leaks and where a
-       household's complaint will be justified.
+       holding's complaint will be justified.
     2. What did each collector take in versus hand over? A shortfall here is a
        different problem from an unpaid bill.
     """
@@ -770,13 +786,13 @@ def reconciliation(*, period: str | None = None, ward_ids: list[str] | None = No
     owner = planned_owners(ward_ids, agency_id)
 
     bills = _scoped(Bill.objects.filter(period=period), ward_ids, agency_id=agency_id)
-    payments = _scoped(Payment.objects.all(), ward_ids, "household__ward_id", agency_id=agency_id).filter(
+    payments = _scoped(Payment.objects.all(), ward_ids, "holding__ward_id", agency_id=agency_id).filter(
         **periods.month_range_filter("at", period)
     )
     visits = _scoped(
         Visit.objects.filter(served_on__gte=start, served_on__lte=end),
         ward_ids,
-        "household__ward_id", agency_id=agency_id)
+        "holding__ward_id", agency_id=agency_id)
     deposits = Deposit.objects.filter(period=period)
     if ward_ids is not None:
         # Deposits belong to a collector, not a ward; scope by the collector's ward.
@@ -785,11 +801,11 @@ def reconciliation(*, period: str | None = None, ward_ids: list[str] | None = No
         # …but the agency is stamped on the row, so it needs no such detour.
         deposits = deposits.filter(agency_id=agency_id)
 
-    served_households = set(
-        visits.filter(status=VisitStatus.COLLECTED).values_list("household_id", flat=True)
+    served_holdings = set(
+        visits.filter(status=VisitStatus.COLLECTED).values_list("holding_id", flat=True)
     )
-    billed_households = set(bills.values_list("household_id", flat=True))
-    paid_households = set(payments.values_list("household_id", flat=True))
+    billed_holdings = set(bills.values_list("holding_id", flat=True))
+    paid_holdings = set(payments.values_list("holding_id", flat=True))
 
     billed_total = bills.aggregate(total=Coalesce(Sum("amount"), 0))["total"]
     received_total = payments.aggregate(total=Coalesce(Sum("amount"), 0))["total"]
@@ -798,19 +814,23 @@ def reconciliation(*, period: str | None = None, ward_ids: list[str] | None = No
         skipped=Count("id", filter=Q(status=VisitStatus.SKIPPED)),
     )
 
-    labels = dict(
-        Household.objects.filter(
-            id__in=served_households | billed_households | paid_households
-        ).values_list("id", "head")
-    )
+    labels = {
+        pk: (number, owner)
+        for pk, number, owner in Holding.objects.filter(
+            id__in=served_holdings | billed_holdings | paid_holdings
+        ).values_list("id", "holding_no", "owner_name")
+    }
 
     def describe(ids):
-        return [{"id": hh, "head": labels.get(hh, hh)} for hh in sorted(ids)]
+        return [
+            {"id": pk, "holdingNo": labels.get(pk, (pk, pk))[0], "head": labels.get(pk, (pk, pk))[1]}
+            for pk in sorted(ids)
+        ]
 
     service = {
         "period": period,
-        "holdingsServed": len(served_households),
-        "holdingsBilled": len(billed_households),
+        "holdingsServed": len(served_holdings),
+        "holdingsBilled": len(billed_holdings),
         "stopsServed": stop_counts["served"],
         "stopsSkipped": stop_counts["skipped"],
         "billed": billed_total,
@@ -821,11 +841,11 @@ def reconciliation(*, period: str | None = None, ward_ids: list[str] | None = No
 
     exceptions = {
         # Served but never invoiced — revenue we simply did not ask for.
-        "servedNotBilled": describe(served_households - billed_households),
-        # Invoiced with no service on record — the household has grounds to dispute.
-        "billedNotServed": describe(billed_households - served_households),
+        "servedNotBilled": describe(served_holdings - billed_holdings),
+        # Invoiced with no service on record — the holding has grounds to dispute.
+        "billedNotServed": describe(billed_holdings - served_holdings),
         # Money taken with no service on record — worth a second look.
-        "paidNotServed": describe(paid_households - served_households),
+        "paidNotServed": describe(paid_holdings - served_holdings),
     }
 
     cash: dict[str | None, dict] = {}
@@ -840,10 +860,10 @@ def reconciliation(*, period: str | None = None, ward_ids: list[str] | None = No
             }
         return cash[collector]
 
-    for row in payments.values("collector_id", "household_id", "method_id").annotate(
+    for row in payments.values("collector_id", "holding_id", "method_id").annotate(
         total=Coalesce(Sum("amount"), 0)
     ):
-        collector = row["collector_id"] or owner.get(row["household_id"])
+        collector = row["collector_id"] or owner.get(row["holding_id"])
         target = cash_row(collector)
         target["collected"] += row["total"]
         method = row["method_id"]
@@ -891,7 +911,7 @@ def kpis(*, period: str | None = None, ward_ids: list[str] | None = None,
     visits = _scoped(
         Visit.objects.filter(served_on__gte=start, served_on__lte=end),
         ward_ids,
-        "household__ward_id", agency_id=agency_id)
+        "holding__ward_id", agency_id=agency_id)
     counts = visits.aggregate(
         served=Count("id", filter=Q(status=VisitStatus.COLLECTED)),
         actioned=Count("id"),
@@ -899,7 +919,7 @@ def kpis(*, period: str | None = None, ward_ids: list[str] | None = None,
 
     # Scheduled stop-days: the standing round multiplied by the service days that
     # have actually happened in the period so far.
-    stops = _planned_households(ward_ids, agency_id).count()
+    stops = _planned_holdings(ward_ids, agency_id).count()
     last_day = min(end, today)
     service_days = sum(
         1
@@ -911,19 +931,16 @@ def kpis(*, period: str | None = None, ward_ids: list[str] | None = None,
     bills = _scoped(Bill.objects.filter(period=period), ward_ids, agency_id=agency_id)
     billed = bills.aggregate(total=Coalesce(Sum("amount"), 0))["total"]
     received = (
-        _scoped(Payment.objects.all(), ward_ids, "household__ward_id", agency_id=agency_id)
+        _scoped(Payment.objects.all(), ward_ids, "holding__ward_id", agency_id=agency_id)
         .filter(**periods.month_range_filter("at", period))
         .aggregate(total=Coalesce(Sum("amount"), 0))["total"]
     )
 
-    active_households = _scoped(
-        Household.objects.filter(status=HoldingStatus.ACTIVE), ward_ids, agency_id=agency_id).count()
-    # "Covered" means the family's *building* is on a round — the plan is
-    # holding-wise, so a stop covers every flat behind that door.
-    covered_households = _scoped(
-        Household.objects.filter(
-            status=HoldingStatus.ACTIVE, holding__route_stop__isnull=False
-        ),
+    active_holdings = _scoped(
+        Holding.objects.filter(status=HoldingStatus.ACTIVE), ward_ids, agency_id=agency_id).count()
+    # "Covered" means the holding is on a round.
+    covered_holdings = _scoped(
+        Holding.objects.filter(status=HoldingStatus.ACTIVE, route_stop__isnull=False),
         ward_ids, agency_id=agency_id).count()
 
     vans = Van.objects.exclude(status=VanStatus.RETIRED)
@@ -938,7 +955,7 @@ def kpis(*, period: str | None = None, ward_ids: list[str] | None = None,
         "period": period,
         "collectionEfficiency": _pct(counts["served"], scheduled),
         "chargeRate": _pct(received, billed),
-        "coverage": _pct(covered_households, active_households),
+        "coverage": _pct(covered_holdings, active_holdings),
         "complaintMedianH": complaint_resolution_median(
             period=period, ward_ids=ward_ids, agency_id=agency_id
         ),
@@ -951,8 +968,8 @@ def kpis(*, period: str | None = None, ward_ids: list[str] | None = None,
         "scheduledStops": scheduled,
         "billed": billed,
         "received": received,
-        "activeHouseholds": active_households,
-        "coveredHouseholds": covered_households,
+        "activeHoldings": active_holdings,
+        "coveredHoldings": covered_holdings,
     }
 
 
@@ -975,7 +992,7 @@ def on_time_completion(*, period: str | None = None, ward_ids: list[str] | None 
             route__isnull=False,
         ),
         ward_ids,
-        "household__ward_id", agency_id=agency_id).values_list("at", "route__window_start", "route__window_end")
+        "holding__ward_id", agency_id=agency_id).values_list("at", "route__window_start", "route__window_end")
 
     total = on_time = 0
     for at, window_start, window_end in visits:

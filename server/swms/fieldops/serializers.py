@@ -2,8 +2,8 @@
 
 The JSON keys are the React app's existing field names, so `Collection.jsx`,
 `RoutePlan.jsx`, `RoutesPage.jsx` and `Collectors.jsx` keep binding to what they
-already bind to: `dspId`, `zone`, `onTime`, `licenseExp`, and `hh` for a visit's
-household.
+already bind to: `dspId`, `zone`, `onTime`, `licenseExp`, and `holding` for the
+building a visit was made at.
 
 Three translations happen here:
 
@@ -27,7 +27,7 @@ from swms.agencies.models import Agency
 from swms.catalog.models import Ward
 from swms.common.scoping import guard, guard_agency
 from swms.common.serializers import IdListField, NullableDecimal, SwmsModelSerializer
-from swms.customers.models import Holding, Household
+from swms.customers.models import Holding
 
 from .models import (
     Assignment,
@@ -141,6 +141,7 @@ class CollectorSerializer(SwmsModelSerializer):
     #: Read-only: employment is changed through POST /collectors/{id}/transfer/,
     #: which writes the history row and this FK together.
     agencyName = serializers.CharField(source="agency.name", read_only=True, default=None)
+    agencyNameBn = serializers.CharField(source="agency.name_bn", read_only=True, default=None)
 
     class Meta:
         model = Collector
@@ -150,6 +151,7 @@ class CollectorSerializer(SwmsModelSerializer):
             "dspId",
             "agency",
             "agencyName",
+            "agencyNameBn",
             "zone",
             "phone",
             "onTime",
@@ -291,11 +293,9 @@ class AssignmentSerializer(SwmsModelSerializer):
 
 
 class VisitSerializer(SwmsModelSerializer):
-    """One collection attempt. `hh` is the household, as the mock called it."""
+    """One collection attempt at one holding."""
 
-    hh = serializers.PrimaryKeyRelatedField(
-        source="household", queryset=Household.objects.all()
-    )
+    holding = serializers.PrimaryKeyRelatedField(queryset=Holding.objects.all())
     collector = serializers.PrimaryKeyRelatedField(
         queryset=Collector.objects.all(), required=False, allow_null=True
     )
@@ -309,7 +309,7 @@ class VisitSerializer(SwmsModelSerializer):
         model = Visit
         fields = [
             "id",
-            "hh",
+            "holding",
             "collector",
             "route",
             "qr",
@@ -344,14 +344,14 @@ class RecordVisitSerializer(serializers.Serializer):
     was actioned; the server decides the id, the tag and the route.
     """
 
-    hh = serializers.PrimaryKeyRelatedField(queryset=Household.objects.all())
+    holding = serializers.PrimaryKeyRelatedField(queryset=Holding.objects.all())
     collector = serializers.PrimaryKeyRelatedField(
         queryset=Collector.objects.all(), required=False, allow_null=True
     )
 
-    def validate_hh(self, household):
-        guard(self, ward_id=household.ward_id, agency_id=household.holding.agency_id)
-        return household
+    def validate_holding(self, holding):
+        guard(self, ward_id=holding.ward_id, agency_id=holding.agency_id)
+        return holding
 
     def validate_collector(self, collector):
         if collector is not None:

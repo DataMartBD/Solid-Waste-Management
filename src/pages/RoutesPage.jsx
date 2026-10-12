@@ -17,7 +17,7 @@ const TILES = {
 }
 
 export default function RoutesPage() {
-  const { collectors, households, visits, routes: routePlan, assignments, api, act, ready } = useData()
+  const { collectors, holdings, visits, routes: routePlan, assignments, api, act, ready } = useData()
   const { t, n, digits, taka, time, percent, wardName } = useLang()
   const [open, setOpen] = useState(null)
   const [mapView, setMapView] = useState({}) // routeId -> boolean
@@ -50,10 +50,11 @@ export default function RoutesPage() {
 
   useEffect(() => { if (ready) loadRounds() }, [ready, loadRounds])
 
-  const byId = useMemo(() => new Map(households.map((h) => [h.id, h])), [households])
+  // Stops and visits are holding-wise: a route walks buildings.
+  const byId = useMemo(() => new Map(holdings.map((h) => [h.id, h])), [holdings])
   const visitToday = useMemo(() => {
     const map = new Map()
-    visits.forEach((v) => { if (dayOf(v.at) === day) map.set(v.hh, v) })
+    visits.forEach((v) => { if (dayOf(v.at) === day) map.set(v.holding, v) })
     return map
   }, [visits, day])
 
@@ -68,13 +69,13 @@ export default function RoutesPage() {
     // same shape and the same order the server would have returned.
     routePlan.forEach((r) => {
       if (map.has(r.id)) return
-      map.set(r.id, (r.stops || []).map((hh) => {
-        const h = byId.get(hh)
+      map.set(r.id, (r.stops || []).map((holdingId) => {
+        const h = byId.get(holdingId)
         if (!h) return null
-        const visit = visitToday.get(hh)
+        const visit = visitToday.get(holdingId)
         return {
-          hh, routeId: r.id, routeName: r.name,
-          head: h.head, holding: h.holding, road: h.road, ward: h.ward,
+          holding: holdingId, holdingNo: h.holdingNo, routeId: r.id, routeName: r.name,
+          head: h.ownerName, road: h.road, ward: h.ward,
           lat: h.lat, lng: h.lng, qr: h.qr, dues: h.dues,
           visitStatus: visit ? visit.status : VISIT_STATUS.pending,
           at: visit ? visit.at : null,
@@ -198,7 +199,7 @@ export default function RoutesPage() {
                           : s.visitStatus === 'skipped' ? 'skip'
                           : idx === r.nextIdx ? 'next' : 'pend'
                         return (
-                          <li key={s.hh} className={`route-step ${state}`}>
+                          <li key={s.holding} className={`route-step ${state}`}>
                             <span className="step-node">
                               {state === 'done' ? <IconCheck size={13} /> : state === 'skip' ? '!' : n(idx + 1)}
                             </span>
@@ -206,14 +207,14 @@ export default function RoutesPage() {
                               <div className="row between wrap gap-8">
                                 <div>
                                   <span style={{ fontWeight: 600 }}>{s.head}</span>
-                                  <span className="tiny muted-3 mono"> · {s.hh}</span>
+                                  <span className="tiny muted-3 mono"> · {s.holding}</span>
                                 </div>
                                 {state === 'done' && <span className="badge badge-ok"><IconQr size={11} /> {time(s.at)}</span>}
                                 {state === 'skip' && <span className="badge badge-warn">{s.at ? t('routes.badge.skippedAt', { time: time(s.at) }) : t('routes.badge.skipped')}</span>}
                                 {state === 'next' && <span className="badge badge-info"><span className="dot" />{t('routes.badge.nextStop')}</span>}
                                 {state === 'pend' && <span className="badge badge-muted">{t('routes.badge.pending')}</span>}
                               </div>
-                              <div className="tiny muted-3 mt-4">{t('routes.holding', { holding: digits(s.holding) })} · {s.road}{s.dues > 0 ? ` · ${t('routes.due', { amount: taka(s.dues) })}` : ''}</div>
+                              <div className="tiny muted-3 mt-4">{t('routes.holding', { holding: digits(s.holdingNo) })} · {s.road}{s.dues > 0 ? ` · ${t('routes.due', { amount: taka(s.dues) })}` : ''}</div>
                             </div>
                           </li>
                         )
@@ -326,11 +327,11 @@ function RouteMap({ route }) {
           const idx = stops.indexOf(s) // keep the stop number from the planned order
           const st = stateOf(idx, s)
           return (
-            <Marker key={s.hh} position={[s.lat, s.lng]} icon={stopIcon(st, n(idx + 1))}>
+            <Marker key={s.holding} position={[s.lat, s.lng]} icon={stopIcon(st, n(idx + 1))}>
               <Tooltip permanent direction="bottom" offset={[0, 15]} className="rt-tip">
                 <b>{s.head}</b><br />{st === 'done' ? `✓ ${time(s.at)}` : st === 'skip' ? t('routes.badge.skipped') : st === 'next' ? t('routes.badge.nextStop') : t('routes.badge.pending')}
               </Tooltip>
-              <Popup>{s.head} · {s.hh}<br />{t('routes.holding', { holding: digits(s.holding) })} · {s.road}{s.dues > 0 ? ` · ${t('routes.due', { amount: taka(s.dues) })}` : ''}</Popup>
+              <Popup>{s.head} · {s.holding}<br />{t('routes.holding', { holding: digits(s.holdingNo) })} · {s.road}{s.dues > 0 ? ` · ${t('routes.due', { amount: taka(s.dues) })}` : ''}</Popup>
             </Marker>
           )
         })}

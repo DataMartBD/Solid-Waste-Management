@@ -1,9 +1,14 @@
-"""Households under service, and surveyed holdings that are not yet customers.
+"""Holdings under service, their occupants, and surveyed holdings not yet customers.
+
+**Every operation is holding-wise.** The service charge, the monthly bill, the
+payment, the daily collection visit and the QR tag all belong to the
+`Holding` — the building. A `Household` is the record of a family or unit
+living in it (name, phone, members, flat number), kept for the register and
+for the "households must equal units" rule, and carries no money and no
+collection of its own.
 
 Two tables share most of their columns because a `PotentialCustomer` is a
-household-shaped survey record. The difference is deliberate and matches the
-field workflow: payment terms (`charge`, `payment_mode`, `payment_day`) only
-exist once a holding is actually signed up, so they live on `Household` alone.
+household-shaped survey record.
 
 Two fixes over the mock data are baked in here:
 
@@ -43,10 +48,11 @@ class ServiceStatus(models.TextChoices):
 
 
 class Holding(TextKeyModel):
-    """A rated property — the building, not the family inside it.
+    """A rated property — the building, and the unit everything is done by.
 
-    One holding carries many `Household` rows: a four-storey building is one
-    holding with one flat per household, each billed separately. The address and
+    It is billed, paid for, collected from and scanned as one: one monthly
+    charge, one bill a month, one visit a day, one QR tag on the building. Its
+    `Household` rows only record who lives in it. The address and
     the GPS pin live here and nowhere else; `Household` mirrors them so the ~450
     existing `ward` lookups (including the role scoping in
     `User.visible_ward_ids`) keep working, but this table is the only writer.
@@ -124,6 +130,32 @@ class Holding(TextKeyModel):
     )
     notes = models.TextField(blank=True)
 
+    # --- service charge: one per building -------------------------------- #
+    #: QR tag on the building, scanned once per collection. 'SS-' + id tail.
+    qr = models.CharField(
+        max_length=24,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text="QR tag fixed at the building, e.g. SS-000123",
+    )
+    #: The tier sets the standard monthly charge. Nullable only because a
+    #: holding can be registered before it is signed up for service.
+    tier = models.ForeignKey(
+        "catalog.Tier", null=True, blank=True, on_delete=models.PROTECT, related_name="holdings"
+    )
+    #: Monthly charge in BDT agreed for this holding. 0 means "the tier's
+    #: standard charge".
+    charge = models.PositiveIntegerField(default=0)
+    payment_mode = models.ForeignKey(
+        "catalog.PaymentMode", null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    payment_day = models.PositiveSmallIntegerField(
+        default=5, validators=[MinValueValidator(1), MaxValueValidator(28)]
+    )
+    #: Cached outstanding balance in BDT, maintained by the billing services.
+    dues = models.IntegerField(default=0)
+
     class Meta:
         db_table = "holding"
         ordering = ["ward_id", "road_id", "holding_no"]
@@ -143,9 +175,44 @@ class Holding(TextKeyModel):
     def save(self, *args, **kwargs):
         if not self.id:
             self.id = holding_id()
+        if not self.qr:
+            self.qr = qr_tag(self.id)
         if not self.address:
             self.address = f"Holding {self.holding_no}, {self.road.name}"
         super().save(*args, **kwargs)
+
+    @property
+    def active_household_count(self) -> int:
+        return sum(1 for h in self.households.all() if h.status == HoldingStatus.ACTIVE)
+
+    @property
+    def units_match(self) -> bool | None:
+        """Households must equal units — the client's rule for a holding.
+
+        `None` when no unit count was declared; otherwise whether the active
+        families recorded equal it. More than declared is refused on save, so
+        `False` means families are still to be recorded.
+        """
+        if self.units_total is None:
+            return None
+        return self.active_household_count == self.units_total
+
+    @property
+    def effective_charge(self) -> int:
+        """The agreed charge, else the tier's standard one, else nothing."""
+        if self.charge and self.charge > 0:
+            return self.charge
+        return self.tier.charge if self.tier_id else 0
+
+    @property
+    def is_routable(self) -> bool:
+        """Only a located building can be put on a route."""
+        return bool(self.verified)
+
+    @property
+    def scan_payload(self) -> str:
+        """The QR body the collector app decodes: `SWMS|<holding id>|<tag>`."""
+        return f"SWMS|{self.id}|{self.qr}"
 
     @property
     def has_location(self) -> bool:
@@ -273,7 +340,10 @@ class LocatableHolding(TextKeyModel):
 
 
 class Household(ContactProfile, LocatableHolding):
-    """One serviced family. Many of these can share a `Holding`."""
+    """A family or unit living in a `Holding` — an occupant record only.
+
+    No charge, bill, payment, visit or QR tag: all of that is the holding's.
+    """
 
     holding = models.ForeignKey(
         Holding, on_delete=models.PROTECT, related_name="households"
@@ -284,29 +354,9 @@ class Household(ContactProfile, LocatableHolding):
         help_text="Flat or unit within the holding, e.g. 3B. Blank for a single-family holding.",
     )
 
-    qr = models.CharField(
-        max_length=24,
-        unique=True,
-        null=True,
-        blank=True,
-        help_text="QR tag printed on the bin sticker, e.g. SS-9F3A21",
-    )
-    tier = models.ForeignKey("catalog.Tier", on_delete=models.PROTECT, related_name="households")
     status = models.CharField(
         max_length=10, choices=HoldingStatus.choices, default=HoldingStatus.ACTIVE
     )
-
-    # Negotiated charge. 0 means "use the tier's standard charge".
-    charge = models.PositiveIntegerField(default=0)
-    payment_mode = models.ForeignKey(
-        "catalog.PaymentMode", on_delete=models.PROTECT, related_name="+"
-    )
-    payment_day = models.PositiveSmallIntegerField(
-        default=5, validators=[MinValueValidator(1), MaxValueValidator(28)]
-    )
-
-    #: Cached outstanding balance in BDT, maintained by the billing services.
-    dues = models.IntegerField(default=0)
 
     converted_from = models.CharField(
         max_length=32, blank=True, help_text="PotentialCustomer id, if converted"
@@ -317,7 +367,6 @@ class Household(ContactProfile, LocatableHolding):
         ordering = ["ward_id", "road_id", "holding_no", "unit"]
         indexes = [
             models.Index(fields=["ward", "status"]),
-            models.Index(fields=["qr"]),
             models.Index(fields=["holding"], name="household_holding_idx"),
         ]
         constraints = [
@@ -336,32 +385,12 @@ class Household(ContactProfile, LocatableHolding):
     def save(self, *args, **kwargs):
         if not self.id:
             self.id = household_id()
-        if not self.qr:
-            self.qr = qr_tag(self.id)
         self.sync_from_holding()
         if not self.address:
             base = f"Holding {self.holding_no}, {self.road.name}"
             self.address = f"Flat {self.unit}, {base}" if self.unit else base
         super().save(*args, **kwargs)
 
-    @property
-    def effective_charge(self) -> int:
-        """A negotiated charge wins over the tier's standard charge."""
-        return self.charge if self.charge and self.charge > 0 else self.tier.charge
-
-    @property
-    def is_routable(self) -> bool:
-        """Only a household on a located building can be put on a route.
-
-        Verification is now the holding's, so every household in a building
-        becomes routable the moment a surveyor pins that building once.
-        """
-        return bool(self.verified)
-
-    @property
-    def scan_payload(self) -> str:
-        """The QR body the collector app decodes: `SWMS|<id>|<tag>`."""
-        return f"SWMS|{self.id}|{self.qr}"
 
 
 class PotentialCustomer(ContactProfile, LocatableHolding):

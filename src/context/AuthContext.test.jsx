@@ -88,7 +88,7 @@ describe('normalizePhone', () => {
 describe('ROLE_HOME', () => {
   it('sends a collector to their round and a viewer to reports', () => {
     expect(ROLE_HOME.Collector).toBe('/app/collection')
-    expect(ROLE_HOME['KCC Viewer']).toBe('/app/reports')
+    expect(ROLE_HOME['City Viewer']).toBe('/app/city')
   })
 })
 
@@ -247,7 +247,7 @@ describe('role helpers', () => {
   it('exposes flags so pages do not compare role strings', async () => {
     client.__store.tokens = { access: 'a', refresh: 'r' }
     client.get.mockResolvedValueOnce({
-      ...USER, roleKey: 'kcc_viewer', role: 'KCC Viewer', readOnly: true,
+      ...USER, roleKey: 'kcc_viewer', role: 'City Viewer', readOnly: true,
     })
     const { result } = await setupReady()
     expect(result.current.isAdmin).toBe(false)

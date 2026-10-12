@@ -1,32 +1,40 @@
 # Smart Sweep SWMS — documentation
 
+Everything here describes the current system: several cities (Khulna City
+Corporation is the pilot), agencies as the collectors, and **every operation
+holding-wise** — charge, bill, payment, daily visit, QR tag and complaint belong
+to the holding; households are the families living in it.
+
 | Document | For | Covers |
 |---|---|---|
 | [API reference](API-REFERENCE.md) | Developers, integrators | Every endpoint, request and response shape, error codes, auth, scoping |
-| [Workflows](WORKFLOWS.md) | Analysts, supervisors, developers | How work moves through the system, who does each step, and the rules the server enforces |
-| [User manual](USER-MANUAL.md) | Everyone using the app | Every screen, by role, in plain language |
-| **[User manual (Word)](Smart-Sweep-User-Manual.docx)** | End users, for printing and circulation | The same manual as a formatted 24-page `.docx` — title page, linked contents, tables and callouts |
+| [Workflows](WORKFLOWS.md) | Analysts, supervisors, developers | How work moves through the system — from setting up a city to reconciled cash, including the daily cut-off close — who does each step, and the rules the server enforces |
+| [User manual](USER-MANUAL.md) | Everyone using the app | Every screen, by role (Collector, Supervisor, Agency Admin, Super Admin, City Viewer), in plain language |
+| **[User manual (Word)](Smart-Sweep-User-Manual.docx)** | End users, for printing and circulation | The same manual as a formatted `.docx` — title page, linked contents, tables and callouts |
 
 ### The Word manual
 
 [`Smart-Sweep-User-Manual.docx`](Smart-Sweep-User-Manual.docx) is the
-hand-out version: A4, 24 pages, with a clickable table of contents whose page
-numbers are already populated. Regenerate it after editing
-[`build-user-manual.js`](build-user-manual.js):
+hand-out version: A4, with a title page and a clickable table of contents. It is
+generated from [`USER-MANUAL.md`](USER-MANUAL.md) — **edit the Markdown, not the
+Word file** — by [`build-user-manual.cjs`](build-user-manual.cjs), which only
+decides how it looks:
 
 ```bash
-node docs/build-user-manual.js docs/Smart-Sweep-User-Manual.docx
+node docs/build-user-manual.cjs docs/Smart-Sweep-User-Manual.docx
 ```
 
-The generator needs the `docx` npm package. After regenerating, open the file in
-Word once and update the contents field (Ctrl-A, F9) so the page numbers match.
+The generator needs the `docx` npm package (`npm install docx@9`, or point
+`NODE_PATH` at a folder where it is installed). After regenerating, open the file
+in Word once and update the contents field (Ctrl-A, F9) so the page numbers
+fill in.
 
 ## The API collection
 
 | File | What it is |
 |---|---|
-| [`api/SmartSweep-SWMS.postman_collection.json`](api/SmartSweep-SWMS.postman_collection.json) | 148 requests in 12 folders, with auth capture built in |
-| [`api/SmartSweep-SWMS.postman_environment.json`](api/SmartSweep-SWMS.postman_environment.json) | `baseUrl`, demo phone, PIN and token slots |
+| [`api/SmartSweep-SWMS.postman_collection.json`](api/SmartSweep-SWMS.postman_collection.json) | 226 requests in 15 folders, with auth capture built in |
+| [`api/SmartSweep-SWMS.postman_environment.json`](api/SmartSweep-SWMS.postman_environment.json) | `baseUrl`, demo phone, password, PIN and token slots |
 | [`api/openapi.yml`](api/openapi.yml) | The generated OpenAPI 3.0.3 schema |
 | [`api/build_collection.py`](api/build_collection.py) | The generator, so the collection can be rebuilt when the API changes |
 
@@ -39,21 +47,25 @@ Start the backend, then import both JSON files into Postman and select the
 cd server && .venv/Scripts/python.exe manage.py runserver
 ```
 
-Run `00 · Auth & session → 1 · Request login code`, then `2 · Verify code`. The
-test scripts capture the JWT pair, your role and your collector id into
-collection variables, so every other request is authorised automatically.
+Set `password` in the environment, then run `00 · Auth & session → Sign in with
+password` (or `Sign in with PIN`; the OTP pair `1 · Request login code` → `2 ·
+Verify code` also still works). The test scripts capture the JWT pair, your role
+and your collector id into collection variables, so every other request is
+authorised automatically.
 
-Demo accounts all use PIN **1470**:
+Demo accounts all use password **swms1234** and PIN **1470**:
 
 | Phone | Role | Scope |
 |---|---|---|
 | `01711000042` | Collector | Ward 14 |
 | `01700112233` | Supervisor | Zone 03 |
-| `01900445566` | Agency Admin | All zones |
-| `01800778899` | KCC Viewer | City-wide |
+| `01900445566` | Agency Admin | Their agency |
+| `01800778899` | City Viewer | City (read-only) |
+| `01900000000` | Superuser — acts as Super Admin | Every city; password **admin1234** |
 
-Signing in as each in turn is the fastest way to see ward scoping and the
-permission rules in action.
+Signing in as each in turn is the fastest way to see ward, agency and city
+scoping and the permission rules in action. Setup, agency and remittance writes
+need the superuser.
 
 ### Rebuilding the collection
 
@@ -70,10 +82,20 @@ cd server && .venv/Scripts/python.exe manage.py spectacular --file ../docs/api/o
 server/.venv/Scripts/python.exe docs/api/build_collection.py docs/api
 ```
 
+## Other files
+
+| File | What it is |
+|---|---|
+| [`SWMS-Gap-Analysis.docx`](SWMS-Gap-Analysis.docx) / [`.pdf`](SWMS-Gap-Analysis.pdf) | The gap analysis against the KCC documents, generated by `gap_analysis_build.py` / `gap_analysis_pdf.py` from `gap_analysis_data.py`. A snapshot from before the holding-wise and multi-city work, kept for the record |
+| [`presentations/`](presentations/) | Progress-update decks in English and Bangla (PDF) |
+
 ## Verification
 
 Every endpoint, response shape, permission rule and error code in these
 documents was checked against a running server on the `seed_demo` dataset —
 including the ward-scoping differences between roles, the complaint permission
 model, the `use_billing_run` refusal, the five QR scan outcomes, and the CSV and
-XLSX exports.
+XLSX exports. The holding-wise, multi-city additions — setup, bulk upload,
+households = units, the collection-day close and the city collection report —
+are covered by the backend test suite, and the Postman collection was checked
+against the regenerated schema so no operation is missing.

@@ -62,4 +62,8 @@ export const EMPTY_CATALOG = {
   potentialReasons: [],
   timeGaps: [],
   currentPractices: [],
+  cities: [],
+  dumpingPoints: [],
+  cityTypes: [],
+  agencyTypes: [],
 }

@@ -337,8 +337,17 @@ export default function Fleet() {
 }
 
 function VanForm({ initial, collectors, onClose, onSave }) {
-  const { t } = useLang()
-  const [form, setForm] = useState({ ...initial, driver: initial.driver || '' })
+  const { t, wardName, localName } = useLang()
+  // A van works a ward and unloads at a dumping point in that ward's city.
+  const { wards, zones, dumpingPoints } = useData()
+  const [form, setForm] = useState({
+    ...initial, driver: initial.driver || '', ward: initial.ward || '', dumpingPoint: initial.dumpingPoint || '',
+  })
+  const cityOf = (wardId) => {
+    const ward = (wards || []).find((w) => w.id === wardId)
+    return (zones || []).find((z) => z.id === ward?.zone)?.city
+  }
+  const points = (dumpingPoints || []).filter((p) => !form.ward || p.city === cityOf(form.ward))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
@@ -359,6 +368,8 @@ function VanForm({ initial, collectors, onClose, onSave }) {
       nextServiceKm: Number(form.nextServiceKm) || 0,
       fitnessExp: form.fitnessExp || null,
       driver: form.driver || '',
+      ward: form.ward || null,
+      dumpingPoint: form.dumpingPoint ? Number(form.dumpingPoint) : null,
     })
     setBusy(false)
     if (result && !result.ok) setError(result.error)
@@ -390,6 +401,15 @@ function VanForm({ initial, collectors, onClose, onSave }) {
             options={[{ value: '', label: t('fleet.form.unassigned') }, ...collectors.map((c) => ({ value: c.id, label: c.name }))]} />
         </FormRow>
         <FieldError>{fieldError('odometer')}</FieldError>
+        <FormRow>
+          <Field half as="select" label={t('fleet.form.ward')} value={form.ward} disabled={busy}
+            onChange={(e) => setForm((f) => ({ ...f, ward: e.target.value, dumpingPoint: '' }))}
+            options={[{ value: '', label: '—' }, ...(wards || []).map((w) => ({ value: w.id, label: wardName(w.id) }))]} />
+          <Field half as="select" label={t('fleet.form.dumpingPoint')} value={form.dumpingPoint} onChange={set('dumpingPoint')}
+            disabled={busy} hint={t('fleet.form.dumpingPointHint')}
+            options={[{ value: '', label: '—' }, ...points.map((p) => ({ value: String(p.id), label: localName(p) }))]} />
+        </FormRow>
+        <FieldError>{fieldError('ward') || fieldError('dumpingPoint')}</FieldError>
         <FormRow>
           <Field half as="select" label={t('fleet.form.status')} value={form.status} onChange={set('status')} disabled={busy} options={VAN_STATUSES.map((s) => ({ value: s, label: t(`status.${s}`) }))} />
           <Field half label={t('fleet.form.fitnessExpiry')} type="date" value={form.fitnessExp || ''} onChange={set('fitnessExp')} disabled={busy} />

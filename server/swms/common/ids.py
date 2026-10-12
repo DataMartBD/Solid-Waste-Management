@@ -133,14 +133,14 @@ def route_id(ward_id: str) -> str:
     return f"RT-{ward_id}-{seq:02d}"
 
 
-def qr_tag(household_pk: str) -> str:
+def qr_tag(holding_pk: str) -> str:
     """Mirror the frontend rule: 'SS-' + last six chars of the id, upper-cased."""
-    return "SS-" + household_pk.replace("-", "")[-6:].upper()
+    return "SS-" + holding_pk.replace("-", "")[-6:].upper()
 
 
-def bill_id(period: str, household_pk: str) -> str:
-    """`B-2026-07-0012840` — period plus the tail of the household id."""
-    return f"B-{period}-{household_pk.replace('-', '')[-7:]}"
+def bill_id(period: str, holding_pk: str) -> str:
+    """`B-2026-07-0000123` — period plus the tail of the holding id."""
+    return f"B-{period}-{holding_pk.replace('-', '')[-7:]}"
 
 
 def payment_id(period: str) -> str:

@@ -4,6 +4,425 @@ info:
   version: 1.0.0
   description: Solid waste management backend for Khulna City Corporation.
 paths:
+  /api/agencies/:
+    get:
+      operationId: api_agencies_list
+      description: The agencies under contract to the city corporation.
+      parameters:
+      - in: query
+        name: active
+        schema:
+          type: boolean
+      - in: query
+        name: agencyType
+        schema:
+          type: string
+      - in: query
+        name: city
+        schema:
+          type: string
+        description: Short code, e.g. 'KCC'
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - active
+          - expired
+          - suspended
+          - terminated
+        description: |-
+          * `active` - Active
+          * `suspended` - Suspended
+          * `expired` - Contract expired
+          * `terminated` - Terminated
+      - in: query
+        name: ward
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAgencyList'
+          description: ''
+    post:
+      operationId: api_agencies_create
+      description: The agencies under contract to the city corporation.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgencyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AgencyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AgencyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agency'
+          description: ''
+  /api/agencies/{id}/:
+    get:
+      operationId: api_agencies_retrieve
+      description: The agencies under contract to the city corporation.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this agency.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agency'
+          description: ''
+    put:
+      operationId: api_agencies_update
+      description: The agencies under contract to the city corporation.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this agency.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgencyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AgencyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AgencyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agency'
+          description: ''
+    patch:
+      operationId: api_agencies_partial_update
+      description: The agencies under contract to the city corporation.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this agency.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAgencyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAgencyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAgencyRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agency'
+          description: ''
+    delete:
+      operationId: api_agencies_destroy
+      description: The agencies under contract to the city corporation.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this agency.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/agencies/{id}/collectors/:
+    get:
+      operationId: api_agencies_collectors_retrieve
+      description: Who this agency currently employs.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this agency.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agency'
+          description: ''
+  /api/agencies/{id}/employment-history/:
+    get:
+      operationId: api_agencies_employment_history_retrieve
+      description: Every collector this agency has employed, and when.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this agency.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agency'
+          description: ''
+  /api/agency-types/:
+    get:
+      operationId: api_agency_types_list
+      description: 'Setup list: kinds of agency (private company, NGO, in-house…).'
+      parameters:
+      - in: query
+        name: active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAgencyTypeList'
+          description: ''
+    post:
+      operationId: api_agency_types_create
+      description: 'Setup list: kinds of agency (private company, NGO, in-house…).'
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgencyTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AgencyTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AgencyTypeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgencyType'
+          description: ''
+  /api/agency-types/{id}/:
+    get:
+      operationId: api_agency_types_retrieve
+      description: 'Setup list: kinds of agency (private company, NGO, in-house…).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this agency type.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgencyType'
+          description: ''
+    put:
+      operationId: api_agency_types_update
+      description: 'Setup list: kinds of agency (private company, NGO, in-house…).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this agency type.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgencyTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AgencyTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AgencyTypeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgencyType'
+          description: ''
+    patch:
+      operationId: api_agency_types_partial_update
+      description: 'Setup list: kinds of agency (private company, NGO, in-house…).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this agency type.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAgencyTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAgencyTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAgencyTypeRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgencyType'
+          description: ''
+    delete:
+      operationId: api_agency_types_destroy
+      description: 'Setup list: kinds of agency (private company, NGO, in-house…).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this agency type.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/ai/ask/:
     post:
       operationId: api_ai_ask_create
@@ -293,6 +712,34 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/auth/login/:
+    post:
+      operationId: api_auth_login_create
+      description: |-
+        Sign in with phone + password.
+
+        This is the only path the login screen offers. The OTP and PIN endpoints
+        below still work and are left in place, but nothing in the UI calls them.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordLoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordLoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordLoginRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/auth/logout/:
     post:
       operationId: api_auth_logout_create
@@ -436,6 +883,34 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/auth/password/:
+    put:
+      operationId: api_auth_password_update
+      description: Change the signed-in operator's password, from the Profile page.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/pin/:
     post:
       operationId: api_auth_pin_create
@@ -724,7 +1199,7 @@ paths:
         schema:
           type: boolean
       - in: query
-        name: hh
+        name: holding
         schema:
           type: string
       - name: ordering
@@ -812,7 +1287,7 @@ paths:
         Bills come from a billing run, never from an ad-hoc insert.
 
         A hand-made bill would have no `run`, so the month's `BillingRun` totals
-        would no longer describe the month, and a household could quietly end up
+        would no longer describe the month, and a holding could quietly end up
         charged twice for reasons no audit trail explains. Superusers are let
         through as a maintenance escape hatch (fixing seed data, backfilling a
         month the run missed) — they are the one caller who can be assumed to
@@ -985,7 +1460,14 @@ paths:
   /api/bills/generate/:
     post:
       operationId: api_bills_generate_create
-      description: Run — or with `dryRun`, preview — one month's charges.
+      description: |-
+        Run — or with `dryRun`, preview — one month's charges.
+
+        Super-admin only. `generate_bills` takes a period and nothing else: it
+        charges every holding in the city, across every contractor. An agency
+        admin confined to their own tenant would be issuing the other
+        contractors' invoices, which is not a permission they are supposed to
+        hold no matter how the queryset behind the list is scoped.
       tags:
       - api
       requestBody:
@@ -1028,6 +1510,208 @@ paths:
               schema:
                 $ref: '#/components/schemas/Bill'
           description: ''
+  /api/blocks/:
+    get:
+      operationId: api_blocks_list
+      description: |-
+        Blocks of a ward — the unit a surveyor is given to walk.
+
+        Filtered by ward in practice: the survey form's block dropdown reloads from
+        `?ward=W-22` whenever the ward above it changes.
+      parameters:
+      - in: query
+        name: active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: ward
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBlockList'
+          description: ''
+    post:
+      operationId: api_blocks_create
+      description: |-
+        Blocks of a ward — the unit a surveyor is given to walk.
+
+        Filtered by ward in practice: the survey form's block dropdown reloads from
+        `?ward=W-22` whenever the ward above it changes.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlockRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BlockRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BlockRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Block'
+          description: ''
+  /api/blocks/{id}/:
+    get:
+      operationId: api_blocks_retrieve
+      description: |-
+        Blocks of a ward — the unit a surveyor is given to walk.
+
+        Filtered by ward in practice: the survey form's block dropdown reloads from
+        `?ward=W-22` whenever the ward above it changes.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          description: e.g. W-22-A
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Block'
+          description: ''
+    put:
+      operationId: api_blocks_update
+      description: |-
+        Blocks of a ward — the unit a surveyor is given to walk.
+
+        Filtered by ward in practice: the survey form's block dropdown reloads from
+        `?ward=W-22` whenever the ward above it changes.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          description: e.g. W-22-A
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlockRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BlockRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BlockRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Block'
+          description: ''
+    patch:
+      operationId: api_blocks_partial_update
+      description: |-
+        Blocks of a ward — the unit a surveyor is given to walk.
+
+        Filtered by ward in practice: the survey form's block dropdown reloads from
+        `?ward=W-22` whenever the ward above it changes.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          description: e.g. W-22-A
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedBlockRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedBlockRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedBlockRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Block'
+          description: ''
+    delete:
+      operationId: api_blocks_destroy
+      description: |-
+        Blocks of a ward — the unit a surveyor is given to walk.
+
+        Filtered by ward in practice: the survey form's block dropdown reloads from
+        `?ward=W-22` whenever the ward above it changes.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          description: e.g. W-22-A
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/catalog/:
     get:
       operationId: api_catalog_retrieve
@@ -1044,6 +1728,364 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/cities/:
+    get:
+      operationId: api_cities_list
+      description: City corporations and pourashovas, and each one's collection-day
+        times.
+      parameters:
+      - in: query
+        name: active
+        schema:
+          type: boolean
+      - in: query
+        name: city_type
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCityList'
+          description: ''
+    post:
+      operationId: api_cities_create
+      description: City corporations and pourashovas, and each one's collection-day
+        times.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CityRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CityRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CityRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/City'
+          description: ''
+  /api/cities/{id}/:
+    get:
+      operationId: api_cities_retrieve
+      description: City corporations and pourashovas, and each one's collection-day
+        times.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          description: Short code, e.g. 'KCC'
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/City'
+          description: ''
+    put:
+      operationId: api_cities_update
+      description: City corporations and pourashovas, and each one's collection-day
+        times.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          description: Short code, e.g. 'KCC'
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CityRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CityRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CityRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/City'
+          description: ''
+    patch:
+      operationId: api_cities_partial_update
+      description: City corporations and pourashovas, and each one's collection-day
+        times.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          description: Short code, e.g. 'KCC'
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCityRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCityRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCityRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/City'
+          description: ''
+    delete:
+      operationId: api_cities_destroy
+      description: City corporations and pourashovas, and each one's collection-day
+        times.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          description: Short code, e.g. 'KCC'
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/city-types/:
+    get:
+      operationId: api_city_types_list
+      description: 'Setup list: kinds of city (City Corporation, Pourashova…).'
+      parameters:
+      - in: query
+        name: active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCityTypeList'
+          description: ''
+    post:
+      operationId: api_city_types_create
+      description: 'Setup list: kinds of city (City Corporation, Pourashova…).'
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CityTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CityTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CityTypeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CityType'
+          description: ''
+  /api/city-types/{id}/:
+    get:
+      operationId: api_city_types_retrieve
+      description: 'Setup list: kinds of city (City Corporation, Pourashova…).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this city type.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CityType'
+          description: ''
+    put:
+      operationId: api_city_types_update
+      description: 'Setup list: kinds of city (City Corporation, Pourashova…).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this city type.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CityTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CityTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CityTypeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CityType'
+          description: ''
+    patch:
+      operationId: api_city_types_partial_update
+      description: 'Setup list: kinds of city (City Corporation, Pourashova…).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this city type.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCityTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCityTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCityTypeRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CityType'
+          description: ''
+    delete:
+      operationId: api_city_types_destroy
+      description: 'Setup list: kinds of city (City Corporation, Pourashova…).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this city type.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/collection/round/:
     get:
       operationId: api_collection_round_retrieve
@@ -1101,7 +2143,7 @@ paths:
   /api/collectors/:
     get:
       operationId: api_collectors_list
-      description: CRUD plus attendance and the metrics recalculation.
+      description: CRUD plus attendance, metrics recalculation and agency transfer.
       parameters:
       - in: query
         name: active
@@ -1178,7 +2220,7 @@ paths:
           description: ''
     post:
       operationId: api_collectors_create
-      description: CRUD plus attendance and the metrics recalculation.
+      description: CRUD plus attendance, metrics recalculation and agency transfer.
       tags:
       - api
       requestBody:
@@ -1205,7 +2247,7 @@ paths:
   /api/collectors/{id}/:
     get:
       operationId: api_collectors_retrieve
-      description: CRUD plus attendance and the metrics recalculation.
+      description: CRUD plus attendance, metrics recalculation and agency transfer.
       parameters:
       - in: path
         name: id
@@ -1226,7 +2268,7 @@ paths:
           description: ''
     put:
       operationId: api_collectors_update
-      description: CRUD plus attendance and the metrics recalculation.
+      description: CRUD plus attendance, metrics recalculation and agency transfer.
       parameters:
       - in: path
         name: id
@@ -1259,7 +2301,7 @@ paths:
           description: ''
     patch:
       operationId: api_collectors_partial_update
-      description: CRUD plus attendance and the metrics recalculation.
+      description: CRUD plus attendance, metrics recalculation and agency transfer.
       parameters:
       - in: path
         name: id
@@ -1291,7 +2333,7 @@ paths:
           description: ''
     delete:
       operationId: api_collectors_destroy
-      description: CRUD plus attendance and the metrics recalculation.
+      description: CRUD plus attendance, metrics recalculation and agency transfer.
       parameters:
       - in: path
         name: id
@@ -1340,6 +2382,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/Collector'
           description: ''
+  /api/collectors/{id}/transfer/:
+    post:
+      operationId: api_collectors_transfer_create
+      description: CRUD plus attendance, metrics recalculation and agency transfer.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this collector.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferCollectorRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TransferCollectorRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TransferCollectorRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/collectors/refresh-metrics/:
     post:
       operationId: api_collectors_refresh_metrics_create
@@ -1403,7 +2475,11 @@ paths:
           * `phone` - Phone call
           * `counter` - Service counter
       - in: query
-        name: hh
+        name: holding
+        schema:
+          type: string
+      - in: query
+        name: household
         schema:
           type: string
       - in: query
@@ -2119,6 +3195,205 @@ paths:
               schema:
                 $ref: '#/components/schemas/Deposit'
           description: ''
+  /api/dumping-points/:
+    get:
+      operationId: api_dumping_points_list
+      description: 'Setup list: where each city''s waste is taken.'
+      parameters:
+      - in: query
+        name: active
+        schema:
+          type: boolean
+      - in: query
+        name: city
+        schema:
+          type: string
+        description: Short code, e.g. 'KCC'
+      - in: query
+        name: kind
+        schema:
+          type: string
+          enum:
+          - disposal_site
+          - dumping_area
+          - transfer_station
+        description: |-
+          * `dumping_area` - Dumping area
+          * `disposal_site` - Disposal site
+          * `transfer_station` - Transfer station
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: wards
+        schema:
+          type: array
+          items:
+            type: string
+        explode: true
+        style: form
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDumpingPointList'
+          description: ''
+    post:
+      operationId: api_dumping_points_create
+      description: 'Setup list: where each city''s waste is taken.'
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DumpingPointRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DumpingPointRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DumpingPointRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DumpingPoint'
+          description: ''
+  /api/dumping-points/{id}/:
+    get:
+      operationId: api_dumping_points_retrieve
+      description: 'Setup list: where each city''s waste is taken.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this dumping point.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DumpingPoint'
+          description: ''
+    put:
+      operationId: api_dumping_points_update
+      description: 'Setup list: where each city''s waste is taken.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this dumping point.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DumpingPointRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DumpingPointRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DumpingPointRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DumpingPoint'
+          description: ''
+    patch:
+      operationId: api_dumping_points_partial_update
+      description: 'Setup list: where each city''s waste is taken.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this dumping point.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDumpingPointRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDumpingPointRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDumpingPointRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DumpingPoint'
+          description: ''
+    delete:
+      operationId: api_dumping_points_destroy
+      description: 'Setup list: where each city''s waste is taken.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this dumping point.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/fuel-logs/:
     get:
       operationId: api_fuel_logs_list
@@ -2307,6 +3582,359 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/holdings/:
+    get:
+      operationId: api_holdings_list
+      description: The Holding Master — every rated property, serviced or not.
+      parameters:
+      - in: query
+        name: holdingType
+        schema:
+          type: string
+      - in: query
+        name: located
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: road
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: serviceStatus
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - active
+          - inactive
+        description: |-
+          * `active` - Active
+          * `inactive` - Inactive
+      - in: query
+        name: unitsMismatch
+        schema:
+          type: boolean
+      - in: query
+        name: verified
+        schema:
+          type: boolean
+      - in: query
+        name: ward
+        schema:
+          type: string
+      - in: query
+        name: zone
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedHoldingList'
+          description: ''
+    post:
+      operationId: api_holdings_create
+      description: The Holding Master — every rated property, serviced or not.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HoldingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/HoldingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/HoldingRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holding'
+          description: ''
+  /api/holdings/{id}/:
+    get:
+      operationId: api_holdings_retrieve
+      description: The Holding Master — every rated property, serviced or not.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this holding.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holding'
+          description: ''
+    put:
+      operationId: api_holdings_update
+      description: The Holding Master — every rated property, serviced or not.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this holding.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HoldingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/HoldingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/HoldingRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holding'
+          description: ''
+    patch:
+      operationId: api_holdings_partial_update
+      description: The Holding Master — every rated property, serviced or not.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this holding.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedHoldingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedHoldingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedHoldingRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holding'
+          description: ''
+    delete:
+      operationId: api_holdings_destroy
+      description: The Holding Master — every rated property, serviced or not.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this holding.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/holdings/{id}/households/:
+    get:
+      operationId: api_holdings_households_retrieve
+      description: The families in this building, for the master's detail panel.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this holding.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holding'
+          description: ''
+  /api/holdings/{id}/verify/:
+    post:
+      operationId: api_holdings_verify_create
+      description: Pin the building. Every household in it becomes routable at once.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this holding.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HoldingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/HoldingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/HoldingRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holding'
+          description: ''
+  /api/holdings/by-qr/{tag}/:
+    get:
+      operationId: api_holdings_by_qr_retrieve
+      description: Resolve a scanned building QR tag (or a holding id) to its holding.
+      parameters:
+      - in: path
+        name: tag
+        schema:
+          type: string
+        description: Building QR tag (SS-…) or holding id
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holding'
+          description: ''
+  /api/holdings/import/:
+    post:
+      operationId: api_holdings_import_create
+      description: |-
+        Upload holdings from Excel or CSV. `commit=false` (default) only previews.
+
+        Every row is validated and reported; `commit=true` then writes the
+        valid rows in one transaction and skips the invalid ones.
+      tags:
+      - api
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/HoldingImportRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/holdings/import-template/:
+    get:
+      operationId: api_holdings_import_template_retrieve
+      description: 'The .xlsx to fill in: the client''s columns, an example row and
+        notes.'
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+          description: ''
+  /api/holdings/unplanned/:
+    get:
+      operationId: api_holdings_unplanned_retrieve
+      description: |-
+        The route planner's to-do list: buildings not yet on any route.
+
+        A stop is a building, so this is the list the planner drags from. Split
+        the way the planner presents it — what could be routed today, and what
+        is blocked because nobody has pinned it on the ground yet.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holding'
+          description: ''
   /api/households/:
     get:
       operationId: api_households_list
@@ -2317,9 +3945,9 @@ paths:
         schema:
           type: string
       - in: query
-        name: hasDues
+        name: holding
         schema:
-          type: boolean
+          type: string
       - in: query
         name: located
         schema:
@@ -2362,10 +3990,6 @@ paths:
         description: |-
           * `active` - Active
           * `inactive` - Inactive
-      - in: query
-        name: tier
-        schema:
-          type: string
       - in: query
         name: unplanned
         schema:
@@ -2523,80 +4147,6 @@ paths:
       responses:
         '204':
           description: No response body
-  /api/households/{id}/verify/:
-    post:
-      operationId: api_households_verify_create
-      description: Confirm this holding's GPS pin — the gate for putting it on a route.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        description: A unique value identifying this household.
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/HouseholdRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/HouseholdRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/HouseholdRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Household'
-          description: ''
-  /api/households/by-qr/{tag}/:
-    get:
-      operationId: api_households_by_qr_retrieve
-      description: Resolve a scanned QR tag to a household.
-      parameters:
-      - in: path
-        name: tag
-        schema:
-          type: string
-        required: true
-      tags:
-      - api
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Household'
-          description: ''
-  /api/households/unplanned/:
-    get:
-      operationId: api_households_unplanned_retrieve
-      description: |-
-        The route planner's to-do list: what is not yet on any route.
-
-        Split the way the planner presents it — holdings that *could* be routed
-        today, and holdings blocked because their location is unverified.
-      tags:
-      - api
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Household'
-          description: ''
   /api/live/:
     get:
       operationId: api_live_retrieve
@@ -2866,7 +4416,7 @@ paths:
         schema:
           type: string
       - in: query
-        name: hh
+        name: holding
         schema:
           type: string
       - in: query
@@ -3322,7 +4872,8 @@ paths:
   /api/potential-customers/{id}/convert/:
     post:
       operationId: api_potential_customers_convert_create
-      description: Sign this holding up for service, creating a Household.
+      description: 'Sign this survey up: a Household in the holding, terms on the
+        holding.'
       parameters:
       - in: path
         name: id
@@ -3353,16 +4904,115 @@ paths:
               schema:
                 $ref: '#/components/schemas/PotentialCustomer'
           description: ''
-  /api/potential-customers/{id}/verify/:
+  /api/remittances/:
+    get:
+      operationId: api_remittances_list
+      description: Agency hand-overs to KCC, and the cash position they close out.
+      parameters:
+      - in: query
+        name: agency
+        schema:
+          type: string
+      - in: query
+        name: method
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: period
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRemittanceList'
+          description: ''
     post:
-      operationId: api_potential_customers_verify_create
-      description: The default CRUD endpoint shape for this project.
+      operationId: api_remittances_create
+      description: Agency hand-overs to KCC, and the cash position they close out.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemittanceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RemittanceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RemittanceRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Remittance'
+          description: ''
+  /api/remittances/{id}/:
+    get:
+      operationId: api_remittances_retrieve
+      description: Agency hand-overs to KCC, and the cash position they close out.
       parameters:
       - in: path
         name: id
         schema:
           type: string
-        description: A unique value identifying this potential customer.
+        description: A unique value identifying this remittance.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Remittance'
+          description: ''
+    put:
+      operationId: api_remittances_update
+      description: Agency hand-overs to KCC, and the cash position they close out.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this remittance.
         required: true
       tags:
       - api
@@ -3370,13 +5020,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PotentialCustomerRequest'
+              $ref: '#/components/schemas/RemittanceRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PotentialCustomerRequest'
+              $ref: '#/components/schemas/RemittanceRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PotentialCustomerRequest'
+              $ref: '#/components/schemas/RemittanceRequest'
         required: true
       security:
       - jwtAuth: []
@@ -3385,7 +5035,98 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PotentialCustomer'
+                $ref: '#/components/schemas/Remittance'
+          description: ''
+    patch:
+      operationId: api_remittances_partial_update
+      description: Agency hand-overs to KCC, and the cash position they close out.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this remittance.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRemittanceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedRemittanceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedRemittanceRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Remittance'
+          description: ''
+    delete:
+      operationId: api_remittances_destroy
+      description: Agency hand-overs to KCC, and the cash position they close out.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this remittance.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/remittances/cash-position/:
+    get:
+      operationId: api_remittances_cash_position_retrieve
+      description: Collected → deposited → remitted, per agency, for one month.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Remittance'
+          description: ''
+  /api/remittances/record/:
+    post:
+      operationId: api_remittances_record_create
+      description: Record one transfer. Several a month are normal — see the model.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemittanceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RemittanceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RemittanceRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Remittance'
           description: ''
   /api/reports/bill-collection/:
     get:
@@ -3408,6 +5149,49 @@ paths:
       operationId: api_reports_bill_status_retrieve
       description: Paid / partial / unpaid / overdue counts for a billing month, per
         collector.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/reports/city-collection/:
+    get:
+      operationId: api_reports_city_collection_retrieve
+      description: 'One city''s collection: confirmed, auto and missed, by period,
+        agency and ward.'
+      parameters:
+      - in: query
+        name: city
+        schema:
+          type: string
+        description: City id, e.g. KCC
+      - in: query
+        name: format
+        schema:
+          type: string
+        description: csv | xlsx | pdf
+      - in: query
+        name: from
+        schema:
+          type: string
+        description: Start date, YYYY-MM-DD
+      - in: query
+        name: mode
+        schema:
+          type: string
+        description: daily | weekly | monthly | yearly
+      - in: query
+        name: to
+        schema:
+          type: string
+        description: End date, YYYY-MM-DD
       tags:
       - api
       security:
@@ -3454,7 +5238,7 @@ paths:
   /api/reports/customer-collection/:
     get:
       operationId: api_reports_customer_collection_retrieve
-      description: Billed and received per household — the "who has not paid" list.
+      description: Billed and received per holding — the "who has not paid" list.
       tags:
       - api
       security:
@@ -4111,6 +5895,506 @@ paths:
               schema:
                 $ref: '#/components/schemas/Route'
           description: ''
+  /api/survey-forms/:
+    get:
+      operationId: api_survey_forms_list
+      description: |-
+        The questionnaires themselves.
+
+        Read-only over the API: a form is loaded by `seed_survey_form` from a module
+        under version control, so that the questions somebody was asked can be
+        traced to a reviewed file rather than to whoever last opened the admin.
+
+        Not scoped. A form is city-wide reference data, like the ward list — and an
+        agency's surveyors need the form before they have anything to scope by.
+      parameters:
+      - in: query
+        name: code
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - draft
+          - published
+          - retired
+        description: |-
+          * `draft` - Draft
+          * `published` - Published
+          * `retired` - Retired
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSurveyFormList'
+          description: ''
+  /api/survey-forms/{id}/:
+    get:
+      operationId: api_survey_forms_retrieve
+      description: |-
+        The questionnaires themselves.
+
+        Read-only over the API: a form is loaded by `seed_survey_form` from a module
+        under version control, so that the questions somebody was asked can be
+        traced to a reviewed file rather than to whoever last opened the admin.
+
+        Not scoped. A form is city-wide reference data, like the ward list — and an
+        agency's surveyors need the form before they have anything to scope by.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this survey form.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurveyFormDetail'
+          description: ''
+  /api/survey-forms/published/:
+    get:
+      operationId: api_survey_forms_published_retrieve
+      description: |-
+        `GET /api/survey-forms/published/?code=d2d-household`
+
+        The newest published version of a form — what the field app asks for
+        when it starts, without having to know which version is current.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurveyFormDetail'
+          description: ''
+  /api/surveys/:
+    get:
+      operationId: api_surveys_list
+      description: 'Collected responses: list, detail, record, and the offline queue.'
+      parameters:
+      - in: query
+        name: block
+        schema:
+          type: string
+      - in: query
+        name: converted
+        schema:
+          type: boolean
+      - in: query
+        name: form
+        schema:
+          type: string
+      - in: query
+        name: from_date
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: gives_to_van
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - converted
+          - draft
+          - rejected
+          - reviewed
+          - submitted
+        description: |-
+          * `draft` - Draft
+          * `submitted` - Submitted
+          * `reviewed` - Reviewed
+          * `converted` - Converted to a holding
+          * `rejected` - Rejected
+      - in: query
+        name: surveyor
+        schema:
+          type: string
+      - in: query
+        name: synced
+        schema:
+          type: boolean
+      - in: query
+        name: to_date
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: ward
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSurveyList'
+          description: ''
+    post:
+      operationId: api_surveys_create
+      description: Record one completed questionnaire.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Survey'
+          description: ''
+  /api/surveys/{id}/:
+    get:
+      operationId: api_surveys_retrieve
+      description: 'Collected responses: list, detail, record, and the offline queue.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this survey.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurveyDetail'
+          description: ''
+    put:
+      operationId: api_surveys_update
+      description: 'Collected responses: list, detail, record, and the offline queue.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this survey.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Survey'
+          description: ''
+    patch:
+      operationId: api_surveys_partial_update
+      description: 'Collected responses: list, detail, record, and the offline queue.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this survey.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSurveyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSurveyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSurveyRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Survey'
+          description: ''
+    delete:
+      operationId: api_surveys_destroy
+      description: 'Collected responses: list, detail, record, and the offline queue.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this survey.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/surveys/{id}/convert/:
+    post:
+      operationId: api_surveys_convert_create
+      description: |-
+        Put a reviewed survey on the register as a holding.
+
+        Agency-admin only. Creating a rated property is the moment a survey
+        starts costing somebody money, and it is not a supervisor's call.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this survey.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Survey'
+          description: ''
+  /api/surveys/{id}/convert-preview/:
+    get:
+      operationId: api_surveys_convert_preview_retrieve
+      description: |-
+        What converting this survey would create, before anybody commits.
+
+        The register refuses an unknown road and needs a property type the
+        survey may not imply, so the useful thing to hand the supervisor is not
+        a form to guess at but a statement of which of those two are missing.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this survey.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Survey'
+          description: ''
+  /api/surveys/{id}/review/:
+    post:
+      operationId: api_surveys_review_create
+      description: |-
+        Mark a survey checked, or reject it.
+
+        A survey is what somebody was told at a door. Reviewing is the step
+        where a supervisor says it is good enough to act on — nothing is
+        promoted into the register before that.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this survey.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Survey'
+          description: ''
+  /api/surveys/{id}/sync/:
+    post:
+      operationId: api_surveys_sync_create
+      description: Acknowledge that a queued record has reached the server.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this survey.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Survey'
+          description: ''
+  /api/surveys/bulk/:
+    post:
+      operationId: api_surveys_bulk_create
+      description: |-
+        Upload a device's offline queue.
+
+        Answers with per-row outcomes rather than one status code, so the device
+        knows which rows it may drop and which to keep trying.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SurveyRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Survey'
+          description: ''
   /api/tiers/:
     get:
       operationId: api_tiers_list
@@ -4281,6 +6565,283 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/users/:
+    get:
+      operationId: api_users_list
+      description: |-
+        Operator accounts — the Users page.
+
+        Unlike every other endpoint in this project, **reading is restricted too**.
+        `SwmsModelViewSet` opens reads to anyone signed in, which is right for
+        households and routes and wrong here: this list is every operator's phone
+        number, national ID, blood group and next of kin. A collector has no reason
+        to enumerate it, so the permission covers GET as well as POST.
+
+        There is deliberately no delete. Visits, payments, complaints and surveys all
+        point at the user who recorded them with `on_delete=SET_NULL`, so removing an
+        account would quietly strip the name off work that was actually done. An
+        account that should stop being usable is deactivated, which the login view
+        already refuses — and the row, with its history, stays.
+      parameters:
+      - in: query
+        name: agency
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: role
+        schema:
+          type: string
+          enum:
+          - agency_admin
+          - collector
+          - kcc_viewer
+          - super_admin
+          - supervisor
+        description: |-
+          * `collector` - Collector
+          * `supervisor` - Supervisor
+          * `agency_admin` - Agency Admin
+          * `super_admin` - Super Admin
+          * `kcc_viewer` - City Viewer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUserAdminList'
+          description: ''
+    post:
+      operationId: api_users_create
+      description: |-
+        Operator accounts — the Users page.
+
+        Unlike every other endpoint in this project, **reading is restricted too**.
+        `SwmsModelViewSet` opens reads to anyone signed in, which is right for
+        households and routes and wrong here: this list is every operator's phone
+        number, national ID, blood group and next of kin. A collector has no reason
+        to enumerate it, so the permission covers GET as well as POST.
+
+        There is deliberately no delete. Visits, payments, complaints and surveys all
+        point at the user who recorded them with `on_delete=SET_NULL`, so removing an
+        account would quietly strip the name off work that was actually done. An
+        account that should stop being usable is deactivated, which the login view
+        already refuses — and the row, with its history, stays.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAdmin'
+          description: ''
+  /api/users/{id}/:
+    get:
+      operationId: api_users_retrieve
+      description: |-
+        Operator accounts — the Users page.
+
+        Unlike every other endpoint in this project, **reading is restricted too**.
+        `SwmsModelViewSet` opens reads to anyone signed in, which is right for
+        households and routes and wrong here: this list is every operator's phone
+        number, national ID, blood group and next of kin. A collector has no reason
+        to enumerate it, so the permission covers GET as well as POST.
+
+        There is deliberately no delete. Visits, payments, complaints and surveys all
+        point at the user who recorded them with `on_delete=SET_NULL`, so removing an
+        account would quietly strip the name off work that was actually done. An
+        account that should stop being usable is deactivated, which the login view
+        already refuses — and the row, with its history, stays.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAdmin'
+          description: ''
+    patch:
+      operationId: api_users_partial_update
+      description: |-
+        Operator accounts — the Users page.
+
+        Unlike every other endpoint in this project, **reading is restricted too**.
+        `SwmsModelViewSet` opens reads to anyone signed in, which is right for
+        households and routes and wrong here: this list is every operator's phone
+        number, national ID, blood group and next of kin. A collector has no reason
+        to enumerate it, so the permission covers GET as well as POST.
+
+        There is deliberately no delete. Visits, payments, complaints and surveys all
+        point at the user who recorded them with `on_delete=SET_NULL`, so removing an
+        account would quietly strip the name off work that was actually done. An
+        account that should stop being usable is deactivated, which the login view
+        already refuses — and the row, with its history, stays.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserAdminRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAdmin'
+          description: ''
+  /api/users/{id}/activate/:
+    post:
+      operationId: api_users_activate_create
+      description: |-
+        Operator accounts — the Users page.
+
+        Unlike every other endpoint in this project, **reading is restricted too**.
+        `SwmsModelViewSet` opens reads to anyone signed in, which is right for
+        households and routes and wrong here: this list is every operator's phone
+        number, national ID, blood group and next of kin. A collector has no reason
+        to enumerate it, so the permission covers GET as well as POST.
+
+        There is deliberately no delete. Visits, payments, complaints and surveys all
+        point at the user who recorded them with `on_delete=SET_NULL`, so removing an
+        account would quietly strip the name off work that was actually done. An
+        account that should stop being usable is deactivated, which the login view
+        already refuses — and the row, with its history, stays.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAdmin'
+          description: ''
+  /api/users/{id}/deactivate/:
+    post:
+      operationId: api_users_deactivate_create
+      description: Stop this account signing in, keeping everything it has recorded.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAdmin'
+          description: ''
   /api/vans/:
     get:
       operationId: api_vans_list
@@ -4651,7 +7212,7 @@ paths:
           type: string
           format: date
       - in: query
-        name: hh
+        name: holding
         schema:
           type: string
       - name: ordering
@@ -4687,11 +7248,13 @@ paths:
         schema:
           type: string
           enum:
+          - auto
           - manual
           - scan
         description: |-
           * `scan` - QR scan
           * `manual` - Manual entry
+          * `auto` - Auto at cut-off
       - in: query
         name: status
         schema:
@@ -4958,6 +7521,11 @@ paths:
         name: zone
         schema:
           type: string
+      - in: query
+        name: zone__city
+        schema:
+          type: string
+        description: Short code, e.g. 'KCC'
       tags:
       - api
       security:
@@ -5104,6 +7672,11 @@ paths:
       operationId: api_zones_list
       description: The default CRUD endpoint shape for this project.
       parameters:
+      - in: query
+        name: city
+        schema:
+          type: string
+        description: Short code, e.g. 'KCC'
       - name: ordering
         required: false
         in: query
@@ -5293,6 +7866,260 @@ components:
         * `priority` - Priority changed
         * `note` - Note added
         * `reopened` - Reopened
+    Agency:
+      type: object
+      description: ModelSerializer with server-assigned ids and blank-friendly text.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 160
+        nameBn:
+          type: string
+          maxLength: 160
+        shortCode:
+          type: string
+        agencyType:
+          type: string
+          nullable: true
+        tradeLicenceNo:
+          type: string
+        registrationNo:
+          type: string
+        tin:
+          type: string
+          maxLength: 20
+        bin:
+          type: string
+          maxLength: 20
+        contactPerson:
+          type: string
+        phone:
+          type: string
+          maxLength: 20
+        altPhone:
+          type: string
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        address:
+          type: string
+          maxLength: 200
+        contractNo:
+          type: string
+        contractStart:
+          type: string
+          format: date
+          nullable: true
+        contractEnd:
+          type: string
+          format: date
+          nullable: true
+        city:
+          type: string
+          description: Short code, e.g. 'KCC'
+          nullable: true
+        serviceWards:
+          type: array
+          items:
+            type: string
+        status:
+          $ref: '#/components/schemas/AgencyStatusEnum'
+        active:
+          type: boolean
+        notes:
+          type: string
+        contractExpired:
+          type: boolean
+          readOnly: true
+        collectorCount:
+          type: integer
+          readOnly: true
+        holdingCount:
+          type: integer
+          readOnly: true
+      required:
+      - collectorCount
+      - contractExpired
+      - holdingCount
+      - id
+      - name
+      - shortCode
+    AgencyRequest:
+      type: object
+      description: ModelSerializer with server-assigned ids and blank-friendly text.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        nameBn:
+          type: string
+          maxLength: 160
+        shortCode:
+          type: string
+          minLength: 1
+        agencyType:
+          type: string
+          minLength: 1
+          nullable: true
+        tradeLicenceNo:
+          type: string
+        registrationNo:
+          type: string
+        tin:
+          type: string
+          maxLength: 20
+        bin:
+          type: string
+          maxLength: 20
+        contactPerson:
+          type: string
+        phone:
+          type: string
+          maxLength: 20
+        altPhone:
+          type: string
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        address:
+          type: string
+          maxLength: 200
+        contractNo:
+          type: string
+        contractStart:
+          type: string
+          format: date
+          nullable: true
+        contractEnd:
+          type: string
+          format: date
+          nullable: true
+        city:
+          type: string
+          minLength: 1
+          description: Short code, e.g. 'KCC'
+          nullable: true
+        serviceWards:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        status:
+          $ref: '#/components/schemas/AgencyStatusEnum'
+        active:
+          type: boolean
+        notes:
+          type: string
+      required:
+      - name
+      - shortCode
+    AgencyStatusEnum:
+      enum:
+      - active
+      - suspended
+      - expired
+      - terminated
+      type: string
+      description: |-
+        * `active` - Active
+        * `suspended` - Suspended
+        * `expired` - Contract expired
+        * `terminated` - Terminated
+    AgencyType:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 48
+        key:
+          type: string
+          maxLength: 96
+        label:
+          type: string
+          maxLength: 96
+        sort_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        active:
+          type: boolean
+      required:
+      - id
+      - key
+      - label
+    AgencyTypeRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 48
+        key:
+          type: string
+          minLength: 1
+          maxLength: 96
+        label:
+          type: string
+          minLength: 1
+          maxLength: 96
+        sort_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        active:
+          type: boolean
+      required:
+      - id
+      - key
+      - label
+    Answer:
+      type: object
+      properties:
+        question:
+          type: string
+          readOnly: true
+        questionNumber:
+          type: string
+          readOnly: true
+        questionText:
+          type: string
+          readOnly: true
+        questionTextBn:
+          type: string
+          readOnly: true
+        option:
+          type: string
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        labelBn:
+          type: string
+          readOnly: true
+        text:
+          type: string
+        number:
+          type: string
+          readOnly: true
+        date:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - label
+      - labelBn
+      - number
+      - option
+      - question
+      - questionNumber
+      - questionText
+      - questionTextBn
     Ask:
       type: object
       properties:
@@ -5356,14 +8183,17 @@ components:
         * `absent` - Absent
     Bill:
       type: object
-      description: A household's charge for one month, plus what has been received
-        on it.
+      description: A holding's charge for one month, plus what has been received on
+        it.
       properties:
         id:
           type: string
           readOnly: true
-        hh:
+        holding:
           type: string
+        holdingNo:
+          type: string
+          readOnly: true
         head:
           type: string
           readOnly: true
@@ -5413,7 +8243,8 @@ components:
       - amount
       - dueOn
       - head
-      - hh
+      - holding
+      - holdingNo
       - id
       - issuedAt
       - method
@@ -5427,10 +8258,10 @@ components:
       - ward
     BillRequest:
       type: object
-      description: A household's charge for one month, plus what has been received
-        on it.
+      description: A holding's charge for one month, plus what has been received on
+        it.
       properties:
-        hh:
+        holding:
           type: string
           minLength: 1
         period:
@@ -5451,7 +8282,7 @@ components:
           minLength: 1
       required:
       - amount
-      - hh
+      - holding
       - issuedAt
       - period
       - ward
@@ -5495,6 +8326,43 @@ components:
     BlankEnum:
       enum:
       - ''
+    Block:
+      type: object
+      properties:
+        id:
+          type: string
+          description: e.g. W-22-A
+          maxLength: 16
+        ward:
+          type: string
+        name:
+          type: string
+          description: e.g. Block-A
+          maxLength: 60
+      required:
+      - id
+      - name
+      - ward
+    BlockRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          description: e.g. W-22-A
+          maxLength: 16
+        ward:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+          description: e.g. Block-A
+          maxLength: 60
+      required:
+      - id
+      - name
+      - ward
     ChannelEnum:
       enum:
       - sms
@@ -5507,6 +8375,130 @@ components:
         * `app` - App
         * `phone` - Phone call
         * `counter` - Service counter
+    City:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Short code, e.g. 'KCC'
+          maxLength: 8
+        name:
+          type: string
+          maxLength: 120
+        nameBn:
+          type: string
+        cityType:
+          type: string
+          nullable: true
+        district:
+          type: string
+          maxLength: 64
+        lat:
+          type: number
+          format: double
+          nullable: true
+        lng:
+          type: number
+          format: double
+          nullable: true
+        collectionCutoff:
+          type: string
+          format: time
+        complaintDeadline:
+          type: string
+          format: time
+        active:
+          type: boolean
+      required:
+      - id
+      - name
+    CityRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          description: Short code, e.g. 'KCC'
+          maxLength: 8
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        nameBn:
+          type: string
+        cityType:
+          type: string
+          minLength: 1
+          nullable: true
+        district:
+          type: string
+          maxLength: 64
+        lat:
+          type: number
+          format: double
+          nullable: true
+        lng:
+          type: number
+          format: double
+          nullable: true
+        collectionCutoff:
+          type: string
+          format: time
+        complaintDeadline:
+          type: string
+          format: time
+        active:
+          type: boolean
+      required:
+      - id
+      - name
+    CityType:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 48
+        key:
+          type: string
+          maxLength: 96
+        label:
+          type: string
+          maxLength: 96
+        sort_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        active:
+          type: boolean
+      required:
+      - id
+      - key
+      - label
+    CityTypeRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 48
+        key:
+          type: string
+          minLength: 1
+          maxLength: 96
+        label:
+          type: string
+          minLength: 1
+          maxLength: 96
+        sort_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        active:
+          type: boolean
+      required:
+      - id
+      - key
+      - label
     Collector:
       type: object
       description: A field collector, as the Collectors table and the round header
@@ -5520,6 +8512,16 @@ components:
           maxLength: 120
         dspId:
           type: string
+        agency:
+          type: string
+          readOnly: true
+          nullable: true
+        agencyName:
+          type: string
+          readOnly: true
+        agencyNameBn:
+          type: string
+          readOnly: true
         zone:
           type: string
         phone:
@@ -5565,6 +8567,9 @@ components:
           nullable: true
           readOnly: true
       required:
+      - agency
+      - agencyName
+      - agencyNameBn
       - assignmentId
       - complaints
       - id
@@ -5634,8 +8639,11 @@ components:
         id:
           type: string
           readOnly: true
-        hh:
+        holding:
           type: string
+        household:
+          type: string
+          nullable: true
         type:
           $ref: '#/components/schemas/Type3b0Enum'
         channel:
@@ -5681,10 +8689,10 @@ components:
           type: string
           nullable: true
           readOnly: true
-        head:
+        holdingNo:
           type: string
           readOnly: true
-        holding:
+        head:
           type: string
           readOnly: true
         road:
@@ -5701,12 +8709,15 @@ components:
           type: string
           format: date-time
           readOnly: true
+        missedOn:
+          type: string
+          format: date
+          nullable: true
       required:
       - activity
       - closedAt
       - head
-      - hh
-      - holding
+      - holdingNo
       - id
       - nextStatus
       - phone
@@ -5759,8 +8770,11 @@ components:
         id:
           type: string
           readOnly: true
-        hh:
+        holding:
           type: string
+        household:
+          type: string
+          nullable: true
         type:
           $ref: '#/components/schemas/Type3b0Enum'
         channel:
@@ -5806,10 +8820,10 @@ components:
           type: string
           nullable: true
           readOnly: true
-        head:
+        holdingNo:
           type: string
           readOnly: true
-        holding:
+        head:
           type: string
           readOnly: true
         road:
@@ -5826,12 +8840,15 @@ components:
           type: string
           format: date-time
           readOnly: true
+        missedOn:
+          type: string
+          format: date
+          nullable: true
       required:
       - activity
       - closedAt
       - head
-      - hh
-      - holding
+      - holdingNo
       - id
       - nextStatus
       - phone
@@ -5853,9 +8870,13 @@ components:
         unless explicitly overridden, and a `created` activity row is written so a
         ticket is never without a trail. `note` is the text that entry carries.
       properties:
-        hh:
+        holding:
           type: string
           minLength: 1
+        household:
+          type: string
+          minLength: 1
+          nullable: true
         type:
           $ref: '#/components/schemas/Type3b0Enum'
         channel:
@@ -5874,11 +8895,14 @@ components:
           $ref: '#/components/schemas/PriorityEnum'
         description:
           type: string
+        missedOn:
+          type: string
+          format: date
+          nullable: true
         note:
           type: string
           writeOnly: true
       required:
-      - hh
       - type
     ComplaintPhoto:
       type: object
@@ -5907,9 +8931,13 @@ components:
       type: object
       description: A ticket as the Complaints page, Dashboard and Reports read it.
       properties:
-        hh:
+        holding:
           type: string
           minLength: 1
+        household:
+          type: string
+          minLength: 1
+          nullable: true
         type:
           $ref: '#/components/schemas/Type3b0Enum'
         channel:
@@ -5928,8 +8956,11 @@ components:
           $ref: '#/components/schemas/PriorityEnum'
         description:
           type: string
+        missedOn:
+          type: string
+          format: date
+          nullable: true
       required:
-      - hh
       - type
     Deposit:
       type: object
@@ -5996,6 +9027,109 @@ components:
       - collector
       - method
       - period
+    DumpingPoint:
+      type: object
+      description: A dumping area, disposal site or transfer station, and the wards
+        it serves.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        nameBn:
+          type: string
+          maxLength: 120
+        kind:
+          $ref: '#/components/schemas/DumpingPointKindEnum'
+        city:
+          type: string
+          description: Short code, e.g. 'KCC'
+        wards:
+          type: array
+          items:
+            type: string
+        lat:
+          type: number
+          format: double
+          nullable: true
+        lng:
+          type: number
+          format: double
+          nullable: true
+        capacityTonnes:
+          type: number
+          format: double
+          maximum: 1000000
+          minimum: -1000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          nullable: true
+        notes:
+          type: string
+        active:
+          type: boolean
+      required:
+      - city
+      - id
+      - name
+    DumpingPointKindEnum:
+      enum:
+      - dumping_area
+      - disposal_site
+      - transfer_station
+      type: string
+      description: |-
+        * `dumping_area` - Dumping area
+        * `disposal_site` - Disposal site
+        * `transfer_station` - Transfer station
+    DumpingPointRequest:
+      type: object
+      description: A dumping area, disposal site or transfer station, and the wards
+        it serves.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        nameBn:
+          type: string
+          maxLength: 120
+        kind:
+          $ref: '#/components/schemas/DumpingPointKindEnum'
+        city:
+          type: string
+          minLength: 1
+          description: Short code, e.g. 'KCC'
+        wards:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        lat:
+          type: number
+          format: double
+          nullable: true
+        lng:
+          type: number
+          format: double
+          nullable: true
+        capacityTonnes:
+          type: number
+          format: double
+          maximum: 1000000
+          minimum: -1000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          nullable: true
+        notes:
+          type: string
+        active:
+          type: boolean
+      required:
+      - city
+      - name
     FuelEnum:
       enum:
       - diesel
@@ -6104,48 +9238,49 @@ components:
       - litres
       - odometer
       - van
-    Household:
+    Holding:
       type: object
-      description: A holding under service.
+      description: A rated property — the building, and the unit everything is done
+        by.
       properties:
         id:
           type: string
           readOnly: true
-        qr:
+        agency:
           type: string
           nullable: true
-          description: QR tag printed on the bin sticker, e.g. SS-9F3A21
-          maxLength: 24
-        tier:
+        district:
           type: string
-        status:
-          $ref: '#/components/schemas/HouseholdStatusEnum'
-        dues:
-          type: integer
-          readOnly: true
-        charge:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-        paymentMode:
+        thana:
           type: string
-        paymentDay:
-          type: integer
         ward:
           type: string
         road:
           type: string
-        holding:
+        holdingNo:
           type: string
-          description: Holding number, e.g. 142/B
-          maxLength: 24
-        head:
+        holdingType:
           type: string
-          description: Head of household / contact name
-          maxLength: 120
-        phone:
+        ownerName:
           type: string
-          maxLength: 20
+        ownerPhone:
+          type: string
+        ownerAltPhone:
+          type: string
+        ownerEmail:
+          type: string
+          format: email
+        address:
+          type: string
+          readOnly: true
+        floors:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+        unitsTotal:
+          type: integer
+          nullable: true
         lat:
           type: number
           format: double
@@ -6162,6 +9297,7 @@ components:
           description: GPS accuracy in metres
         verified:
           type: boolean
+          readOnly: true
         verifiedAt:
           type: string
           format: date-time
@@ -6171,113 +9307,122 @@ components:
           readOnly: true
         placedByHand:
           type: boolean
-        customerType:
+        status:
+          $ref: '#/components/schemas/StatusA3eEnum'
+        notes:
           type: string
-        profession:
-          type: string
-          maxLength: 80
-        address:
-          type: string
-          maxLength: 200
-        email:
-          type: string
-          format: email
-          maxLength: 254
-        altPhone:
-          type: string
-        contactPerson:
-          type: string
-        bloodGroup:
-          type: string
-        members:
-          type: integer
-          maximum: 32767
-          minimum: 0
-        membersUnder5:
-          type: integer
-        membersFemale:
-          type: integer
-        storage:
-          type: string
-        holdingType:
-          type: string
-        floor:
-          type: string
-          maxLength: 32
-        suitableTime:
-          type: string
-        lastVisit:
-          type: string
-          readOnly: true
-        effectiveCharge:
-          type: integer
-          readOnly: true
-        routable:
-          type: boolean
-          readOnly: true
-        routeId:
-          type: string
-          readOnly: true
-      required:
-      - customerType
-      - dues
-      - effectiveCharge
-      - head
-      - holding
-      - holdingType
-      - id
-      - lastVisit
-      - paymentMode
-      - road
-      - routable
-      - routeId
-      - storage
-      - suitableTime
-      - tier
-      - verifiedBy
-      - ward
-    HouseholdRequest:
-      type: object
-      description: A holding under service.
-      properties:
         qr:
           type: string
-          nullable: true
-          description: QR tag printed on the bin sticker, e.g. SS-9F3A21
-          maxLength: 24
+          readOnly: true
         tier:
           type: string
-          minLength: 1
-        status:
-          $ref: '#/components/schemas/HouseholdStatusEnum'
+          nullable: true
         charge:
           type: integer
-          maximum: 2147483647
           minimum: 0
         paymentMode:
           type: string
-          minLength: 1
+          nullable: true
         paymentDay:
           type: integer
+          maximum: 28
+          minimum: 1
+        effectiveCharge:
+          type: integer
+          readOnly: true
+        unitsMatch:
+          type: boolean
+          readOnly: true
+          nullable: true
+        dues:
+          type: integer
+          readOnly: true
+        routeId:
+          type: string
+          nullable: true
+          readOnly: true
+        serviceStatus:
+          type: string
+          readOnly: true
+        householdCount:
+          type: integer
+          readOnly: true
+        activeHouseholdCount:
+          type: integer
+          readOnly: true
+      required:
+      - activeHouseholdCount
+      - address
+      - dues
+      - effectiveCharge
+      - holdingNo
+      - holdingType
+      - householdCount
+      - id
+      - ownerName
+      - qr
+      - road
+      - routeId
+      - serviceStatus
+      - unitsMatch
+      - verified
+      - verifiedBy
+      - ward
+    HoldingImportRequestRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+          description: Excel (.xlsx) or CSV (.csv)
+        commit:
+          type: boolean
+          description: false (default) previews; true writes the valid rows
+      required:
+      - file
+    HoldingRequest:
+      type: object
+      description: A rated property — the building, and the unit everything is done
+        by.
+      properties:
+        agency:
+          type: string
+          minLength: 1
+          nullable: true
+        district:
+          type: string
+        thana:
+          type: string
         ward:
           type: string
           minLength: 1
         road:
           type: string
           minLength: 1
-        holding:
+        holdingNo:
           type: string
           minLength: 1
-          description: Holding number, e.g. 142/B
-          maxLength: 24
-        head:
+        holdingType:
           type: string
           minLength: 1
-          description: Head of household / contact name
-          maxLength: 120
-        phone:
+        ownerName:
           type: string
-          maxLength: 20
+          minLength: 1
+        ownerPhone:
+          type: string
+        ownerAltPhone:
+          type: string
+        ownerEmail:
+          type: string
+          format: email
+        floors:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+        unitsTotal:
+          type: integer
+          nullable: true
         lat:
           type: number
           format: double
@@ -6292,14 +9437,193 @@ components:
           minimum: 0
           nullable: true
           description: GPS accuracy in metres
-        verified:
-          type: boolean
         verifiedAt:
           type: string
           format: date-time
           nullable: true
         placedByHand:
           type: boolean
+        status:
+          $ref: '#/components/schemas/StatusA3eEnum'
+        notes:
+          type: string
+        tier:
+          type: string
+          minLength: 1
+          nullable: true
+        charge:
+          type: integer
+          minimum: 0
+        paymentMode:
+          type: string
+          minLength: 1
+          nullable: true
+        paymentDay:
+          type: integer
+          maximum: 28
+          minimum: 1
+        households:
+          type: array
+          items:
+            $ref: '#/components/schemas/NestedHouseholdRequest'
+          writeOnly: true
+        householdDefaults:
+          type: object
+          additionalProperties: {}
+          writeOnly: true
+      required:
+      - holdingNo
+      - holdingType
+      - ownerName
+      - road
+      - ward
+    Household:
+      type: object
+      description: |-
+        A family or unit living in a holding — who lives there, nothing more.
+
+        The service charge, bills, payments, visits and QR tag are the holding's.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StatusA3eEnum'
+        holding:
+          type: string
+        holdingNo:
+          type: string
+          readOnly: true
+        unit:
+          type: string
+          description: Flat or unit within the holding, e.g. 3B. Blank for a single-family
+            holding.
+          maxLength: 24
+        ward:
+          type: string
+          readOnly: true
+        road:
+          type: string
+          readOnly: true
+        head:
+          type: string
+          description: Head of household / contact name
+          maxLength: 120
+        phone:
+          type: string
+          maxLength: 20
+        lat:
+          type: number
+          format: double
+          readOnly: true
+        lng:
+          type: number
+          format: double
+          readOnly: true
+        accuracy:
+          type: integer
+          readOnly: true
+        verified:
+          type: boolean
+          readOnly: true
+        verifiedAt:
+          type: string
+          format: date-time
+          readOnly: true
+        verifiedBy:
+          type: string
+          readOnly: true
+        placedByHand:
+          type: boolean
+          readOnly: true
+        customerType:
+          type: string
+        profession:
+          type: string
+          maxLength: 80
+        address:
+          type: string
+          maxLength: 200
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        altPhone:
+          type: string
+        contactPerson:
+          type: string
+        bloodGroup:
+          type: string
+        members:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        membersUnder5:
+          type: integer
+        membersFemale:
+          type: integer
+        storage:
+          type: string
+        holdingType:
+          type: string
+        floor:
+          type: string
+          maxLength: 32
+        suitableTime:
+          type: string
+        routeId:
+          type: string
+          nullable: true
+          description: |-
+            The route this family is on, which is the one its building sits on.
+
+            The plan is holding-wise, so the stop hangs off the holding — a family
+            is walked because its building is a stop.
+          readOnly: true
+      required:
+      - accuracy
+      - customerType
+      - head
+      - holding
+      - holdingNo
+      - holdingType
+      - id
+      - lat
+      - lng
+      - placedByHand
+      - road
+      - routeId
+      - storage
+      - suitableTime
+      - verified
+      - verifiedAt
+      - verifiedBy
+      - ward
+    HouseholdRequest:
+      type: object
+      description: |-
+        A family or unit living in a holding — who lives there, nothing more.
+
+        The service charge, bills, payments, visits and QR tag are the holding's.
+      properties:
+        status:
+          $ref: '#/components/schemas/StatusA3eEnum'
+        holding:
+          type: string
+          minLength: 1
+        unit:
+          type: string
+          description: Flat or unit within the holding, e.g. 3B. Blank for a single-family
+            holding.
+          maxLength: 24
+        head:
+          type: string
+          minLength: 1
+          description: Head of household / contact name
+          maxLength: 120
+        phone:
+          type: string
+          maxLength: 20
         customerType:
           type: string
           minLength: 1
@@ -6344,28 +9668,8 @@ components:
       - head
       - holding
       - holdingType
-      - paymentMode
-      - road
       - storage
       - suitableTime
-      - tier
-      - ward
-    HouseholdStatusEnum:
-      enum:
-      - active
-      - inactive
-      type: string
-      description: |-
-        * `active` - Active
-        * `inactive` - Inactive
-    KindEnum:
-      enum:
-      - scheduled
-      - unscheduled
-      type: string
-      description: |-
-        * `scheduled` - Scheduled
-        * `unscheduled` - Unscheduled
     Maintenance:
       type: object
       description: |-
@@ -6381,7 +9685,7 @@ components:
         van:
           type: string
         kind:
-          $ref: '#/components/schemas/KindEnum'
+          $ref: '#/components/schemas/MaintenanceKindEnum'
         reason:
           type: string
           maxLength: 200
@@ -6425,6 +9729,14 @@ components:
       - opened
       - reason
       - van
+    MaintenanceKindEnum:
+      enum:
+      - scheduled
+      - unscheduled
+      type: string
+      description: |-
+        * `scheduled` - Scheduled
+        * `unscheduled` - Unscheduled
     MaintenanceRequest:
       type: object
       description: |-
@@ -6438,7 +9750,7 @@ components:
           type: string
           minLength: 1
         kind:
-          $ref: '#/components/schemas/KindEnum'
+          $ref: '#/components/schemas/MaintenanceKindEnum'
         reason:
           type: string
           minLength: 1
@@ -6467,6 +9779,181 @@ components:
       - odometer
       - reason
       - van
+    NestedHousehold:
+      type: object
+      description: |-
+        One family, as the Holding editor writes it.
+
+        A building and the families inside it are entered on one visit, so they are
+        entered on one screen: the editor shows the holding on the left and its
+        households on the right, and this is the right-hand side of that payload.
+        Every field the standalone Households form has is accepted here, so the two
+        screens agree on what a household is.
+
+        `id` is what distinguishes an edit from an addition. Present, it updates
+        that household — and it must already belong to this holding, or the editor
+        could be used to reassign somebody else's family into this building. Absent,
+        it creates one. A household is never deleted from here: complaints may name
+        it, so retiring one is a `status` change, which is a field on this form like
+        any other.
+
+        There is no charge or payment here: the service charge is the holding's.
+
+        The address is *not* here. Ward, road and holding number belong to the
+        building and are copied down on save; accepting them per family would let a
+        caller write a value the next save silently overwrites.
+      properties:
+        id:
+          type: string
+        head:
+          type: string
+          maxLength: 120
+        customerType:
+          type: string
+        phone:
+          type: string
+          maxLength: 20
+        altPhone:
+          type: string
+          maxLength: 20
+        profession:
+          type: string
+          maxLength: 80
+        email:
+          type: string
+          format: email
+        contactPerson:
+          type: string
+          maxLength: 120
+        bloodGroup:
+          type: string
+          maxLength: 4
+        unit:
+          type: string
+          maxLength: 24
+        holdingType:
+          type: string
+        floor:
+          type: string
+          maxLength: 32
+        address:
+          type: string
+          maxLength: 200
+        members:
+          type: integer
+          maximum: 99
+          minimum: 0
+        membersUnder5:
+          type: integer
+          maximum: 99
+          minimum: 0
+        membersFemale:
+          type: integer
+          maximum: 99
+          minimum: 0
+        storage:
+          type: string
+        suitableTime:
+          type: string
+        status:
+          $ref: '#/components/schemas/StatusA3eEnum'
+      required:
+      - head
+    NestedHouseholdRequest:
+      type: object
+      description: |-
+        One family, as the Holding editor writes it.
+
+        A building and the families inside it are entered on one visit, so they are
+        entered on one screen: the editor shows the holding on the left and its
+        households on the right, and this is the right-hand side of that payload.
+        Every field the standalone Households form has is accepted here, so the two
+        screens agree on what a household is.
+
+        `id` is what distinguishes an edit from an addition. Present, it updates
+        that household — and it must already belong to this holding, or the editor
+        could be used to reassign somebody else's family into this building. Absent,
+        it creates one. A household is never deleted from here: complaints may name
+        it, so retiring one is a `status` change, which is a field on this form like
+        any other.
+
+        There is no charge or payment here: the service charge is the holding's.
+
+        The address is *not* here. Ward, road and holding number belong to the
+        building and are copied down on save; accepting them per family would let a
+        caller write a value the next save silently overwrites.
+      properties:
+        id:
+          type: string
+        head:
+          type: string
+          minLength: 1
+          maxLength: 120
+        customerType:
+          type: string
+          minLength: 1
+        phone:
+          type: string
+          maxLength: 20
+        altPhone:
+          type: string
+          maxLength: 20
+        profession:
+          type: string
+          maxLength: 80
+        email:
+          type: string
+          format: email
+        contactPerson:
+          type: string
+          maxLength: 120
+        bloodGroup:
+          type: string
+          maxLength: 4
+        unit:
+          type: string
+          maxLength: 24
+        holdingType:
+          type: string
+          minLength: 1
+        floor:
+          type: string
+          maxLength: 32
+        address:
+          type: string
+          maxLength: 200
+        members:
+          type: integer
+          maximum: 99
+          minimum: 0
+        membersUnder5:
+          type: integer
+          maximum: 99
+          minimum: 0
+        membersFemale:
+          type: integer
+          maximum: 99
+          minimum: 0
+        storage:
+          type: string
+          minLength: 1
+        suitableTime:
+          type: string
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/StatusA3eEnum'
+      required:
+      - head
+    OperatorEnum:
+      enum:
+      - answered
+      - equals
+      - not_equals
+      type: string
+      description: |-
+        * `answered` - Has any answer
+        * `equals` - Is one of these options
+        * `not_equals` - Is none of these options
     OtpRequestRequest:
       type: object
       properties:
@@ -6496,6 +9983,52 @@ components:
       description: |-
         * `owned` - Owned
         * `leased` - Leased
+    PaginatedAgencyList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Agency'
+    PaginatedAgencyTypeList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgencyType'
     PaginatedAssignmentList:
       type: object
       required:
@@ -6565,6 +10098,75 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/BillingRun'
+    PaginatedBlockList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Block'
+    PaginatedCityList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/City'
+    PaginatedCityTypeList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CityType'
     PaginatedCollectorList:
       type: object
       required:
@@ -6634,6 +10236,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Deposit'
+    PaginatedDumpingPointList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DumpingPoint'
     PaginatedFuelLogList:
       type: object
       required:
@@ -6657,6 +10282,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/FuelLog'
+    PaginatedHoldingList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Holding'
     PaginatedHouseholdList:
       type: object
       required:
@@ -6749,6 +10397,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PotentialCustomer'
+    PaginatedRemittanceList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Remittance'
     PaginatedRoadList:
       type: object
       required:
@@ -6795,6 +10466,52 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Route'
+    PaginatedSurveyFormList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SurveyForm'
+    PaginatedSurveyList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Survey'
     PaginatedTierList:
       type: object
       required:
@@ -6818,6 +10535,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Tier'
+    PaginatedUserAdminList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserAdmin'
     PaginatedVanList:
       type: object
       required:
@@ -6910,6 +10650,124 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Zone'
+    PasswordChangeRequest:
+      type: object
+      description: Change the signed-in user's own password.
+      properties:
+        currentPassword:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - currentPassword
+      - password
+    PasswordLoginRequest:
+      type: object
+      description: Phone + password — the only sign-in path the login screen offers.
+      properties:
+        phone:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - password
+      - phone
+    PatchedAgencyRequest:
+      type: object
+      description: ModelSerializer with server-assigned ids and blank-friendly text.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        nameBn:
+          type: string
+          maxLength: 160
+        shortCode:
+          type: string
+          minLength: 1
+        agencyType:
+          type: string
+          minLength: 1
+          nullable: true
+        tradeLicenceNo:
+          type: string
+        registrationNo:
+          type: string
+        tin:
+          type: string
+          maxLength: 20
+        bin:
+          type: string
+          maxLength: 20
+        contactPerson:
+          type: string
+        phone:
+          type: string
+          maxLength: 20
+        altPhone:
+          type: string
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        address:
+          type: string
+          maxLength: 200
+        contractNo:
+          type: string
+        contractStart:
+          type: string
+          format: date
+          nullable: true
+        contractEnd:
+          type: string
+          format: date
+          nullable: true
+        city:
+          type: string
+          minLength: 1
+          description: Short code, e.g. 'KCC'
+          nullable: true
+        serviceWards:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        status:
+          $ref: '#/components/schemas/AgencyStatusEnum'
+        active:
+          type: boolean
+        notes:
+          type: string
+    PatchedAgencyTypeRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 48
+        key:
+          type: string
+          minLength: 1
+          maxLength: 96
+        label:
+          type: string
+          minLength: 1
+          maxLength: 96
+        sort_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        active:
+          type: boolean
     PatchedAssignmentRequest:
       type: object
       description: Which routes a collector is responsible for.
@@ -6927,10 +10785,10 @@ components:
           type: boolean
     PatchedBillRequest:
       type: object
-      description: A household's charge for one month, plus what has been received
-        on it.
+      description: A holding's charge for one month, plus what has been received on
+        it.
       properties:
-        hh:
+        holding:
           type: string
           minLength: 1
         period:
@@ -6949,6 +10807,80 @@ components:
         ward:
           type: string
           minLength: 1
+    PatchedBlockRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          description: e.g. W-22-A
+          maxLength: 16
+        ward:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+          description: e.g. Block-A
+          maxLength: 60
+    PatchedCityRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          description: Short code, e.g. 'KCC'
+          maxLength: 8
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        nameBn:
+          type: string
+        cityType:
+          type: string
+          minLength: 1
+          nullable: true
+        district:
+          type: string
+          maxLength: 64
+        lat:
+          type: number
+          format: double
+          nullable: true
+        lng:
+          type: number
+          format: double
+          nullable: true
+        collectionCutoff:
+          type: string
+          format: time
+        complaintDeadline:
+          type: string
+          format: time
+        active:
+          type: boolean
+    PatchedCityTypeRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 48
+        key:
+          type: string
+          minLength: 1
+          maxLength: 96
+        label:
+          type: string
+          minLength: 1
+          maxLength: 96
+        sort_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        active:
+          type: boolean
     PatchedCollectorRequest:
       type: object
       description: A field collector, as the Collectors table and the round header
@@ -6996,9 +10928,13 @@ components:
       type: object
       description: A ticket as the Complaints page, Dashboard and Reports read it.
       properties:
-        hh:
+        holding:
           type: string
           minLength: 1
+        household:
+          type: string
+          minLength: 1
+          nullable: true
         type:
           $ref: '#/components/schemas/Type3b0Enum'
         channel:
@@ -7017,6 +10953,10 @@ components:
           $ref: '#/components/schemas/PriorityEnum'
         description:
           type: string
+        missedOn:
+          type: string
+          format: date
+          nullable: true
     PatchedDepositRequest:
       type: object
       description: A collector handing collected cash in to the office.
@@ -7044,6 +10984,49 @@ components:
           type: string
           description: Deposit slip reference
           maxLength: 32
+    PatchedDumpingPointRequest:
+      type: object
+      description: A dumping area, disposal site or transfer station, and the wards
+        it serves.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        nameBn:
+          type: string
+          maxLength: 120
+        kind:
+          $ref: '#/components/schemas/DumpingPointKindEnum'
+        city:
+          type: string
+          minLength: 1
+          description: Short code, e.g. 'KCC'
+        wards:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        lat:
+          type: number
+          format: double
+          nullable: true
+        lng:
+          type: number
+          format: double
+          nullable: true
+        capacityTonnes:
+          type: number
+          format: double
+          maximum: 1000000
+          minimum: -1000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          nullable: true
+        notes:
+          type: string
+        active:
+          type: boolean
     PatchedFuelLogRequest:
       type: object
       description: |-
@@ -7086,48 +11069,49 @@ components:
           exclusiveMaximum: true
           exclusiveMinimum: true
           nullable: true
-    PatchedHouseholdRequest:
+    PatchedHoldingRequest:
       type: object
-      description: A holding under service.
+      description: A rated property — the building, and the unit everything is done
+        by.
       properties:
-        qr:
+        agency:
           type: string
+          minLength: 1
           nullable: true
-          description: QR tag printed on the bin sticker, e.g. SS-9F3A21
-          maxLength: 24
-        tier:
+        district:
           type: string
-          minLength: 1
-        status:
-          $ref: '#/components/schemas/HouseholdStatusEnum'
-        charge:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-        paymentMode:
+        thana:
           type: string
-          minLength: 1
-        paymentDay:
-          type: integer
         ward:
           type: string
           minLength: 1
         road:
           type: string
           minLength: 1
-        holding:
+        holdingNo:
           type: string
           minLength: 1
-          description: Holding number, e.g. 142/B
-          maxLength: 24
-        head:
+        holdingType:
           type: string
           minLength: 1
-          description: Head of household / contact name
-          maxLength: 120
-        phone:
+        ownerName:
           type: string
-          maxLength: 20
+          minLength: 1
+        ownerPhone:
+          type: string
+        ownerAltPhone:
+          type: string
+        ownerEmail:
+          type: string
+          format: email
+        floors:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+        unitsTotal:
+          type: integer
+          nullable: true
         lat:
           type: number
           format: double
@@ -7142,14 +11126,65 @@ components:
           minimum: 0
           nullable: true
           description: GPS accuracy in metres
-        verified:
-          type: boolean
         verifiedAt:
           type: string
           format: date-time
           nullable: true
         placedByHand:
           type: boolean
+        status:
+          $ref: '#/components/schemas/StatusA3eEnum'
+        notes:
+          type: string
+        tier:
+          type: string
+          minLength: 1
+          nullable: true
+        charge:
+          type: integer
+          minimum: 0
+        paymentMode:
+          type: string
+          minLength: 1
+          nullable: true
+        paymentDay:
+          type: integer
+          maximum: 28
+          minimum: 1
+        households:
+          type: array
+          items:
+            $ref: '#/components/schemas/NestedHouseholdRequest'
+          writeOnly: true
+        householdDefaults:
+          type: object
+          additionalProperties: {}
+          writeOnly: true
+    PatchedHouseholdRequest:
+      type: object
+      description: |-
+        A family or unit living in a holding — who lives there, nothing more.
+
+        The service charge, bills, payments, visits and QR tag are the holding's.
+      properties:
+        status:
+          $ref: '#/components/schemas/StatusA3eEnum'
+        holding:
+          type: string
+          minLength: 1
+        unit:
+          type: string
+          description: Flat or unit within the holding, e.g. 3B. Blank for a single-family
+            holding.
+          maxLength: 24
+        head:
+          type: string
+          minLength: 1
+          description: Head of household / contact name
+          maxLength: 120
+        phone:
+          type: string
+          maxLength: 20
         customerType:
           type: string
           minLength: 1
@@ -7202,7 +11237,7 @@ components:
           type: string
           minLength: 1
         kind:
-          $ref: '#/components/schemas/KindEnum'
+          $ref: '#/components/schemas/MaintenanceKindEnum'
         reason:
           type: string
           minLength: 1
@@ -7282,16 +11317,11 @@ components:
         currentPractice:
           type: string
           minLength: 1
-        ward:
-          type: string
-          minLength: 1
-        road:
-          type: string
-          minLength: 1
         holding:
           type: string
           minLength: 1
-          description: Holding number, e.g. 142/B
+        unit:
+          type: string
           maxLength: 24
         head:
           type: string
@@ -7301,28 +11331,6 @@ components:
         phone:
           type: string
           maxLength: 20
-        lat:
-          type: number
-          format: double
-          nullable: true
-        lng:
-          type: number
-          format: double
-          nullable: true
-        accuracy:
-          type: integer
-          maximum: 32767
-          minimum: 0
-          nullable: true
-          description: GPS accuracy in metres
-        verified:
-          type: boolean
-        verifiedAt:
-          type: string
-          format: date-time
-          nullable: true
-        placedByHand:
-          type: boolean
         customerType:
           type: string
           minLength: 1
@@ -7390,6 +11398,36 @@ components:
           type: string
           format: binary
           nullable: true
+    PatchedRemittanceRequest:
+      type: object
+      description: An agency's hand-over to the corporation.
+      properties:
+        agency:
+          type: string
+          minLength: 1
+        period:
+          type: string
+          minLength: 1
+          description: YYYY-MM being settled
+          maxLength: 7
+        method:
+          type: string
+          minLength: 1
+        amount:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: BDT remitted
+        at:
+          type: string
+          format: date-time
+        ref:
+          type: string
+          description: Bank transfer / cheque / challan number
+          maxLength: 64
+        note:
+          type: string
+          maxLength: 200
     PatchedRoadRequest:
       type: object
       properties:
@@ -7412,6 +11450,10 @@ components:
         ward:
           type: string
           minLength: 1
+        agency:
+          type: string
+          minLength: 1
+          nullable: true
         windowStart:
           type: string
           format: time
@@ -7426,6 +11468,37 @@ components:
             maxLength: 32
         active:
           type: boolean
+    PatchedSurveyRequest:
+      type: object
+      description: One collected response, as the list shows it.
+      properties:
+        status:
+          $ref: '#/components/schemas/Status556Enum'
+        synced:
+          type: boolean
+        district:
+          type: string
+          maxLength: 64
+        thana:
+          type: string
+          maxLength: 96
+        lat:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        lng:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        accuracy:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+        notes:
+          type: string
     PatchedTierRequest:
       type: object
       properties:
@@ -7446,6 +11519,73 @@ components:
           maximum: 2147483647
           minimum: 0
           description: Standard monthly charge, BDT
+    PatchedUserAdminRequest:
+      type: object
+      description: |-
+        Creating and editing operators, from the Users page.
+
+        Separate from `UserSerializer` on purpose. That one is the *session* shape —
+        the signed-in user reading themselves, with phone, role and scope read-only
+        because nobody may promote themselves. This one is an administrator acting
+        on somebody else, so those are exactly the fields it must be able to write.
+
+        What it still refuses is in `validate`: an admin may not edit their own role,
+        scope or active flag. Not because it is dangerous in itself, but because the
+        account doing it is the one that would have to undo it — a city with one
+        agency admin who demotes themselves has nobody left who can put it back.
+      properties:
+        phone:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        scopeKind:
+          $ref: '#/components/schemas/ScopeKindEnum'
+        scopeZone:
+          type: string
+          maxLength: 8
+        scopeWards:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        agency:
+          type: string
+          minLength: 1
+          nullable: true
+        collector:
+          type: string
+          minLength: 1
+          nullable: true
+        city:
+          type: string
+          minLength: 1
+          description: Short code, e.g. 'KCC'
+          nullable: true
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        altPhone:
+          type: string
+        nid:
+          type: string
+          title: National ID
+          maxLength: 30
+        bloodGroup:
+          type: string
+        emergencyContact:
+          type: string
+        isActive:
+          type: boolean
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
     PatchedVanRequest:
       type: object
       description: A vehicle in the registry, with its paperwork and service status.
@@ -7480,6 +11620,13 @@ components:
           type: string
           minLength: 1
           nullable: true
+        ward:
+          type: string
+          minLength: 1
+          nullable: true
+        dumpingPoint:
+          type: integer
+          nullable: true
         fitnessExp:
           type: string
           format: date
@@ -7510,10 +11657,9 @@ components:
           nullable: true
     PatchedVisitRequest:
       type: object
-      description: One collection attempt. `hh` is the household, as the mock called
-        it.
+      description: One collection attempt at one holding.
       properties:
-        hh:
+        holding:
           type: string
           minLength: 1
         collector:
@@ -7543,6 +11689,7 @@ components:
             * `locked` - Premises locked
             * `access` - Could not access
             * `refused` - Householder refused
+            * `complaint` - Reported not collected
           oneOf:
           - $ref: '#/components/schemas/ReasonEnum'
           - $ref: '#/components/schemas/BlankEnum'
@@ -7583,6 +11730,9 @@ components:
           type: string
           minLength: 1
           maxLength: 96
+        nameBn:
+          type: string
+          maxLength: 96
         zone:
           type: string
           minLength: 1
@@ -7594,6 +11744,8 @@ components:
           type: number
           format: double
           nullable: true
+        active:
+          type: boolean
     PatchedZoneRequest:
       type: object
       properties:
@@ -7608,6 +11760,14 @@ components:
           type: string
           minLength: 1
           maxLength: 64
+        nameBn:
+          type: string
+          maxLength: 64
+        city:
+          type: string
+          minLength: 1
+          description: Short code, e.g. 'KCC'
+          nullable: true
     Payment:
       type: object
       description: Money received against a bill.
@@ -7617,7 +11777,7 @@ components:
           readOnly: true
         bill:
           type: string
-        hh:
+        holding:
           type: string
           readOnly: true
         collector:
@@ -7651,7 +11811,7 @@ components:
       - amount
       - bill
       - deposit
-      - hh
+      - holding
       - id
       - method
       - period
@@ -7838,14 +11998,20 @@ components:
           type: string
         currentPractice:
           type: string
-        ward:
-          type: string
-        road:
-          type: string
         holding:
           type: string
-          description: Holding number, e.g. 142/B
+        holdingNo:
+          type: string
+          readOnly: true
+        unit:
+          type: string
           maxLength: 24
+        ward:
+          type: string
+          readOnly: true
+        road:
+          type: string
+          readOnly: true
         head:
           type: string
           description: Head of household / contact name
@@ -7856,28 +12022,27 @@ components:
         lat:
           type: number
           format: double
-          nullable: true
+          readOnly: true
         lng:
           type: number
           format: double
-          nullable: true
+          readOnly: true
         accuracy:
           type: integer
-          maximum: 32767
-          minimum: 0
-          nullable: true
-          description: GPS accuracy in metres
+          readOnly: true
         verified:
           type: boolean
+          readOnly: true
         verifiedAt:
           type: string
           format: date-time
-          nullable: true
+          readOnly: true
         verifiedBy:
           type: string
           readOnly: true
         placedByHand:
           type: boolean
+          readOnly: true
         customerType:
           type: string
         profession:
@@ -7922,6 +12087,7 @@ components:
           type: integer
           readOnly: true
       required:
+      - accuracy
       - convertedTo
       - currentPractice
       - customerType
@@ -7929,14 +12095,20 @@ components:
       - estimatedValue
       - head
       - holding
+      - holdingNo
       - holdingType
       - id
+      - lat
+      - lng
+      - placedByHand
       - reason
       - road
       - storage
       - suitableTime
       - surveyedAt
       - timeGap
+      - verified
+      - verifiedAt
       - verifiedBy
       - ward
     PotentialCustomerRequest:
@@ -7966,16 +12138,11 @@ components:
         currentPractice:
           type: string
           minLength: 1
-        ward:
-          type: string
-          minLength: 1
-        road:
-          type: string
-          minLength: 1
         holding:
           type: string
           minLength: 1
-          description: Holding number, e.g. 142/B
+        unit:
+          type: string
           maxLength: 24
         head:
           type: string
@@ -7985,28 +12152,6 @@ components:
         phone:
           type: string
           maxLength: 20
-        lat:
-          type: number
-          format: double
-          nullable: true
-        lng:
-          type: number
-          format: double
-          nullable: true
-        accuracy:
-          type: integer
-          maximum: 32767
-          minimum: 0
-          nullable: true
-          description: GPS accuracy in metres
-        verified:
-          type: boolean
-        verifiedAt:
-          type: string
-          format: date-time
-          nullable: true
-        placedByHand:
-          type: boolean
         customerType:
           type: string
           minLength: 1
@@ -8056,12 +12201,10 @@ components:
       - holding
       - holdingType
       - reason
-      - road
       - storage
       - suitableTime
       - surveyedAt
       - timeGap
-      - ward
     PriorityEnum:
       enum:
       - urgent
@@ -8125,6 +12268,132 @@ components:
           type: string
           format: binary
           nullable: true
+    Question:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 48
+        number:
+          type: string
+          description: As printed, e.g. '29'
+          maxLength: 8
+        section:
+          type: string
+          maxLength: 60
+        kind:
+          $ref: '#/components/schemas/QuestionKindEnum'
+        text:
+          type: string
+          maxLength: 300
+        textBn:
+          type: string
+          readOnly: true
+        hint:
+          type: string
+          maxLength: 300
+        hintBn:
+          type: string
+          readOnly: true
+        required:
+          type: boolean
+        width:
+          description: |-
+            Override the width the client would infer from the kind.
+
+            * `normal` - A third of the row
+            * `wide` - Half the row
+            * `full` - The whole row
+          oneOf:
+          - $ref: '#/components/schemas/WidthEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        minValue:
+          type: integer
+          readOnly: true
+        maxValue:
+          type: integer
+          readOnly: true
+        mapsTo:
+          type: string
+          readOnly: true
+        optionsSource:
+          type: string
+          readOnly: true
+        defaultValue:
+          type: string
+          readOnly: true
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuestionOption'
+          readOnly: true
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuestionRule'
+          readOnly: true
+      required:
+      - code
+      - defaultValue
+      - hintBn
+      - kind
+      - mapsTo
+      - maxValue
+      - minValue
+      - options
+      - optionsSource
+      - rules
+      - text
+      - textBn
+    QuestionKindEnum:
+      enum:
+      - single
+      - multi
+      - text
+      - number
+      - date
+      - note
+      type: string
+      description: |-
+        * `single` - One choice
+        * `multi` - Several choices
+        * `text` - Text
+        * `number` - Number
+        * `date` - Date
+        * `note` - Section heading / instruction
+    QuestionOption:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 48
+        label:
+          type: string
+          maxLength: 200
+        label_bn:
+          type: string
+          maxLength: 200
+        is_other:
+          type: boolean
+      required:
+      - code
+      - label
+    QuestionRule:
+      type: object
+      description: A display rule, flattened to codes so the client needs no id lookups.
+      properties:
+        dependsOn:
+          type: string
+          readOnly: true
+        operator:
+          $ref: '#/components/schemas/OperatorEnum'
+        options:
+          type: array
+          items: {}
+          readOnly: true
+      required:
+      - dependsOn
+      - options
     ReasonEnum:
       enum:
       - noOne
@@ -8132,6 +12401,7 @@ components:
       - locked
       - access
       - refused
+      - complaint
       type: string
       description: |-
         * `noOne` - No one home
@@ -8139,6 +12409,90 @@ components:
         * `locked` - Premises locked
         * `access` - Could not access
         * `refused` - Householder refused
+        * `complaint` - Reported not collected
+    Remittance:
+      type: object
+      description: An agency's hand-over to the corporation.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        agency:
+          type: string
+        agencyName:
+          type: string
+          readOnly: true
+        agencyNameBn:
+          type: string
+          readOnly: true
+        period:
+          type: string
+          description: YYYY-MM being settled
+          maxLength: 7
+        method:
+          type: string
+        amount:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: BDT remitted
+        at:
+          type: string
+          format: date-time
+        ref:
+          type: string
+          description: Bank transfer / cheque / challan number
+          maxLength: 64
+        note:
+          type: string
+          maxLength: 200
+        receivedBy:
+          type: string
+          readOnly: true
+      required:
+      - agency
+      - agencyName
+      - agencyNameBn
+      - amount
+      - id
+      - method
+      - period
+      - receivedBy
+    RemittanceRequest:
+      type: object
+      description: An agency's hand-over to the corporation.
+      properties:
+        agency:
+          type: string
+          minLength: 1
+        period:
+          type: string
+          minLength: 1
+          description: YYYY-MM being settled
+          maxLength: 7
+        method:
+          type: string
+          minLength: 1
+        amount:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: BDT remitted
+        at:
+          type: string
+          format: date-time
+        ref:
+          type: string
+          description: Bank transfer / cheque / challan number
+          maxLength: 64
+        note:
+          type: string
+          maxLength: 200
+      required:
+      - agency
+      - amount
+      - method
+      - period
     Road:
       type: object
       properties:
@@ -8167,6 +12521,20 @@ components:
       required:
       - name
       - ward
+    RoleEnum:
+      enum:
+      - collector
+      - supervisor
+      - agency_admin
+      - super_admin
+      - kcc_viewer
+      type: string
+      description: |-
+        * `collector` - Collector
+        * `supervisor` - Supervisor
+        * `agency_admin` - Agency Admin
+        * `super_admin` - Super Admin
+        * `kcc_viewer` - City Viewer
     Route:
       type: object
       description: A route and its walking order.
@@ -8180,6 +12548,9 @@ components:
           maxLength: 120
         ward:
           type: string
+        agency:
+          type: string
+          nullable: true
         window:
           type: string
           readOnly: true
@@ -8213,6 +12584,10 @@ components:
         ward:
           type: string
           minLength: 1
+        agency:
+          type: string
+          minLength: 1
+          nullable: true
         windowStart:
           type: string
           format: time
@@ -8261,14 +12636,42 @@ components:
           format: date
       required:
       - raw
+    ScopeKindEnum:
+      enum:
+      - ward
+      - zone
+      - agency
+      - city
+      type: string
+      description: |-
+        * `ward` - Ward
+        * `zone` - Zone
+        * `agency` - All zones
+        * `city` - City-wide
     SourceEnum:
       enum:
       - scan
       - manual
+      - auto
       type: string
       description: |-
         * `scan` - QR scan
         * `manual` - Manual entry
+        * `auto` - Auto at cut-off
+    Status556Enum:
+      enum:
+      - draft
+      - submitted
+      - reviewed
+      - converted
+      - rejected
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `submitted` - Submitted
+        * `reviewed` - Reviewed
+        * `converted` - Converted to a holding
+        * `rejected` - Rejected
     Status5bdEnum:
       enum:
       - open
@@ -8283,6 +12686,422 @@ components:
         * `in_progress` - In progress
         * `resolved` - Resolved
         * `closed` - Closed
+    Status860Enum:
+      enum:
+      - draft
+      - published
+      - retired
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `published` - Published
+        * `retired` - Retired
+    StatusA3eEnum:
+      enum:
+      - active
+      - inactive
+      type: string
+      description: |-
+        * `active` - Active
+        * `inactive` - Inactive
+    Survey:
+      type: object
+      description: One collected response, as the list shows it.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        formCode:
+          type: string
+          readOnly: true
+        formVersion:
+          type: integer
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/Status556Enum'
+        synced:
+          type: boolean
+        surveyedOn:
+          type: string
+          format: date
+          readOnly: true
+        surveyorName:
+          type: string
+          description: The collector's name when there is one, else what the form
+            said.
+          readOnly: true
+        district:
+          type: string
+          maxLength: 64
+        thana:
+          type: string
+          maxLength: 96
+        ward:
+          type: string
+          readOnly: true
+        wardName:
+          type: string
+          readOnly: true
+        block:
+          type: string
+          readOnly: true
+        blockName:
+          type: string
+          readOnly: true
+        roadName:
+          type: string
+          readOnly: true
+        holdingNo:
+          type: string
+          readOnly: true
+        respondentName:
+          type: string
+          readOnly: true
+        respondentPhone:
+          type: string
+          readOnly: true
+        premisesType:
+          type: string
+          readOnly: true
+        householdCount:
+          type: integer
+          readOnly: true
+        dailyWasteKg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          readOnly: true
+        givesToVan:
+          type: boolean
+          readOnly: true
+        monthlyFee:
+          type: integer
+          readOnly: true
+        willingFee:
+          type: integer
+          readOnly: true
+        lat:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        lng:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        accuracy:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+        notes:
+          type: string
+        holding:
+          type: string
+          readOnly: true
+        convertedTo:
+          type: string
+          readOnly: true
+        photoCount:
+          type: integer
+          readOnly: true
+      required:
+      - block
+      - blockName
+      - convertedTo
+      - dailyWasteKg
+      - formCode
+      - formVersion
+      - givesToVan
+      - holding
+      - holdingNo
+      - householdCount
+      - id
+      - monthlyFee
+      - photoCount
+      - premisesType
+      - respondentName
+      - respondentPhone
+      - roadName
+      - surveyedOn
+      - surveyorName
+      - ward
+      - wardName
+      - willingFee
+    SurveyDetail:
+      type: object
+      description: One collected response, as the list shows it.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        formCode:
+          type: string
+          readOnly: true
+        formVersion:
+          type: integer
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/Status556Enum'
+        synced:
+          type: boolean
+        surveyedOn:
+          type: string
+          format: date
+          readOnly: true
+        surveyorName:
+          type: string
+          description: The collector's name when there is one, else what the form
+            said.
+          readOnly: true
+        district:
+          type: string
+          maxLength: 64
+        thana:
+          type: string
+          maxLength: 96
+        ward:
+          type: string
+          readOnly: true
+        wardName:
+          type: string
+          readOnly: true
+        block:
+          type: string
+          readOnly: true
+        blockName:
+          type: string
+          readOnly: true
+        roadName:
+          type: string
+          readOnly: true
+        holdingNo:
+          type: string
+          readOnly: true
+        respondentName:
+          type: string
+          readOnly: true
+        respondentPhone:
+          type: string
+          readOnly: true
+        premisesType:
+          type: string
+          readOnly: true
+        householdCount:
+          type: integer
+          readOnly: true
+        dailyWasteKg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          readOnly: true
+        givesToVan:
+          type: boolean
+          readOnly: true
+        monthlyFee:
+          type: integer
+          readOnly: true
+        willingFee:
+          type: integer
+          readOnly: true
+        lat:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        lng:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        accuracy:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+        notes:
+          type: string
+        holding:
+          type: string
+          readOnly: true
+        convertedTo:
+          type: string
+          readOnly: true
+        photoCount:
+          type: integer
+          readOnly: true
+        answers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Answer'
+          readOnly: true
+        photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/SurveyPhoto'
+          readOnly: true
+      required:
+      - answers
+      - block
+      - blockName
+      - convertedTo
+      - dailyWasteKg
+      - formCode
+      - formVersion
+      - givesToVan
+      - holding
+      - holdingNo
+      - householdCount
+      - id
+      - monthlyFee
+      - photoCount
+      - photos
+      - premisesType
+      - respondentName
+      - respondentPhone
+      - roadName
+      - surveyedOn
+      - surveyorName
+      - ward
+      - wardName
+      - willingFee
+    SurveyForm:
+      type: object
+      description: The list row — enough to choose a form, without its 72 questions.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        code:
+          type: string
+          description: Stable key, e.g. 'd2d-household'
+          maxLength: 40
+        version:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          default: 1
+        title:
+          type: string
+          maxLength: 200
+        titleBn:
+          type: string
+          readOnly: true
+        organisation:
+          type: string
+          maxLength: 160
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/Status860Enum'
+        questionCount:
+          type: integer
+          readOnly: true
+        surveyCount:
+          type: integer
+          readOnly: true
+      required:
+      - code
+      - id
+      - questionCount
+      - surveyCount
+      - title
+      - titleBn
+    SurveyFormDetail:
+      type: object
+      description: The whole questionnaire, for rendering and for offline download.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        code:
+          type: string
+          description: Stable key, e.g. 'd2d-household'
+          maxLength: 40
+        version:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          default: 1
+        title:
+          type: string
+          maxLength: 200
+        titleBn:
+          type: string
+          readOnly: true
+        organisation:
+          type: string
+          maxLength: 160
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/Status860Enum'
+        questionCount:
+          type: integer
+          readOnly: true
+        surveyCount:
+          type: integer
+          readOnly: true
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Question'
+          readOnly: true
+      required:
+      - code
+      - id
+      - questionCount
+      - questions
+      - surveyCount
+      - title
+      - titleBn
+    SurveyPhoto:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        image:
+          type: string
+          format: uri
+        caption:
+          type: string
+          maxLength: 200
+      required:
+      - id
+      - image
+    SurveyRequest:
+      type: object
+      description: One collected response, as the list shows it.
+      properties:
+        status:
+          $ref: '#/components/schemas/Status556Enum'
+        synced:
+          type: boolean
+        district:
+          type: string
+          maxLength: 64
+        thana:
+          type: string
+          maxLength: 96
+        lat:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        lng:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        accuracy:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+        notes:
+          type: string
     Tier:
       type: object
       properties:
@@ -8349,6 +13168,22 @@ components:
           minLength: 1
       required:
       - refresh
+    TransferCollectorRequest:
+      type: object
+      description: Move a collector to another agency, as of a date.
+      properties:
+        agency:
+          type: string
+          minLength: 1
+        onDate:
+          type: string
+          format: date
+          nullable: true
+        note:
+          type: string
+          maxLength: 200
+      required:
+      - agency
     Type3b0Enum:
       enum:
       - missed_collection
@@ -8417,6 +13252,12 @@ components:
         collector:
           type: string
           readOnly: true
+        agency:
+          type: string
+          readOnly: true
+        city:
+          type: string
+          readOnly: true
         home:
           type: string
           readOnly: true
@@ -8428,7 +13269,9 @@ components:
           nullable: true
           readOnly: true
       required:
+      - agency
       - avatarUrl
+      - city
       - collector
       - hasPin
       - home
@@ -8442,6 +13285,159 @@ components:
       - scope
       - scopeKind
       - scopeWards
+    UserAdmin:
+      type: object
+      description: |-
+        Creating and editing operators, from the Users page.
+
+        Separate from `UserSerializer` on purpose. That one is the *session* shape —
+        the signed-in user reading themselves, with phone, role and scope read-only
+        because nobody may promote themselves. This one is an administrator acting
+        on somebody else, so those are exactly the fields it must be able to write.
+
+        What it still refuses is in `validate`: an admin may not edit their own role,
+        scope or active flag. Not because it is dangerous in itself, but because the
+        account doing it is the one that would have to undo it — a city with one
+        agency admin who demotes themselves has nobody left who can put it back.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        phone:
+          type: string
+        name:
+          type: string
+          maxLength: 120
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        roleLabel:
+          type: string
+          readOnly: true
+        scopeKind:
+          $ref: '#/components/schemas/ScopeKindEnum'
+        scopeZone:
+          type: string
+          maxLength: 8
+        scopeWards:
+          type: array
+          items:
+            type: string
+        scope:
+          type: string
+          readOnly: true
+        agency:
+          type: string
+          nullable: true
+        collector:
+          type: string
+          nullable: true
+        city:
+          type: string
+          description: Short code, e.g. 'KCC'
+          nullable: true
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        altPhone:
+          type: string
+        nid:
+          type: string
+          title: National ID
+          maxLength: 30
+        bloodGroup:
+          type: string
+        emergencyContact:
+          type: string
+        isActive:
+          type: boolean
+        hasPin:
+          type: boolean
+          readOnly: true
+        lastLogin:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - hasPin
+      - id
+      - lastLogin
+      - name
+      - phone
+      - role
+      - roleLabel
+      - scope
+    UserAdminRequest:
+      type: object
+      description: |-
+        Creating and editing operators, from the Users page.
+
+        Separate from `UserSerializer` on purpose. That one is the *session* shape —
+        the signed-in user reading themselves, with phone, role and scope read-only
+        because nobody may promote themselves. This one is an administrator acting
+        on somebody else, so those are exactly the fields it must be able to write.
+
+        What it still refuses is in `validate`: an admin may not edit their own role,
+        scope or active flag. Not because it is dangerous in itself, but because the
+        account doing it is the one that would have to undo it — a city with one
+        agency admin who demotes themselves has nobody left who can put it back.
+      properties:
+        phone:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        scopeKind:
+          $ref: '#/components/schemas/ScopeKindEnum'
+        scopeZone:
+          type: string
+          maxLength: 8
+        scopeWards:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        agency:
+          type: string
+          minLength: 1
+          nullable: true
+        collector:
+          type: string
+          minLength: 1
+          nullable: true
+        city:
+          type: string
+          minLength: 1
+          description: Short code, e.g. 'KCC'
+          nullable: true
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        altPhone:
+          type: string
+        nid:
+          type: string
+          title: National ID
+          maxLength: 30
+        bloodGroup:
+          type: string
+        emergencyContact:
+          type: string
+        isActive:
+          type: boolean
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - name
+      - phone
+      - role
     Van:
       type: object
       description: A vehicle in the registry, with its paperwork and service status.
@@ -8476,6 +13472,12 @@ components:
           $ref: '#/components/schemas/VanStatusEnum'
         driver:
           type: string
+          nullable: true
+        ward:
+          type: string
+          nullable: true
+        dumpingPoint:
+          type: integer
           nullable: true
         fitnessExp:
           type: string
@@ -8556,6 +13558,13 @@ components:
           type: string
           minLength: 1
           nullable: true
+        ward:
+          type: string
+          minLength: 1
+          nullable: true
+        dumpingPoint:
+          type: integer
+          nullable: true
         fitnessExp:
           type: string
           format: date
@@ -8615,13 +13624,12 @@ components:
         * `tricycle` - Tricycle
     Visit:
       type: object
-      description: One collection attempt. `hh` is the household, as the mock called
-        it.
+      description: One collection attempt at one holding.
       properties:
         id:
           type: string
           readOnly: true
-        hh:
+        holding:
           type: string
         collector:
           type: string
@@ -8656,6 +13664,7 @@ components:
             * `locked` - Premises locked
             * `access` - Could not access
             * `refused` - Householder refused
+            * `complaint` - Reported not collected
           oneOf:
           - $ref: '#/components/schemas/ReasonEnum'
           - $ref: '#/components/schemas/BlankEnum'
@@ -8682,17 +13691,16 @@ components:
           type: boolean
       required:
       - at
-      - hh
+      - holding
       - id
       - qr
       - route
       - status
     VisitRequest:
       type: object
-      description: One collection attempt. `hh` is the household, as the mock called
-        it.
+      description: One collection attempt at one holding.
       properties:
-        hh:
+        holding:
           type: string
           minLength: 1
         collector:
@@ -8722,6 +13730,7 @@ components:
             * `locked` - Premises locked
             * `access` - Could not access
             * `refused` - Householder refused
+            * `complaint` - Reported not collected
           oneOf:
           - $ref: '#/components/schemas/ReasonEnum'
           - $ref: '#/components/schemas/BlankEnum'
@@ -8748,7 +13757,7 @@ components:
           type: boolean
       required:
       - at
-      - hh
+      - holding
       - status
     VisitStatusEnum:
       enum:
@@ -8772,8 +13781,14 @@ components:
         name:
           type: string
           maxLength: 96
+        nameBn:
+          type: string
+          maxLength: 96
         zone:
           type: string
+        city:
+          type: string
+          readOnly: true
         lat:
           type: number
           format: double
@@ -8782,7 +13797,10 @@ components:
           type: number
           format: double
           nullable: true
+        active:
+          type: boolean
       required:
+      - city
       - id
       - name
       - zone
@@ -8802,6 +13820,9 @@ components:
           type: string
           minLength: 1
           maxLength: 96
+        nameBn:
+          type: string
+          maxLength: 96
         zone:
           type: string
           minLength: 1
@@ -8813,10 +13834,22 @@ components:
           type: number
           format: double
           nullable: true
+        active:
+          type: boolean
       required:
       - id
       - name
       - zone
+    WidthEnum:
+      enum:
+      - normal
+      - wide
+      - full
+      type: string
+      description: |-
+        * `normal` - A third of the row
+        * `wide` - Half the row
+        * `full` - The whole row
     Zone:
       type: object
       properties:
@@ -8829,6 +13862,13 @@ components:
         name:
           type: string
           maxLength: 64
+        nameBn:
+          type: string
+          maxLength: 64
+        city:
+          type: string
+          description: Short code, e.g. 'KCC'
+          nullable: true
       required:
       - id
       - name
@@ -8846,6 +13886,14 @@ components:
           type: string
           minLength: 1
           maxLength: 64
+        nameBn:
+          type: string
+          maxLength: 64
+        city:
+          type: string
+          minLength: 1
+          description: Short code, e.g. 'KCC'
+          nullable: true
       required:
       - id
       - name

@@ -58,8 +58,8 @@ def own_round_only(request, requested: str) -> str:
     """Pin a collector-role caller to their own round.
 
     Supervisors and admins look in on any collector — that is how a round gets
-    reviewed from a desk. A collector may not, because a round names households,
-    their phone numbers and what they owe.
+    reviewed from a desk. A collector may not, because a round names holdings,
+    their owners' phone numbers and what they owe.
     """
     user = request.user
     if user.is_superuser or user.role != Role.COLLECTOR.value:
@@ -266,17 +266,17 @@ class AssignmentViewSet(SwmsModelViewSet):
 
 
 class VisitFilter(filters.FilterSet):
-    hh = filters.CharFilter(field_name="household_id")
+    holding = filters.CharFilter(field_name="holding_id")
     collector = filters.CharFilter(field_name="collector_id")
     route = filters.CharFilter(field_name="route_id")
-    ward = filters.CharFilter(field_name="household__ward_id")
+    ward = filters.CharFilter(field_name="holding__ward_id")
     day = filters.DateFilter(field_name="served_on")
     dateFrom = filters.DateFilter(field_name="served_on", lookup_expr="gte")
     dateTo = filters.DateFilter(field_name="served_on", lookup_expr="lte")
 
     class Meta:
         model = Visit
-        fields = ["hh", "collector", "route", "ward", "day", "status", "source", "synced"]
+        fields = ["holding", "collector", "route", "ward", "day", "status", "source", "synced"]
 
 
 class VisitViewSet(SwmsModelViewSet):
@@ -284,16 +284,16 @@ class VisitViewSet(SwmsModelViewSet):
 
     serializer_class = VisitSerializer
     filterset_class = VisitFilter
-    search_fields = ["id", "household_id", "qr"]
+    search_fields = ["id", "holding_id", "qr"]
     ordering_fields = ["at", "served_on", "id"]
-    ward_scope_field = "household__ward_id"
+    ward_scope_field = "holding__ward_id"
     agency_scope_field = "agency_id"
     # Recording collections is the collector's core job.
     write_roles = OPERATIONAL_WRITERS | {Role.COLLECTOR}
 
     def get_queryset(self):
         queryset = Visit.objects.select_related(
-            "household", "household__ward", "household__road", "collector", "route"
+            "holding", "holding__ward", "holding__road", "collector", "route"
         )
         return self.scope_queryset(queryset)
 
@@ -321,7 +321,7 @@ class VisitViewSet(SwmsModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         visit = record_visit(
-            data["hh"],
+            data["holding"],
             collector=self._acting_collector(request, data.get("collector")),
             status=data["status"],
             at=data.get("at"),

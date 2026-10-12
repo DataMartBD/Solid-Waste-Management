@@ -59,9 +59,11 @@ class NestedHouseholdSerializer(serializers.Serializer):
     `id` is what distinguishes an edit from an addition. Present, it updates
     that household — and it must already belong to this holding, or the editor
     could be used to reassign somebody else's family into this building. Absent,
-    it creates one. A household is never deleted from here: bills, payments and
-    visits hang off it, so retiring one is a `status` change, which is a field
-    on this form like any other.
+    it creates one. A household is never deleted from here: complaints may name
+    it, so retiring one is a `status` change, which is a field on this form like
+    any other.
+
+    There is no charge or payment here: the service charge is the holding's.
 
     The address is *not* here. Ward, road and holding number belong to the
     building and are copied down on save; accepting them per family would let a
@@ -111,19 +113,6 @@ class NestedHouseholdSerializer(serializers.Serializer):
         source="suitable_time", queryset=SuitableTime.objects.all(), required=False
     )
 
-    # --- service and money ------------------------------------------------ #
-    #: Per-flat because it sets the charge: a shop on the ground floor of a
-    #: residential building is not on the residential tier.
-    tier = serializers.PrimaryKeyRelatedField(queryset=Tier.objects.all())
-    #: 0 means "use the tier's standard charge" rather than "free", which is why
-    #: it is not simply left blank.
-    charge = serializers.IntegerField(required=False, min_value=0)
-    paymentMode = serializers.PrimaryKeyRelatedField(
-        source="payment_mode", queryset=PaymentMode.objects.all(), required=False
-    )
-    paymentDay = serializers.IntegerField(
-        source="payment_day", required=False, min_value=1, max_value=28
-    )
     #: No default: absent means "leave this family's status alone". A default of
     #: `active` would quietly reactivate a family that had moved out, every time
     #: anything else on the building was edited.
@@ -142,7 +131,7 @@ class NestedHouseholdSerializer(serializers.Serializer):
 
 
 class HoldingSerializer(SwmsModelSerializer):
-    """A rated property — the building the households sit in."""
+    """A rated property — the building, and the unit everything is done by."""
 
     ward = serializers.PrimaryKeyRelatedField(queryset=Ward.objects.all())
     road = RoadNameField()
@@ -166,8 +155,8 @@ class HoldingSerializer(SwmsModelSerializer):
     #: Write-only. A row with an `id` updates that family, a row without one
     #: creates it, and a family left out of the list is **untouched** — the list
     #: is never read as the complete set. Treating it as complete would mean an
-    #: edit that forgot to resend a flat deleted that family along with its
-    #: bills, payments and visit history. Retiring a family is `status`.
+    #: edit that forgot to resend a flat deleted that family. Retiring a family
+    #: is `status`.
     households = NestedHouseholdSerializer(many=True, required=False, write_only=True)
     #: The choices shared by every flat in the building, made once. Ignored when
     #: `households` is absent.
@@ -194,6 +183,28 @@ class HoldingSerializer(SwmsModelSerializer):
     #: existed has them, and an edit that does not mention them leaves them be.
     district = serializers.CharField(required=False, allow_blank=True)
     thana = serializers.CharField(required=False, allow_blank=True)
+
+    # --- service charge: one per building --------------------------------- #
+    #: Building QR tag, issued automatically; scanned once per collection.
+    qr = serializers.CharField(read_only=True)
+    tier = serializers.PrimaryKeyRelatedField(
+        queryset=Tier.objects.all(), required=False, allow_null=True
+    )
+    #: 0 means "use the tier's standard charge" rather than "free".
+    charge = serializers.IntegerField(required=False, min_value=0)
+    paymentMode = serializers.PrimaryKeyRelatedField(
+        source="payment_mode", queryset=PaymentMode.objects.all(), required=False,
+        allow_null=True,
+    )
+    paymentDay = serializers.IntegerField(
+        source="payment_day", required=False, min_value=1, max_value=28
+    )
+    effectiveCharge = serializers.IntegerField(source="effective_charge", read_only=True)
+    #: Households must equal units: null when no unit count is declared.
+    unitsMatch = serializers.BooleanField(source="units_match", read_only=True, allow_null=True)
+    #: Maintained by the billing services from this holding's bills.
+    dues = serializers.IntegerField(read_only=True)
+    routeId = serializers.SerializerMethodField()
 
     class Meta:
         model = Holding
@@ -222,13 +233,26 @@ class HoldingSerializer(SwmsModelSerializer):
             "placedByHand",
             "status",
             "notes",
+            "qr",
+            "tier",
+            "charge",
+            "paymentMode",
+            "paymentDay",
+            "effectiveCharge",
+            "unitsMatch",
+            "dues",
+            "routeId",
             "serviceStatus",
             "householdCount",
             "activeHouseholdCount",
             "households",
             "householdDefaults",
         ]
-        read_only_fields = ["id", "verified", "address"]
+        read_only_fields = ["id", "verified", "address", "qr", "dues"]
+
+    def get_routeId(self, obj) -> str | None:
+        stop = getattr(obj, "route_stop", None)
+        return stop.route_id if stop else None
 
     def get_householdCount(self, obj) -> int:
         return obj.households.count()
@@ -264,7 +288,38 @@ class HoldingSerializer(SwmsModelSerializer):
         self._resolve_road(attrs)
         self._check_family_ids(attrs)
         self._check_flats(attrs)
+        self._check_units(attrs)
         return attrs
+
+    def _check_units(self, attrs):
+        """Never more active families than the units the building has.
+
+        Fewer is allowed — families are recorded over time — and is flagged by
+        `unitsMatch`. Counted after this save: the families already here, with
+        the form's edits applied, plus the ones it adds.
+        """
+        units = attrs.get("units_total", getattr(self.instance, "units_total", None))
+        if units is None:
+            return
+        status = {}
+        if self.instance is not None:
+            status = dict(self.instance.households.values_list("id", "status"))
+        added = 0
+        for row in attrs.get("households") or []:
+            pk = (row.get("id") or "").strip()
+            if pk:
+                if row.get("status"):
+                    status[pk] = row["status"]
+            elif row.get("status", HoldingStatus.ACTIVE) == HoldingStatus.ACTIVE:
+                added += 1
+        active = sum(1 for value in status.values() if value == HoldingStatus.ACTIVE) + added
+        if active > units:
+            raise serializers.ValidationError({
+                "unitsTotal": (
+                    f"This holding has {units} unit(s) but {active} active households. "
+                    "Households must equal units: raise the unit count or retire a household."
+                )
+            })
 
     def _check_geography(self, attrs):
         """The district and thana must be a real pair, or neither.
@@ -387,10 +442,8 @@ class HoldingSerializer(SwmsModelSerializer):
         "head", "phone", "alt_phone", "profession", "email", "contact_person",
         "blood_group", "unit", "floor", "address",
     ]
-    _FAMILY_NUMBERS = ["members", "members_under5", "members_female", "charge", "payment_day"]
-    _FAMILY_LINKS = [
-        "customer_type", "holding_type", "storage", "suitable_time", "tier", "payment_mode",
-    ]
+    _FAMILY_NUMBERS = ["members", "members_under5", "members_female"]
+    _FAMILY_LINKS = ["customer_type", "holding_type", "storage", "suitable_time"]
 
     def _save_families(self, holding, rows, defaults):
         """Write the families on the form: update the ones with an id, create the rest.
@@ -400,8 +453,8 @@ class HoldingSerializer(SwmsModelSerializer):
         which, and the operator standing at the door has no way to tell.
 
         Nothing is deleted here. A family that has moved out is set inactive:
-        its bills, payments and collection history hang off it, and removing the
-        row from a form is far too easy an action to have that consequence.
+        complaints may name it, and removing the row from a form is far too easy
+        an action to have that consequence.
         """
         if not rows:
             return
@@ -440,9 +493,8 @@ class HoldingSerializer(SwmsModelSerializer):
     def _shared_choices(self, defaults, holding):
         """The building-level choices, falling back to the catalog's first row.
 
-        A household cannot be saved without a customer type, storage type,
-        collection time and payment mode, and the form does not ask for them per
-        flat. Where the form supplies them they are used for every flat; where it
+        A household cannot be saved without a customer type, storage type and
+        collection time, and the form does not ask for them per flat. Where the form supplies them they are used for every flat; where it
         does not, the same default the Households page offers is used, and the
         operator can correct any of it there.
         """
@@ -462,26 +514,12 @@ class HoldingSerializer(SwmsModelSerializer):
                 )
             return row
 
-        day = defaults.get("paymentDay") or 5
-        try:
-            day = int(day)
-        except (TypeError, ValueError):
-            raise serializers.ValidationError(
-                {"householdDefaults": f"'{day}' is not a day of the month."}
-            ) from None
-        if not 1 <= day <= 28:
-            raise serializers.ValidationError(
-                {"householdDefaults": "Payment day must be between 1 and 28."}
-            )
-
         return {
             "customer_type": pick(CustomerType, "customerType"),
             "storage": pick(StorageType, "storage"),
             "suitable_time": pick(SuitableTime, "suitableTime"),
-            "payment_mode": pick(PaymentMode, "paymentMode"),
             # The flat is in this building, so it is of this building's type.
             "holding_type": holding.holding_type,
-            "payment_day": day,
         }
 
     def _resolve_road(self, attrs):
@@ -596,29 +634,22 @@ class HoldingSerializerBase(SwmsModelSerializer):
 
 
 class HouseholdSerializer(HoldingSerializerBase):
-    """A holding under service."""
+    """A family or unit living in a holding — who lives there, nothing more.
 
-    tier = serializers.PrimaryKeyRelatedField(queryset=Tier.objects.all())
-    paymentMode = serializers.PrimaryKeyRelatedField(
-        source="payment_mode", queryset=PaymentMode.objects.all()
-    )
-    paymentDay = serializers.IntegerField(source="payment_day", required=False)
-    # Derived, not stored: the mock's `lastVisit` column went stale because
-    # recording a collection never updated it.
-    lastVisit = serializers.SerializerMethodField()
-    effectiveCharge = serializers.IntegerField(source="effective_charge", read_only=True)
-    routable = serializers.BooleanField(source="is_routable", read_only=True)
+    The service charge, bills, payments, visits and QR tag are the holding's.
+    """
+
     routeId = serializers.SerializerMethodField()
 
     class Meta:
         model = Household
         fields = (
-            ["id", "qr", "tier", "status", "dues", "charge", "paymentMode", "paymentDay"]
+            ["id", "status"]
             + HoldingSerializerBase.LOCATION_FIELDS
             + HoldingSerializerBase.PROFILE_FIELDS
-            + ["lastVisit", "effectiveCharge", "routable", "routeId"]
+            + ["routeId"]
         )
-        read_only_fields = ["id", "dues"]
+        read_only_fields = ["id"]
         # The generated unique-together validator reports
         # "The fields holding, unit must make a unique set." under
         # `non_field_errors`, which names columns rather than telling an
@@ -632,6 +663,21 @@ class HouseholdSerializer(HoldingSerializerBase):
         unit = attrs.get("unit", self.instance.unit if self.instance else "")
         if holding is None:
             return attrs
+
+        # Households must equal units: an active family may not take the
+        # holding past the units it declared.
+        status = attrs.get("status", self.instance.status if self.instance else HoldingStatus.ACTIVE)
+        if holding.units_total is not None and status == HoldingStatus.ACTIVE:
+            others = holding.households.filter(status=HoldingStatus.ACTIVE)
+            if self.instance is not None:
+                others = others.exclude(pk=self.instance.pk)
+            if others.count() >= holding.units_total:
+                raise serializers.ValidationError({
+                    "holding": (
+                        f"Holding {holding.holding_no} has {holding.units_total} unit(s) and "
+                        "already that many active households."
+                    )
+                })
 
         clash = Household.objects.filter(holding=holding, unit=unit)
         if self.instance is not None:
@@ -652,11 +698,7 @@ class HouseholdSerializer(HoldingSerializerBase):
             )
         return attrs
 
-    def get_lastVisit(self, obj):
-        value = getattr(obj, "last_collected_at", None)
-        return value.isoformat() if value else None
-
-    def get_routeId(self, obj):
+    def get_routeId(self, obj) -> str | None:
         """The route this family is on, which is the one its building sits on.
 
         The plan is holding-wise, so the stop hangs off the holding — a family
@@ -717,9 +759,11 @@ class VerifyLocationSerializer(serializers.Serializer):
 
 
 class ConvertSerializer(serializers.Serializer):
-    """Turn a potential customer into a paying household.
+    """Turn a potential customer into a household of a holding under service.
 
-    Everything is optional: unspecified terms fall back to the surveyed estimate.
+    The terms are the holding's. Everything is optional: a holding that has no
+    tier yet takes the surveyed estimate; one that already has terms keeps them
+    unless new ones are sent.
     """
 
     tier = serializers.PrimaryKeyRelatedField(queryset=Tier.objects.all(), required=False)

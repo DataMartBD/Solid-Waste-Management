@@ -63,6 +63,10 @@ export default {
     'opt.agencyType.ngo': 'NGO',
     'opt.agencyType.cbo': 'Community organisation',
     'opt.agencyType.cooperative': 'Cooperative',
+    'opt.agencyType.city_corporation': 'City Corporation (in-house)',
+    'opt.agencyType.pourashova': 'Pourashova / Municipality (in-house)',
+    'opt.cityType.city_corporation': 'City Corporation',
+    'opt.cityType.pourashova': 'Pourashova / Municipality',
     'opt.agencyStatus.active': 'Active',
     'opt.agencyStatus.suspended': 'Suspended',
     'opt.agencyStatus.expired': 'Expired',
@@ -70,7 +74,7 @@ export default {
     'opt.role.Collector': 'Collector',
     'opt.role.Supervisor': 'Supervisor',
     'opt.role.Agency Admin': 'Agency Admin',
-    'opt.role.KCC Viewer': 'KCC Viewer',
+    'opt.role.City Viewer': 'City Viewer',
 
     // ward display names. The place names are transliterated, not translated —
     // Sonadanga is Sonadanga; only the word "Ward" and the numeral change.
@@ -146,6 +150,10 @@ export default {
     'opt.agencyType.ngo': 'এনজিও',
     'opt.agencyType.cbo': 'কমিউনিটি সংগঠন',
     'opt.agencyType.cooperative': 'সমবায় সমিতি',
+    'opt.agencyType.city_corporation': 'সিটি কর্পোরেশন (নিজস্ব)',
+    'opt.agencyType.pourashova': 'পৌরসভা (নিজস্ব)',
+    'opt.cityType.city_corporation': 'সিটি কর্পোরেশন',
+    'opt.cityType.pourashova': 'পৌরসভা',
     'opt.agencyStatus.active': 'একটিভ',
     'opt.agencyStatus.suspended': 'স্থগিত',
     'opt.agencyStatus.expired': 'মেয়াদোত্তীর্ণ',
@@ -153,7 +161,7 @@ export default {
     'opt.role.Collector': 'কালেক্টর',
     'opt.role.Supervisor': 'সুপারভাইজার',
     'opt.role.Agency Admin': 'সংস্থা প্রশাসক',
-    'opt.role.KCC Viewer': 'কেসিসি পর্যবেক্ষক',
+    'opt.role.City Viewer': 'সিটি পর্যবেক্ষক',
 
     // ward display names — place names transliterated, not translated
     'opt.ward.W-14': 'ওয়ার্ড ১৪ — সোনাডাঙ্গা',

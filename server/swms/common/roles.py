@@ -1,7 +1,7 @@
 """Roles.
 
 Stored as slugs, exposed to the SPA as the display labels it already switches on
-(`'Collector'`, `'Supervisor'`, `'Agency Admin'`, `'KCC Viewer'`).
+(`'Collector'`, `'Supervisor'`, `'Agency Admin'`, `'City Viewer'`).
 
 The mock app gated routes only on "is logged in"; the sidebar showed every page
 to everyone. Here the five roles get real, distinct capabilities:
@@ -12,7 +12,8 @@ to everyone. Here the five roles get real, distinct capabilities:
                     holdings, bills and users, and nothing belonging to another
     super_admin   — the corporation's own administrator: every agency at once,
                     plus the city-wide master data no single contractor owns
-    kcc_viewer    — read-only city-wide oversight (reports, dashboards)
+    kcc_viewer    — read-only city oversight (the City dashboard, reports). Shown
+                    as "City Viewer"; `User.city` confines it to one city
 
 The line between the last two is the tenancy boundary. An agency admin is a
 tenant: `User.agency` is what confines them, and every scoped queryset narrows
@@ -29,7 +30,7 @@ class Role(models.TextChoices):
     SUPERVISOR = "supervisor", "Supervisor"
     AGENCY_ADMIN = "agency_admin", "Agency Admin"
     SUPER_ADMIN = "super_admin", "Super Admin"
-    KCC_VIEWER = "kcc_viewer", "KCC Viewer"
+    KCC_VIEWER = "kcc_viewer", "City Viewer"
 
 
 #: Roles allowed to change operational records (routes, households, complaints…).
@@ -58,7 +59,7 @@ ROLE_HOME = {
     Role.SUPERVISOR: "/app/dashboard",
     Role.AGENCY_ADMIN: "/app/dashboard",
     Role.SUPER_ADMIN: "/app/dashboard",
-    Role.KCC_VIEWER: "/app/reports",
+    Role.KCC_VIEWER: "/app/city",
 }
 
 

@@ -16,7 +16,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from swms.accounts.models import ScopeKind, User
-from swms.catalog.models import Ward, Zone
+from swms.catalog.models import City, Ward, Zone
 from swms.common.exceptions import DomainError
 from swms.common.roles import Role
 from swms.fieldops.models import Collector
@@ -188,6 +188,86 @@ class AgencyApiTests(AgencyData):
             response.json()["serviceWards"], [self.ward.id, self.other_ward.id]
         )
 
+    def test_an_agency_belongs_to_a_city(self):
+        kcc = City.objects.create(id="KCC", name="Khulna City Corporation")
+        Zone.objects.filter(pk="Z-03").update(city=kcc)
+        response = self.client.post(
+            reverse("agency-list"),
+            {"name": "New Provider", "shortCode": "NEW", "agencyType": "ngo",
+             "city": "KCC", "serviceWards": [self.ward.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(Agency.objects.get(short_code="NEW").city_id, "KCC")
+
+    def test_wards_of_another_city_are_refused(self):
+        City.objects.create(id="KCC", name="Khulna City Corporation")
+        scc = City.objects.create(id="SCC", name="Sylhet City Corporation")
+        Zone.objects.filter(pk="Z-03").update(city=scc)
+        response = self.client.post(
+            reverse("agency-list"),
+            {"name": "New Provider", "shortCode": "NEW", "agencyType": "ngo",
+             "city": "KCC", "serviceWards": [self.ward.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("W-14", str(response.json()))
+
+    def test_moving_an_agency_to_another_city_checks_its_wards(self):
+        City.objects.create(id="KCC", name="Khulna City Corporation")
+        City.objects.create(id="SCC", name="Sylhet City Corporation")
+        Zone.objects.filter(pk="Z-03").update(city_id="KCC")
+        self.first.service_wards.set([self.ward])
+        response = self.client.patch(
+            reverse("agency-detail", args=[self.first.id]), {"city": "SCC"}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_an_agency_can_be_the_citys_own_service(self):
+        response = self.client.post(
+            reverse("agency-list"),
+            {"name": "KCC Conservancy", "shortCode": "KCCC", "agencyType": "city_corporation"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(response.json()["agencyType"], "city_corporation")
+
+    def test_an_agency_carries_its_bangla_name(self):
+        response = self.client.post(
+            reverse("agency-list"),
+            {"name": "Green Equipment Limited", "nameBn": "গ্রিন ইকুইপমেন্ট লিমিটেড",
+             "shortCode": "GEL", "agencyType": "private"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(response.json()["nameBn"], "গ্রিন ইকুইপমেন্ট লিমিটেড")
+        self.assertEqual(
+            Agency.objects.get(short_code="GEL").name_bn, "গ্রিন ইকুইপমেন্ট লিমিটেড"
+        )
+
+    def test_collector_and_history_rows_carry_the_bangla_agency_name(self):
+        self.first.name_bn = "প্রিমিয়ার ক্লিন"
+        self.first.save(update_fields=["name_bn"])
+        collector = self.make_collector(agency=self.first)
+        transfer_collector(collector, self.first, on_date=dt.date(2026, 1, 1))
+
+        row = self.client.get(reverse("collector-detail", args=[collector.id])).json()
+        self.assertEqual(row["agencyNameBn"], "প্রিমিয়ার ক্লিন")
+
+        history = self.client.get(
+            reverse("agency-employment-history", args=[self.first.id])
+        ).json()
+        history = history.get("results", history) if isinstance(history, dict) else history
+        self.assertEqual(history[0]["agencyNameBn"], "প্রিমিয়ার ক্লিন")
+
+    def test_an_agency_type_must_exist_in_setup(self):
+        response = self.client.post(
+            reverse("agency-list"),
+            {"name": "X", "shortCode": "XX", "agencyType": "made_up"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_transfer_endpoint_moves_a_collector(self):
         collector = self.make_collector(agency=self.first)
         transfer_collector(collector, self.first, on_date=dt.date(2026, 1, 1))
@@ -236,30 +316,31 @@ class StampedAttributionTests(AgencyData):
 
         road = Road.objects.create(ward=self.ward, name="KDA Avenue")
         htype = HoldingType.objects.create(id="pucca", key="opt.h", label="Pucca")
-        holding = Holding.objects.create(
+        # Service terms are the building's; the family only lives there.
+        self.holding = Holding.objects.create(
             ward=self.ward, road=road, holding_no="142/B", holding_type=htype,
             owner_name="Landlord", verified=True, lat=22.83, lng=89.53,
+            tier=Tier.objects.create(id="std", key="opt.t", label="Std", charge=150),
+            payment_mode=PaymentMode.objects.create(id="cash", key="opt.pm", label="Cash"),
         )
         self.household = Household.objects.create(
-            holding=holding, head="Abdul Karim",
-            tier=Tier.objects.create(id="std", key="opt.t", label="Std", charge=150),
+            holding=self.holding, head="Abdul Karim",
             customer_type=CustomerType.objects.create(id="hh", key="opt.c", label="HH"),
             storage=StorageType.objects.create(id="bin", key="opt.s", label="Bin"),
             holding_type=htype,
             suitable_time=SuitableTime.objects.create(id="am", key="opt.st", label="AM"),
-            payment_mode=PaymentMode.objects.create(id="cash", key="opt.pm", label="Cash"),
         )
 
     def test_a_visit_is_stamped_with_the_agency_that_did_it(self):
         from swms.fieldops.services import record_visit
 
-        visit = record_visit(self.household, collector=self.collector)
+        visit = record_visit(self.holding, collector=self.collector)
         self.assertEqual(visit.agency_id, self.first.id)
 
     def test_a_transfer_does_not_rewrite_a_past_visit(self):
         from swms.fieldops.services import record_visit
 
-        visit = record_visit(self.household, collector=self.collector)
+        visit = record_visit(self.holding, collector=self.collector)
         transfer_collector(self.collector, self.second, on_date=dt.date(2026, 12, 1))
 
         visit.refresh_from_db()
@@ -272,7 +353,7 @@ class StampedAttributionTests(AgencyData):
         from swms.catalog.models import PaymentMode
 
         bill = Bill.objects.create(
-            household=self.household, ward=self.ward, period="2026-03",
+            holding=self.holding, ward=self.ward, period="2026-03",
             issued_at=dt.date(2026, 3, 1), due_on=dt.date(2026, 3, 11), amount=150,
         )
         payment = Payment.objects.create(
@@ -291,7 +372,7 @@ class StampedAttributionTests(AgencyData):
         from swms.catalog.models import PaymentMode
 
         bill = Bill.objects.create(
-            household=self.household, ward=self.ward, period="2026-04",
+            holding=self.holding, ward=self.ward, period="2026-04",
             issued_at=dt.date(2026, 4, 1), due_on=dt.date(2026, 4, 11), amount=150,
         )
         payment = Payment.objects.create(
@@ -308,7 +389,7 @@ class RemittanceTests(StampedAttributionTests):
         from swms.billing.models import Bill
 
         return Bill.objects.create(
-            household=self.household, ward=self.ward, period=period,
+            holding=self.holding, ward=self.ward, period=period,
             issued_at=dt.date(2026, 3, 1), due_on=dt.date(2026, 3, 11), amount=amount,
         )
 
@@ -452,10 +533,9 @@ class TenancyTests(AgencyData):
         self.mine = building("1", self.first)
         self.theirs = building("2", self.second)
         for holding, head in ((self.mine, "Mine"), (self.theirs, "Theirs")):
-            Household.objects.create(
-                holding=holding, head=head, tier=self.tier,
-                payment_mode=self.mode, **self.profile,
-            )
+            holding.tier, holding.payment_mode = self.tier, self.mode
+            holding.save(update_fields=["tier", "payment_mode"])
+            Household.objects.create(holding=holding, head=head, **self.profile)
 
         self.my_collector = self.make_collector("Mine", agency=self.first)
         self.their_collector = self.make_collector("Theirs", agency=self.second)
@@ -531,10 +611,9 @@ class TenancyTests(AgencyData):
 
     def test_a_report_counts_only_my_agencys_work(self):
         from swms.fieldops.services import record_visit
-        from swms.customers.models import Household
 
-        record_visit(Household.objects.get(head="Mine"), collector=self.my_collector)
-        record_visit(Household.objects.get(head="Theirs"), collector=self.their_collector)
+        record_visit(self.mine, collector=self.my_collector)
+        record_visit(self.theirs, collector=self.their_collector)
 
         rows = self.client.get(reverse("report-waste-collection")).json()["rows"]
         owners = {row["collector"] for row in rows}
@@ -543,10 +622,9 @@ class TenancyTests(AgencyData):
 
     def test_kcc_still_sees_both_agencies(self):
         from swms.fieldops.services import record_visit
-        from swms.customers.models import Household
 
-        record_visit(Household.objects.get(head="Mine"), collector=self.my_collector)
-        record_visit(Household.objects.get(head="Theirs"), collector=self.their_collector)
+        record_visit(self.mine, collector=self.my_collector)
+        record_visit(self.theirs, collector=self.their_collector)
 
         officer = User.objects.create_user(
             phone="01900000009", name="KCC Reports", role=Role.KCC_VIEWER,
@@ -577,24 +655,18 @@ class WriteGuardTests(TenancyTests):
     """
 
     def test_a_visit_cannot_be_recorded_against_another_agencys_building(self):
-        from swms.customers.models import Household
-
-        theirs = Household.objects.get(head="Theirs")
         response = self.client.post(
             reverse("visit-list"),
-            {"hh": theirs.id, "status": "collected"},
+            {"holding": self.theirs.id, "status": "collected"},
             format="json",
         )
         self.assertEqual(response.status_code, 400)
-        self.assertIn("hh", response.json()["fields"])
+        self.assertIn("holding", response.json()["fields"])
 
     def test_a_visit_cannot_name_another_agencys_collector(self):
-        from swms.customers.models import Household
-
-        mine = Household.objects.get(head="Mine")
         response = self.client.post(
             reverse("visit-list"),
-            {"hh": mine.id, "collector": self.their_collector.id, "status": "collected"},
+            {"holding": self.mine.id, "collector": self.their_collector.id, "status": "collected"},
             format="json",
         )
         self.assertEqual(response.status_code, 400)
@@ -638,12 +710,9 @@ class WriteGuardTests(TenancyTests):
 
     def test_my_own_records_are_still_writable(self):
         """The guards must narrow, not block."""
-        from swms.customers.models import Household
-
-        mine = Household.objects.get(head="Mine")
         response = self.client.post(
             reverse("visit-list"),
-            {"hh": mine.id, "collector": self.my_collector.id, "status": "collected"},
+            {"holding": self.mine.id, "collector": self.my_collector.id, "status": "collected"},
             format="json",
         )
         self.assertIn(response.status_code, (200, 201), response.content[:200])

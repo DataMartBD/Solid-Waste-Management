@@ -33,7 +33,7 @@ export default {
     'reportsCustomer.status.subtitle': 'Every bill for {period}, settled from what was actually received.',
 
     'reportsCustomer.col.period': 'Period',
-    'reportsCustomer.col.household': 'Household',
+    'reportsCustomer.col.household': 'Holding owner',
     'reportsCustomer.col.ward': 'Ward',
     'reportsCustomer.col.holding': 'Holding',
     'reportsCustomer.col.billed': 'Billed',
@@ -89,7 +89,7 @@ export default {
     'reportsCustomer.status.subtitle': '{period} মাসের প্রতিটি বিল, প্রকৃত আদায়ের ভিত্তিতে নির্ধারিত।',
 
     'reportsCustomer.col.period': 'সময়কাল',
-    'reportsCustomer.col.household': 'হাউসহোল্ডস',
+    'reportsCustomer.col.household': 'হোল্ডিং মালিক',
     'reportsCustomer.col.ward': 'ওয়ার্ড',
     'reportsCustomer.col.holding': 'হোল্ডিং',
     'reportsCustomer.col.billed': 'বিলকৃত',

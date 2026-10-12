@@ -1,12 +1,20 @@
 """Back-office admin for field operations.
 
-Aimed at the two things staff actually do here by hand: look up why a household
+Aimed at the two things staff actually do here by hand: look up why a holding
 was or was not served on a given day, and fix a route's walking order.
 """
 
 from django.contrib import admin
 
-from .models import Assignment, AssignmentRoute, Collector, Route, RouteStop, Visit
+from .models import (
+    Assignment,
+    AssignmentRoute,
+    Collector,
+    DailyCollectionSummary,
+    Route,
+    RouteStop,
+    Visit,
+)
 
 
 class RouteStopInline(admin.TabularInline):
@@ -100,7 +108,7 @@ class VisitAdmin(admin.ModelAdmin):
     list_display = [
         "id",
         "served_on",
-        "household",
+        "holding",
         "collector",
         "route",
         "status",
@@ -109,12 +117,30 @@ class VisitAdmin(admin.ModelAdmin):
         "synced",
         "at",
     ]
-    list_filter = ["status", "source", "synced", "reason", "served_on", "household__ward"]
-    search_fields = ["id", "household__id", "household__holding", "qr", "collector__name"]
-    list_select_related = ["household", "collector", "route"]
-    raw_id_fields = ["household", "recorded_by"]
+    list_filter = ["status", "source", "synced", "reason", "served_on", "holding__ward"]
+    search_fields = ["id", "holding__id", "holding__holding_no", "qr", "collector__name"]
+    list_select_related = ["holding", "collector", "route"]
+    raw_id_fields = ["holding", "recorded_by"]
     date_hierarchy = "served_on"
     ordering = ["-at"]
     # `served_on` is derived from `at` in save(); editing it would let the two
     # disagree and break the one-visit-per-day lookup.
     readonly_fields = ["served_on", "created_at", "updated_at"]
+
+
+@admin.register(DailyCollectionSummary)
+class DailyCollectionSummaryAdmin(admin.ModelAdmin):
+    """Read-only: rebuilt by `close_collection_day` and by late complaints."""
+
+    list_display = [
+        "day", "city", "ward", "agency", "due", "confirmed", "auto", "missed", "skipped",
+        "complaints",
+    ]
+    list_filter = ["city", "day", "agency"]
+    date_hierarchy = "day"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

@@ -43,6 +43,7 @@ from .models import (
     Complaint,
     ComplaintActivity,
     ComplaintStatus,
+    ComplaintType,
     Priority,
 )
 
@@ -111,7 +112,8 @@ def _broadcast(complaint: Complaint, event: str = COMPLAINT_UPDATED) -> None:
         event,
         {
             "id": complaint.id,
-            "hh": complaint.household_id,
+            "holding": complaint.holding_id,
+            "household": complaint.household_id,
             "ward": complaint.ward_id,
             "type": complaint.type,
             "status": complaint.status,
@@ -121,7 +123,7 @@ def _broadcast(complaint: Complaint, event: str = COMPLAINT_UPDATED) -> None:
             "opened": complaint.opened.isoformat() if complaint.opened else None,
         },
         # A complaint belongs to whoever services the building it is about.
-        agency_id=complaint.household.holding.agency_id if complaint.household_id else None,
+        agency_id=complaint.holding.agency_id if complaint.holding_id else None,
     )
 
 
@@ -137,7 +139,7 @@ def open_complaint(*, user=None, note: str = "", **fields) -> Complaint:
     The SLA budget follows the priority (urgent 4h … low 48h) unless the caller
     passes one explicitly — a supervisor negotiating a deadline with a citizen
     needs that escape hatch. `ward` is not accepted: `Complaint.save()` derives
-    it from the household.
+    it from the holding.
     """
     fields.pop("ward", None)
     fields.pop("ward_id", None)
@@ -146,8 +148,34 @@ def open_complaint(*, user=None, note: str = "", **fields) -> Complaint:
     if not fields.get("sla"):
         fields["sla"] = SLA_HOURS[Priority(priority)]
 
+    # A complaint is about a holding. Naming only the family that reported it
+    # files it against the building that family lives in.
+    household = fields.get("household")
+    if household is not None:
+        if fields.get("holding") is None:
+            fields["holding"] = household.holding
+        elif household.holding_id != fields["holding"].pk:
+            raise DomainError(
+                f"{household.pk} does not live in holding {fields['holding'].pk}.",
+                code="household_not_in_holding",
+            )
+    if fields.get("holding") is None:
+        raise DomainError("A complaint must name a holding.", code="holding_required")
+
+    # A missed collection names the day it was missed; that day is what the
+    # city's cut-off rule turns into "not collected".
+    from swms.fieldops.collection_day import check_missed_on, record_missed
+
+    if fields.get("type") == ComplaintType.MISSED_COLLECTION:
+        fields["missed_on"] = fields.get("missed_on") or timezone.localdate()
+        check_missed_on(fields["holding"], fields["missed_on"])
+    else:
+        fields["missed_on"] = None
+
     complaint = Complaint(**fields)
     complaint.save()
+    if complaint.missed_on:
+        record_missed(complaint.holding, complaint.missed_on)
 
     # An unauthenticated ticket came in over SMS or the citizen app, so it is
     # signed with the channel rather than 'System'.

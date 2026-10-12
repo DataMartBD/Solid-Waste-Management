@@ -71,6 +71,19 @@ class Van(TextKeyModel):
         on_delete=models.SET_NULL,
         related_name="vans",
     )
+    #: The ward this van works — a ward is the operational unit, with its own
+    #: routes, holdings, vans and collectors.
+    ward = models.ForeignKey(
+        "catalog.Ward", null=True, blank=True, on_delete=models.SET_NULL, related_name="vans"
+    )
+    #: Where it unloads.
+    dumping_point = models.ForeignKey(
+        "catalog.DumpingPoint",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="vans",
+    )
 
     fitness_exp = models.DateField(null=True, blank=True)
     tax_exp = models.DateField(null=True, blank=True)

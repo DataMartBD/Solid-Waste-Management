@@ -28,19 +28,6 @@ from swms.common.ids import agency_id
 from swms.common.models import TextKeyModel, TimeStampedModel
 
 
-class AgencyType(models.TextChoices):
-    """How the contractor is constituted.
-
-    All four appear in Bangladeshi municipal waste contracting, and KCC's own
-    paperwork distinguishes them, so this is a real field rather than a label.
-    """
-
-    PRIVATE = "private", "Private company"
-    NGO = "ngo", "NGO"
-    CBO = "cbo", "Community-based organisation"
-    COOPERATIVE = "cooperative", "Cooperative"
-
-
 class AgencyStatus(models.TextChoices):
     ACTIVE = "active", "Active"
     SUSPENDED = "suspended", "Suspended"
@@ -52,11 +39,19 @@ class Agency(TextKeyModel):
     """A service provider under contract to the city corporation."""
 
     name = models.CharField(max_length=160)
+    #: Shown when the app is in Bangla; empty falls back to `name`.
+    name_bn = models.CharField(max_length=160, blank=True)
     short_code = models.CharField(
         max_length=12, unique=True, help_text="Short label for reports and exports, e.g. 'PCM'"
     )
-    agency_type = models.CharField(
-        max_length=12, choices=AgencyType.choices, default=AgencyType.PRIVATE
+    #: From the setup list (`catalog.AgencyType`): private company, NGO, CBO,
+    #: cooperative, or the city's own in-house service.
+    agency_type = models.ForeignKey(
+        "catalog.AgencyType",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="agencies",
     )
 
     # --- what KCC audits --------------------------------------------------- #
@@ -78,6 +73,13 @@ class Agency(TextKeyModel):
     contract_no = models.CharField(max_length=40, blank=True)
     contract_start = models.DateField(null=True, blank=True)
     contract_end = models.DateField(null=True, blank=True)
+
+    #: The city corporation or pourashova this contractor works for. The client
+    #: calls an agency the "customer"; one city may have several. Nullable for
+    #: the same reason as `Zone.city`.
+    city = models.ForeignKey(
+        "catalog.City", null=True, blank=True, on_delete=models.PROTECT, related_name="agencies"
+    )
 
     #: Wards this agency works in. Reporting and the agency page read this;
     #: it is NOT the access boundary — two agencies may share a ward, so a ward

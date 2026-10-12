@@ -179,7 +179,7 @@ function CustomerCollection() {
     if (activeBucket !== 'all' && r.period !== activeBucket) return false
     if (ward !== 'all' && r.ward !== ward) return false
     if (!needle) return true
-    return [r.head, r.holding, r.road, r.hh]
+    return [r.head, r.holdingNo, r.road, r.holding]
       .some((v) => String(v ?? '').toLowerCase().includes(needle))
   }), [all, activeBucket, ward, needle])
 
@@ -207,9 +207,9 @@ function CustomerCollection() {
 
   const columns = [
     { key: 'period', label: t('reportsCustomer.col.period'), get: (r) => periodLabel(r.period) },
-    { key: 'head', label: t('reportsCustomer.col.household'), get: (r) => `${r.head} (${r.hh})` },
+    { key: 'head', label: t('reportsCustomer.col.household'), get: (r) => `${r.head} (${r.holding})` },
     { key: 'ward', label: t('reportsCustomer.col.ward'), get: (r) => wardName(r.ward) },
-    { key: 'holding', label: t('reportsCustomer.col.holding'), get: (r) => r.holding || '—' },
+    { key: 'holding', label: t('reportsCustomer.col.holding'), get: (r) => r.holdingNo || '—' },
     { key: 'billed', label: t('reportsCustomer.col.billed'), get: (r) => taka(r.billed) },
     { key: 'received', label: t('reportsCustomer.col.received'), get: (r) => taka(r.received) },
     { key: 'outstanding', label: t('reportsCustomer.col.outstanding'), get: (r) => taka(r.outstanding) },
@@ -267,7 +267,7 @@ function CustomerCollection() {
         <>
           <div className="stat-grid" style={{ marginBottom: 20 }}>
             <StatCard icon={<IconUsers size={18} />} label={t('reportsCustomer.stat.customers')}
-              value={n(new Set(rows.map((r) => r.hh)).size)}
+              value={n(new Set(rows.map((r) => r.holding)).size)}
               sub={t('reportsCustomer.stat.customersSub', { count: n(rows.length) })} />
             <StatCard icon={<IconBill size={18} />} label={t('reportsCustomer.stat.billed')}
               value={taka(totals.billed)} sub={t('reportsCustomer.stat.billedSub', { count: n(billCount) })} />
@@ -292,14 +292,14 @@ function CustomerCollection() {
                 <thead><tr>{columns.map((c) => <th key={c.key}>{c.label}</th>)}</tr></thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr key={`${r.period}|${r.hh}`}>
+                    <tr key={`${r.period}|${r.holding}`}>
                       <td style={{ fontWeight: 600 }}>{periodLabel(r.period)}</td>
                       <td>
                         <div style={{ fontWeight: 600 }}>{r.head}</div>
-                        <div className="tiny muted-3 mono">{r.hh}</div>
+                        <div className="tiny muted-3 mono">{r.holding}</div>
                       </td>
                       <td className="small">{wardName(r.ward)}</td>
-                      <td className="mono">{r.holding || '—'}</td>
+                      <td className="mono">{r.holdingNo || '—'}</td>
                       <td className="mono">{taka(r.billed)}</td>
                       <td className="mono">{taka(r.received)}</td>
                       <td className="mono">
@@ -361,9 +361,9 @@ function CustomerBillStatus() {
 
   const columns = [
     { key: 'bill', label: t('reportsCustomer.col.billId'), get: (r) => r.bill },
-    { key: 'head', label: t('reportsCustomer.col.household'), get: (r) => `${r.head} (${r.hh})` },
+    { key: 'head', label: t('reportsCustomer.col.household'), get: (r) => `${r.head} (${r.holding})` },
     { key: 'ward', label: t('reportsCustomer.col.ward'), get: (r) => wardName(r.ward) },
-    { key: 'holding', label: t('reportsCustomer.col.holding'), get: (r) => r.holding || '—' },
+    { key: 'holding', label: t('reportsCustomer.col.holding'), get: (r) => r.holdingNo || '—' },
     { key: 'collector', label: t('reportsCustomer.col.collector'), get: (r) => (r.collector ? collectorName(r.collector) : '—') },
     { key: 'billed', label: t('reportsCustomer.col.billed'), get: (r) => taka(r.billed) },
     { key: 'received', label: t('reportsCustomer.col.received'), get: (r) => taka(r.received) },
@@ -455,10 +455,10 @@ function CustomerBillStatus() {
                           <td className="mono">{r.bill}</td>
                           <td>
                             <div style={{ fontWeight: 600 }}>{r.head}</div>
-                            <div className="tiny muted-3 mono">{r.hh}</div>
+                            <div className="tiny muted-3 mono">{r.holding}</div>
                           </td>
                           <td className="small">{wardName(r.ward)}</td>
-                          <td className="mono">{r.holding || '—'}</td>
+                          <td className="mono">{r.holdingNo || '—'}</td>
                           <td className="small">{r.collector ? collectorName(r.collector) : <span className="muted-3">—</span>}</td>
                           <td className="mono">{taka(r.billed)}</td>
                           <td className="mono">{taka(r.received)}</td>

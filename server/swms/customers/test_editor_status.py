@@ -43,7 +43,7 @@ class EditorOmitsStatusTests(HoldingData):
         return body
 
     def family(self, **overrides):
-        row = {"head": "Shirin Akter", "unit": "1A", "tier": self.tier.id}
+        row = {"head": "Shirin Akter", "unit": "1A"}
         row.update(overrides)
         return row
 
