@@ -13,7 +13,13 @@ from unittest import mock
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.urls import reverse
 from django.utils import timezone
+from rest_framework.test import APIClient
+
+from swms.accounts.models import ScopeKind, User
+from swms.agencies.models import Agency
+from swms.common.roles import Role
 
 from swms.catalog.models import City, Zone
 from swms.customers.models import Holding
@@ -74,8 +80,8 @@ class CloseDayTests(CollectionDayData):
     def test_a_holding_that_complained_is_not_collected(self):
         self.missed(self.b)
         result = close_day(self.city, DAY, now=at(DAY, 21))
-        self.assertEqual(result, {"city": "KCC", "day": "2026-10-09",
-                                  "auto_collected": 2, "auto_missed": 1})
+        self.assertEqual(result, {"city": "KCC", "day": "2026-10-09", "due": 3,
+                                  "already_visited": 0, "auto_collected": 2, "auto_missed": 1})
         visit = self.visit(self.b)
         self.assertEqual(visit.status, VisitStatus.SKIPPED)
         self.assertEqual(visit.reason, SkipReason.COMPLAINT)
@@ -221,3 +227,86 @@ class CommandTests(CollectionDayData):
         with self.assertRaises(CommandError) as caught:
             self.run_command(at(DAY, 22), "--city", "XYZ")
         self.assertIn("XYZ", str(caught.exception))
+
+
+class ManualCloseTests(CollectionDayData):
+    """The "Mark all collected" button: the same close, on demand."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            phone="01799000001", name="Super", role=Role.SUPER_ADMIN.value,
+            password="x", scope_kind=ScopeKind.CITY,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin)
+        self.url = reverse("collection-close-day")
+
+    def press(self, *, client=None, now=None, **body):
+        with mock.patch("django.utils.timezone.now", return_value=now or at(DAY, 15)):
+            return (client or self.client).post(self.url, {"city": "KCC", **body}, format="json")
+
+    def test_the_preview_counts_and_writes_nothing(self):
+        self.missed(self.b)
+        response = self.press()
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["autoCollected"], 2)
+        self.assertEqual(response.data["autoMissed"], 1)
+        self.assertEqual(response.data["due"], 3)
+        self.assertTrue(response.data["dryRun"])
+        self.assertFalse(Visit.objects.exists())
+
+    def test_confirming_closes_today_before_the_cutoff(self):
+        response = self.press(dryRun=False)
+        self.assertEqual(response.data["day"], DAY.isoformat())
+        self.assertEqual(response.data["autoCollected"], 3)
+        self.assertEqual(self.visit(self.a).source, VisitSource.AUTO)
+        self.assertTrue(DailyCollectionSummary.objects.filter(day=DAY).exists())
+
+    def test_holdings_already_visited_are_counted_and_kept(self):
+        Visit.objects.create(
+            holding=self.a, status=VisitStatus.COLLECTED, source=VisitSource.SCAN, at=at(DAY, 7),
+        )
+        response = self.press(dryRun=False)
+        self.assertEqual(response.data["alreadyVisited"], 1)
+        self.assertEqual(response.data["autoCollected"], 2)
+        self.assertEqual(self.visit(self.a).source, VisitSource.SCAN)
+
+    def test_a_complaint_after_an_early_close_still_counts(self):
+        self.press(dryRun=False)
+        self.missed(self.c)
+        self.assertTrue(record_missed(self.c, DAY, now=at(DAY, 16)))
+        self.assertEqual(self.visit(self.c).status, VisitStatus.SKIPPED)
+
+    def test_a_future_day_is_refused(self):
+        response = self.press(day=(DAY + dt.timedelta(days=1)).isoformat(), dryRun=False)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["code"], "collection_day_future")
+
+    def test_a_past_day_can_be_closed(self):
+        response = self.press(now=at(DAY + dt.timedelta(days=3), 10), day=DAY.isoformat(), dryRun=False)
+        self.assertEqual(response.data["autoCollected"], 3)
+
+    def test_an_agency_admin_closes_only_their_agency(self):
+        agency = Agency.objects.create(name="Premier Clean", short_code="PCM")
+        Holding.objects.filter(pk=self.a.pk).update(agency=agency)
+        bound = User.objects.create_user(
+            phone="01799000002", name="Bound", role=Role.AGENCY_ADMIN.value,
+            password="x", scope_kind=ScopeKind.AGENCY, agency=agency, city=self.city,
+        )
+        client = APIClient()
+        client.force_authenticate(user=bound)
+        response = self.press(client=client, dryRun=False)
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["autoCollected"], 1)
+        self.assertEqual(list(Visit.objects.values_list("holding_id", flat=True)), [self.a.pk])
+
+    def test_a_supervisor_cannot_press_it(self):
+        supervisor = User.objects.create_user(
+            phone="01799000003", name="Sup", role=Role.SUPERVISOR.value,
+            password="x", scope_kind=ScopeKind.CITY,
+        )
+        client = APIClient()
+        client.force_authenticate(user=supervisor)
+        self.assertEqual(self.press(client=client, dryRun=False).status_code, 403)
+        self.assertFalse(Visit.objects.exists())

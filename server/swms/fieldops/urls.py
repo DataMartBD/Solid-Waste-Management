@@ -15,4 +15,5 @@ urlpatterns = [
     # rather than resources of their own, so they sit outside the router.
     path("collection/round/", views.CollectionRoundView.as_view(), name="collection-round"),
     path("collection/scan/", views.ScanView.as_view(), name="collection-scan"),
+    path("collection/close-day/", views.CloseDayView.as_view(), name="collection-close-day"),
 ]

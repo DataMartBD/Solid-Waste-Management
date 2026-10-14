@@ -402,6 +402,14 @@ class ScanSerializer(serializers.Serializer):
     day = serializers.DateField(required=False)
 
 
+class CloseDaySerializer(serializers.Serializer):
+    """"Mark all collected": which city and day, and whether only to count."""
+
+    city = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    day = serializers.DateField(required=False)
+    dryRun = serializers.BooleanField(default=True)
+
+
 class ReorderStopsSerializer(serializers.Serializer):
     """Replace a route's whole walking order."""
 

@@ -20,12 +20,14 @@ from swms.common.roles import OPERATIONAL_WRITERS, Role
 from swms.common.views import StampsCreatorAgencyMixin, SwmsModelViewSet
 from swms.complaints.models import ComplaintStatus
 
+from .collection_day import close_day
 from .models import Assignment, Collector, Route, Visit
 from .serializers import (
     AssignRoutesSerializer,
     AssignmentSerializer,
     AttendanceSerializer,
     BulkVisitSerializer,
+    CloseDaySerializer,
     CollectorSerializer,
     RecordVisitSerializer,
     ReorderStopsSerializer,
@@ -416,6 +418,49 @@ class ScanView(APIView):
         # Always 200. A wrong-round or worn-label scan is an answer the collector
         # acts on, not a failed request.
         return Response(result)
+
+
+class CloseDayView(APIView):
+    """`POST /api/collection/close-day/` — "Mark all collected" by hand.
+
+    The same close `close_collection_day` runs at the cut-off, on demand: every
+    due holding with no visit yet for the day is recorded collected, unless a
+    missed-collection complaint names it. Confirmed visits are left alone, and
+    repeating it changes nothing. It may run before the cut-off; a complaint
+    afterwards still turns that holding into not collected.
+
+    `dryRun` (default true) only counts. An agency admin closes their own
+    agency's holdings; a super admin the whole city.
+    """
+
+    permission_classes = [IsAgencyAdmin]
+
+    @extend_schema(request=CloseDaySerializer, responses={200: None})
+    def post(self, request):
+        from swms.reports.views import _city_for
+
+        serializer = CloseDaySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        city = _city_for(request, data.get("city") or "")
+        day = data.get("day") or timezone.localdate()
+        if day > timezone.localdate():
+            raise DomainError("A day in the future cannot be closed.", code="collection_day_future")
+
+        result = close_day(
+            city, day, force=True, dry_run=data["dryRun"],
+            agency_id=request.user.visible_agency_id(),
+        )
+        return Response({
+            "city": city.id,
+            "day": result["day"],
+            "due": result["due"],
+            "alreadyVisited": result["already_visited"],
+            "autoCollected": result["auto_collected"],
+            "autoMissed": result["auto_missed"],
+            "dryRun": data["dryRun"],
+        })
 
 
 def _parse_day(raw):

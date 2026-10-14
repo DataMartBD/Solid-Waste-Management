@@ -505,13 +505,17 @@ CITY_DEFAULT_SPAN = {
 
 def _city(request):
     """The city to report on: the caller's own, or the one asked for if visible."""
+    return _city_for(request, request.query_params.get("city"))
+
+
+def _city_for(request, wanted):
+    """The caller's own city, or `wanted` if they can see it, or their first."""
     from swms.catalog.models import City
 
     own = request.user.city_id
     if own:
         return City.objects.get(pk=own)
     cities = city_report.visible_cities(_ward_scope(request))
-    wanted = request.query_params.get("city")
     city = cities.filter(pk=wanted).first() if wanted else cities.first()
     if city is None:
         raise DomainError(

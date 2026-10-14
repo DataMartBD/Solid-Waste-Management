@@ -196,6 +196,8 @@ export const collection = {
   // `collector`/`day` matter when a supervisor is previewing someone else's
   // round; for a collector-role caller the server pins both to their own.
   scan: (raw, params) => post('/collection/scan/', { raw, ...params }),
+  // "Mark all collected": the cut-off close, by hand. `dryRun` only counts.
+  closeDay: (body) => post('/collection/close-day/', body),
 }
 
 export const complaints = {

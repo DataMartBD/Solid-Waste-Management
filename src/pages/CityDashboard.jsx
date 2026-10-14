@@ -8,12 +8,18 @@
 //
 // A City Viewer bound to one city gets no picker: the server ignores `city` for
 // them and `cities` comes back empty.
+//
+// Admins get "Mark all collected": the cut-off close, run by hand for a chosen
+// day. It always previews first (a dry run), then writes on confirm. An agency
+// admin's press covers only their own agency's holdings.
 
 import { useEffect, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { PageHeader, Section, StatCard, EmptyState, CHART_TOOLTIP } from '../components/ui.jsx'
 import { ExportMenu } from '../components/ExportMenu.jsx'
+import { Modal, ModalActions } from '../components/Modal.jsx'
 import { IconCheck, IconHome, IconAlert, IconClock, IconRefresh, IconUsers } from '../components/Icons.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 import { useData } from '../context/DataContext.jsx'
 import { useLang } from '../i18n/index.jsx'
 
@@ -21,11 +27,14 @@ const MODES = ['daily', 'weekly', 'monthly']
 
 export default function CityDashboard() {
   const { api } = useData()
+  const { isAdmin, isSuperAdmin } = useAuth()
   const { t, n, percent, date, period, digits, lang, wardName } = useLang()
   const [mode, setMode] = useState('daily')
   const [city, setCity] = useState('')
   const [attempt, setAttempt] = useState(0)
   const [state, setState] = useState({ loading: true, error: null, data: null })
+  const [closing, setClosing] = useState(false)
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     let live = true
@@ -64,6 +73,11 @@ export default function CityDashboard() {
           <button key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{t(`reports.mode.${m}`)}</button>
         ))}
       </div>
+      {isAdmin && data && (
+        <button className="btn btn-primary" onClick={() => { setNotice(''); setClosing(true) }}>
+          <IconCheck size={16} /> {t('city.close.button')}
+        </button>
+      )}
       {data && (
         <ExportMenu
           title={t('city.exportTitle', { city: cityName })}
@@ -125,6 +139,23 @@ export default function CityDashboard() {
     <div className="fade-in">
       {header}
 
+      {notice && <div className="form-note ok" style={{ marginBottom: 16 }}><span>{notice}</span></div>}
+
+      {closing && (
+        <CloseDayModal
+          api={api}
+          city={data.city.id}
+          today={today.date}
+          ownAgency={!isSuperAdmin}
+          onClose={() => setClosing(false)}
+          onDone={(result) => {
+            setClosing(false)
+            setNotice(t('city.close.done', { count: n(result.autoCollected), missed: n(result.autoMissed) }))
+            setAttempt((v) => v + 1)
+          }}
+        />
+      )}
+
       <Section
         title={t('city.today.title', { date: date(today.date) })}
         actions={today.closed
@@ -138,6 +169,10 @@ export default function CityDashboard() {
             sub={t('city.today.confirmedSub')} progress={today.due ? Math.round((today.confirmed / today.due) * 100) : 0} />
           <StatCard icon={<IconClock size={18} />} tone="info" label={t('city.today.pending')} value={n(today.pending)}
             sub={today.closed ? t('city.today.pendingClosed') : t('city.today.pendingSub', { cutoff: digits(today.cutoff) })} />
+          {!today.closed && today.auto > 0 && (
+            <StatCard icon={<IconCheck size={18} />} tone="info" label={t('city.today.auto')} value={n(today.auto)}
+              sub={t('city.today.autoSub')} />
+          )}
           <StatCard icon={<IconAlert size={18} />} tone="warn" label={t('city.today.complaints')} value={n(today.complaints)}
             sub={t('city.today.complaintsSub')} />
         </div>
@@ -186,6 +221,77 @@ export default function CityDashboard() {
         </Section>
       </div>
     </div>
+  )
+}
+
+// Preview (dry run) on open and whenever the date changes; confirm writes.
+function CloseDayModal({ api, city, today, ownAgency, onClose, onDone }) {
+  const { t, n, date } = useLang()
+  const [day, setDay] = useState(today)
+  const [preview, setPreview] = useState(null)
+  const [busy, setBusy] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let live = true
+    setBusy(true)
+    setError('')
+    api.collection.closeDay({ city, day, dryRun: true })
+      .then((result) => { if (live) setPreview(result) })
+      .catch((err) => { if (live) { setPreview(null); setError(err?.detail || err?.message || 'unknown') } })
+      .finally(() => { if (live) setBusy(false) })
+    return () => { live = false }
+  }, [api, city, day])
+
+  async function confirm() {
+    setBusy(true)
+    setError('')
+    try {
+      onDone(await api.collection.closeDay({ city, day, dryRun: false }))
+    } catch (err) {
+      setError(err?.detail || err?.message || 'unknown')
+      setBusy(false)
+    }
+  }
+
+  const nothing = preview && preview.autoCollected + preview.autoMissed === 0
+
+  return (
+    <Modal title={t('city.close.title', { date: date(day) })} subtitle={t('city.close.subtitle')}
+      onClose={onClose} width={480}>
+      <div className="field">
+        <label htmlFor="close-day">{t('city.close.day')}</label>
+        <input id="close-day" className="input" type="date" value={day} max={today}
+          onChange={(e) => e.target.value && setDay(e.target.value)} />
+      </div>
+
+      {preview && (
+        <dl className="kv" style={{ marginTop: 12 }}>
+          <dt>{t('city.close.due')}</dt><dd>{n(preview.due)}</dd>
+          <dt>{t('city.close.already')}</dt><dd>{n(preview.alreadyVisited)}</dd>
+          <dt>{t('city.close.willCollect')}</dt><dd><b style={{ fontSize: 16 }}>{n(preview.autoCollected)}</b></dd>
+          <dt>{t('city.close.willMiss')}</dt>
+          <dd style={preview.autoMissed ? { color: 'var(--danger)', fontWeight: 700 } : undefined}>{n(preview.autoMissed)}</dd>
+        </dl>
+      )}
+
+      {error && <div className="form-note bad" style={{ marginTop: 12 }}><span>{error === 'unknown' ? t('common.loadFailedUnknown') : error}</span></div>}
+      {preview && (
+        <div className={`form-note ${nothing ? 'ok' : 'info'}`} style={{ marginTop: 12 }}>
+          <span>
+            {nothing ? t('city.close.nothing') : t('city.close.lateComplaint')}
+            {ownAgency && <> {t('city.close.ownAgency')}</>}
+          </span>
+        </div>
+      )}
+
+      <ModalActions>
+        <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy && !preview}>{t('common.cancel')}</button>
+        <button type="button" className="btn btn-primary" disabled={busy || !preview || nothing} onClick={confirm}>
+          {busy ? <span className="spinner" /> : t('city.close.confirm', { count: n(preview?.autoCollected ?? 0) })}
+        </button>
+      </ModalActions>
+    </Modal>
   )
 }
 

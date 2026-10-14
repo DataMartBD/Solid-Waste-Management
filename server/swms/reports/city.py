@@ -70,6 +70,7 @@ def today_live(city: City, *, ward_ids=None, agency_id=None, now=None) -> dict:
 
     due_count = due.count()
     confirmed = visits.filter(status=VisitStatus.COLLECTED).exclude(source=VisitSource.AUTO).count()
+    auto = visits.filter(status=VisitStatus.COLLECTED, source=VisitSource.AUTO).count()
     handled = visits.count()
     return {
         "date": day.isoformat(),
@@ -77,6 +78,8 @@ def today_live(city: City, *, ward_ids=None, agency_id=None, now=None) -> dict:
         "cutoff": city.collection_cutoff.strftime("%H:%M"),
         "due": due_count,
         "confirmed": confirmed,
+        # Non-zero before the cut-off only when an admin pressed "Mark all collected".
+        "auto": auto,
         "skipped": visits.filter(status=VisitStatus.SKIPPED).count(),
         "pending": max(due_count - handled, 0),
         "complaints": complaints.count(),

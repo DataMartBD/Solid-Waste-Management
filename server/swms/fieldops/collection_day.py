@@ -18,6 +18,11 @@ and the complaint stays on the ticket queue for a supervisor to settle.
 
 Each close, and each late flip, rebuilds `DailyCollectionSummary` for the
 city and day so the city dashboard reads a few rows rather than every visit.
+
+The close normally runs from `close_collection_day`, but an admin may also run
+it by hand from the City Collection page ("Mark all collected"), even before
+the cut-off. A complaint that arrives after such an early close still turns the
+holding's auto visit into a missed one.
 """
 
 from __future__ import annotations
@@ -110,11 +115,14 @@ def close_day(
     now: dt.datetime | None = None,
     force: bool = False,
     dry_run: bool = False,
+    agency_id: str | None = None,
 ) -> dict:
     """Write an auto visit for every due holding nobody confirmed.
 
     Idempotent: a holding that already has a visit for `day` is left alone,
     so running this every few minutes after the cut-off changes nothing more.
+    `force` closes before the cut-off (the manual button); `agency_id` limits
+    the close to one agency's holdings (an agency admin's button).
     """
     now = now or timezone.now()
     if not force and not is_closed(city, day, now):
@@ -123,9 +131,11 @@ def close_day(
             code="collection_day_open",
         )
 
-    holdings = list(
-        due_holdings(city, day).exclude(visits__served_on=day).select_related("route_stop")
-    )
+    due = due_holdings(city, day)
+    if agency_id is not None:
+        due = due.filter(agency_id=agency_id)
+    due_count = due.count()
+    holdings = list(due.exclude(visits__served_on=day).select_related("route_stop"))
     missed = _missed_holding_ids(city, day)
     at = cutoff_at(city, day)
 
@@ -148,6 +158,8 @@ def close_day(
     result = {
         "city": city.id,
         "day": day.isoformat(),
+        "due": due_count,
+        "already_visited": due_count - len(visits),
         "auto_collected": sum(v.status == VisitStatus.COLLECTED for v in visits),
         "auto_missed": sum(v.status == VisitStatus.SKIPPED for v in visits),
     }
@@ -165,17 +177,19 @@ def close_day(
 def record_missed(holding: Holding, day: dt.date, *, now: dt.datetime | None = None) -> bool:
     """Apply a missed-collection complaint to a day that has already closed.
 
-    Before the cut-off there is nothing to do — `close_day` will see the
-    complaint. After it, the holding's auto visit becomes a missed one (or one
-    is written, if it was not due when the day closed). Returns whether a
-    visit changed.
+    An auto visit — written at the cut-off, or earlier by the manual close —
+    becomes a missed one. With no visit yet, before the cut-off there is
+    nothing to do (`close_day` will see the complaint); after it, a missed
+    visit is written. Returns whether a visit changed.
     """
     city = city_of(holding)
-    if city is None or not is_closed(city, day, now):
+    if city is None:
         return False
 
     visit = Visit.objects.filter(holding=holding, served_on=day).first()
     if visit is None:
+        if not is_closed(city, day, now):
+            return False
         Visit(
             holding=holding,
             agency_id=holding.agency_id,
