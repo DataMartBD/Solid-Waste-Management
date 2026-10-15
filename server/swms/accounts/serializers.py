@@ -15,7 +15,7 @@ from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
 from swms.agencies.models import Agency
-from swms.catalog.models import Ward
+from swms.catalog.models import City, Ward
 from swms.common.roles import ROLE_HOME, Role
 from swms.common.scoping import caller, guard_agency
 
@@ -59,6 +59,13 @@ class UserSerializer(serializers.ModelSerializer):
     agency = serializers.CharField(source="agency_id", read_only=True, default=None)
     #: The one city a city-scoped account may see, or null for every city.
     city = serializers.CharField(source="city_id", read_only=True, default=None)
+    #: Names for the Profile page, so an operator can read where they work.
+    agencyName = serializers.CharField(source="agency.name", read_only=True, default=None)
+    agencyNameBn = serializers.CharField(source="agency.name_bn", read_only=True, default=None)
+    cityName = serializers.SerializerMethodField()
+    cityNameBn = serializers.SerializerMethodField()
+    #: The wards a zone-scoped account covers; ward-scoped ones use `scopeWards`.
+    zoneWards = serializers.SerializerMethodField()
     home = serializers.SerializerMethodField()
     readOnly = serializers.BooleanField(source="is_read_only", read_only=True)
     avatarUrl = serializers.SerializerMethodField()
@@ -83,12 +90,40 @@ class UserSerializer(serializers.ModelSerializer):
             "hasPin",
             "collector",
             "agency",
+            "agencyName",
+            "agencyNameBn",
             "city",
+            "cityName",
+            "cityNameBn",
+            "zoneWards",
             "home",
             "readOnly",
             "avatarUrl",
         ]
         read_only_fields = ["id", "phone"]
+
+    def _work_city(self, obj):
+        """The account's city, or the city its wards or zone lie in."""
+        if obj.city_id:
+            return obj.city
+        if obj.scope_kind == ScopeKind.ZONE and obj.scope_zone:
+            return City.objects.filter(zones__id=obj.scope_zone).first()
+        if obj.scope_kind == ScopeKind.WARD:
+            return City.objects.filter(zones__wards__in=obj.scope_wards.all()).first()
+        return None
+
+    def get_cityName(self, obj) -> str | None:
+        city = self._work_city(obj)
+        return city.name if city else None
+
+    def get_cityNameBn(self, obj) -> str | None:
+        city = self._work_city(obj)
+        return (city.name_bn or None) if city else None
+
+    def get_zoneWards(self, obj) -> list[str]:
+        if obj.scope_kind != ScopeKind.ZONE or not obj.scope_zone:
+            return []
+        return list(Ward.objects.filter(zone=obj.scope_zone).values_list("id", flat=True))
 
     def get_home(self, obj) -> str:
         return ROLE_HOME.get(Role(obj.role), "/app/dashboard")

@@ -76,11 +76,22 @@ export default function Profile() {
             <dl className="kv">
               <dt>{t('profile.role')}</dt><dd>{label('opt.role', user?.role)}</dd>
               <dt>{t('profile.accessScope')}</dt><dd>{label('opt.scope', user?.scope)}</dd>
-              {user?.scopeWards?.length > 0 && (
+              {(user?.scopeWards?.length > 0 || user?.zoneWards?.length > 0) && (
                 <>
-                  <dt>{t('profile.wards')}</dt><dd className="mono">{user.scopeWards.join(', ')}</dd>
+                  <dt>{t('profile.wards')}</dt>
+                  <dd className="mono">{(user.scopeWards?.length ? user.scopeWards : user.zoneWards).join(', ')}</dd>
                 </>
               )}
+              {/* Where they work: their contractor and city. No agency means the
+                  corporation's own staff, who see every agency's records. */}
+              <dt>{t('profile.agency')}</dt>
+              <dd>{user?.agency
+                ? (lang === 'bn' && user.agencyNameBn) || user.agencyName || user.agency
+                : t('profile.allAgencies')}</dd>
+              <dt>{t('profile.city')}</dt>
+              <dd>{user?.cityName
+                ? (lang === 'bn' && user.cityNameBn) || user.cityName
+                : t('profile.allCities')}</dd>
               <dt>{t('profile.landing')}</dt><dd className="mono">{user?.home || '—'}</dd>
               <dt>{t('profile.signedInAt')}</dt><dd>{date(user?.loginAt)}</dd>
             </dl>

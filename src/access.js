@@ -35,10 +35,11 @@ export const ROUTE_ACCESS = {
   // roles. It was reachable by every signed-in user until this entry existed —
   // a path absent from this map is open, which is easy to miss when adding one.
   '/app/holdings': ['collector', ...OFFICE],
-  // Registering or editing a building is a write, so it is narrower than the
-  // list it sits behind. `:id` is matched as a parameter — see `canAccess`.
-  '/app/holdings/new': OFFICE,
-  '/app/holdings/:id/edit': OFFICE,
+  // Registering or editing a building. Collectors find unregistered buildings
+  // in the field, so they may add and correct them — the server confines them
+  // to their own wards. `:id` is matched as a parameter — see `canAccess`.
+  '/app/holdings/new': ['collector', ...OFFICE],
+  '/app/holdings/:id/edit': ['collector', ...OFFICE],
   // A building's families. Collectors read it on the doorstep, so it matches
   // the register it hangs off rather than the narrower editor.
   '/app/holdings/:id/households': ['collector', ...OFFICE],

@@ -95,8 +95,15 @@ export default function HoldingEditor() {
   const myAgency = user?.agency || null
   const { catalog, agencies } = useData()
   const isNew = !id
+  // A ward-bound account (a collector) may only register buildings in its own
+  // wards — the server refuses the rest — so the list offers only those.
+  const myWards = user?.scopeKind === 'ward' && user?.scopeWards?.length ? user.scopeWards : null
+  const wardChoices = (catalog?.wards || []).filter((w) => !myWards || myWards.includes(w.id))
 
-  const [form, setForm] = useState(BLANK_HOLDING)
+  // A collector with one ward starts with it chosen.
+  const [form, setForm] = useState(() => (
+    isNew && myWards?.length === 1 ? { ...BLANK_HOLDING, ward: myWards[0] } : BLANK_HOLDING
+  ))
   // Read-only facts about a saved building: its QR tag and what it owes.
   const [service, setService] = useState({ qr: null, dues: 0, effectiveCharge: 0 })
   const [families, setFamilies] = useState([])
@@ -308,7 +315,7 @@ export default function HoldingEditor() {
                   onChange={(e) => { set('ward')(e); setForm((f) => ({ ...f, road: '' })) }}
                   disabled={busy}
                   options={[{ value: '', label: '—' },
-                    ...(catalog?.wards || []).map((w) => ({ value: w.id, label: w.name }))]} />
+                    ...wardChoices.map((w) => ({ value: w.id, label: w.name }))]} />
                 <Field half as="select" label={t('holdings.col.road')} value={form.road}
                   onChange={set('road')} disabled={busy}
                   hint={form.ward ? undefined : t('holdings.editor.pickWardFirst')}
