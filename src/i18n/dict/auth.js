@@ -47,6 +47,7 @@ export default {
     'auth.show': 'Show',
     'auth.hide': 'Hide',
     'auth.accountDisabled': 'This account has been disabled. Contact your ward office.',
+    'auth.unknownAccount': 'No staff account for this number. Holding owners and residents: use the citizen portal.',
     'auth.offline': 'Cannot reach the server. Check your connection and try again.',
     'auth.unexpected': 'Something went wrong. Please try again.',
     // setPin/changePin reject a weak PIN before the round trip and return these
@@ -109,6 +110,7 @@ export default {
     'auth.show': 'দেখুন',
     'auth.hide': 'লুকান',
     'auth.accountDisabled': 'এই অ্যাকাউন্ট বন্ধ করা হয়েছে। ওয়ার্ড অফিসে যোগাযোগ করুন।',
+    'auth.unknownAccount': 'এই নম্বরে কোনো কর্মী অ্যাকাউন্ট নেই। হোল্ডিং মালিক ও বাসিন্দারা সিটিজেন পোর্টাল ব্যবহার করুন।',
     'auth.offline': 'সার্ভারে সংযোগ করা যাচ্ছে না। ইন্টারনেট দেখে আবার চেষ্টা করুন।',
     'auth.unexpected': 'কিছু একটা সমস্যা হয়েছে। আবার চেষ্টা করুন।',
     'auth.tooShort': 'পিনটি খুব ছোট।',

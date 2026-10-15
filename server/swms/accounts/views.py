@@ -70,25 +70,19 @@ def _session_response(user, request) -> Response:
     )
 
 
-def _provision(phone: str):
-    """Find or create the operator for a phone number.
+def _operator_for(phone: str):
+    """The operator account for a phone number — never created here.
 
-    The mock signed unknown numbers in as a generic 'Field Operator'; that is
-    kept so field staff can be onboarded by an office user without a separate
-    registration screen. New accounts get the least-privileged role.
+    The mock app signed unknown numbers in as a new 'Field Operator' collector,
+    and the server used to do the same. That let anyone with a phone become
+    staff, and holding owners who tried the staff login ended up with collector
+    accounts. Staff accounts are now made only on the Users page; citizens sign
+    in through the citizen portal instead.
     """
     user = User.objects.filter(phone=phone).first()
-    if user:
-        return user, True
-    return (
-        User.objects.create_user(
-            phone=phone,
-            name="Field Operator",
-            role=Role.COLLECTOR,
-            scope_kind=ScopeKind.WARD,
-        ),
-        False,
-    )
+    if user is None:
+        raise DomainError("auth.unknownAccount", code="account_unknown")
+    return user
 
 
 class PasswordLoginView(APIView):
@@ -203,7 +197,7 @@ class OtpVerifyView(APIView):
         serializer.is_valid(raise_exception=True)
         phone = serializer.validated_data["phone"]
 
-        user, _existed = _provision(phone)
+        user = _operator_for(phone)
         if not user.is_active:
             raise DomainError("This account is disabled.", code="account_disabled")
         # A successful OTP clears any PIN lockout, matching the frontend's

@@ -295,7 +295,7 @@ def resolve_with(complaint: Complaint, note: str = "", *, user=None) -> Complain
 
 
 @transaction.atomic
-def reopen(complaint: Complaint, *, user=None, note: str = "") -> Complaint:
+def reopen(complaint: Complaint, *, user=None, note: str = "", actor: str | None = None) -> Complaint:
     """Send a settled ticket back to `open`.
 
     Only from `resolved`/`closed`: reopening something that was never settled is
@@ -314,7 +314,7 @@ def reopen(complaint: Complaint, *, user=None, note: str = "") -> Complaint:
     complaint.resolved_at = None
     complaint.closed_at = None
     complaint.save(update_fields=["status", "resolved_at", "closed_at", "updated_at"])
-    _log(complaint, ActivityAction.REOPENED, note=note or "Reopened.", user=user)
+    _log(complaint, ActivityAction.REOPENED, note=note or "Reopened.", user=user, actor=actor)
     _broadcast(complaint)
     return complaint
 
@@ -349,13 +349,13 @@ def change_priority(complaint: Complaint, priority: str, *, user=None, note: str
 
 
 @transaction.atomic
-def add_note(complaint: Complaint, note: str, *, user=None) -> ComplaintActivity:
+def add_note(complaint: Complaint, note: str, *, user=None, actor: str | None = None) -> ComplaintActivity:
     """Append a comment. The only mutation that changes no column."""
     text = (note or "").strip()
     if not text:
         raise DomainError("A note cannot be empty.", code="empty_note")
     # No _broadcast: the map and dashboard render columns, and none changed.
-    return _log(complaint, ActivityAction.NOTE, note=text, user=user)
+    return _log(complaint, ActivityAction.NOTE, note=text, user=user, actor=actor)
 
 
 # --------------------------------------------------------------------------- #

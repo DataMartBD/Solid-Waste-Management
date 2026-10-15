@@ -262,9 +262,9 @@ class OtpCode(TimeStampedModel):
     """A single-use login code.
 
     The code itself is never stored — only a hash — so a database leak cannot be
-    replayed. Rows are keyed by phone rather than user so unknown numbers can
-    still be issued a code (the mock app auto-provisioned unknown operators, and
-    that behaviour is preserved).
+    replayed. Rows are keyed by phone rather than user, so asking for a code does
+    not reveal whether a number has an account; verifying one for an unknown
+    number is refused (`account_unknown`) — accounts are never created here.
     """
 
     phone = models.CharField(max_length=15, db_index=True)

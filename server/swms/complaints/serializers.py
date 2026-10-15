@@ -113,6 +113,8 @@ class ComplaintSerializer(SwmsModelSerializer):
     head = serializers.SerializerMethodField()
     road = serializers.CharField(source="holding.road.name", read_only=True)
     phone = serializers.SerializerMethodField()
+    #: The number a citizen reported from (the citizen portal stamps it).
+    reporterPhone = serializers.CharField(source="reporter_phone", read_only=True)
 
     #: Moving a ticket to another holding would strand its denormalised ward,
     #: and re-dating a missed collection would dodge the deadline check.
@@ -126,6 +128,7 @@ class ComplaintSerializer(SwmsModelSerializer):
             "household",
             "type",
             "channel",
+            "reporterPhone",
             "status",
             "assigned",
             "opened",

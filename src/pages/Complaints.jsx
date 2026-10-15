@@ -350,7 +350,10 @@ function ComplaintDrawer({ complaint: c, collectors, collectorName, onClose, bus
               <span className={`badge ${meta.badge}`}><span className="dot" />{t(priorityLabelKey(c.priority))}</span>
               <Status value={c.status} />
             </div>
-            <div className="tiny muted-3 mono mt-4">{c.id} · {t(`complaints.channelBadge.${c.channel}`)}</div>
+            <div className="tiny muted-3 mono mt-4">
+              {c.id} · {t(`complaints.channelBadge.${c.channel}`)}
+              {c.reporterPhone && <> · {t('complaints.reportedFrom', { phone: c.reporterPhone })}</>}
+            </div>
           </div>
           <button className="icon-btn" onClick={onClose} aria-label={t('common.close')}>✕</button>
         </div>

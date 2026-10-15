@@ -24,6 +24,7 @@ import ReportsCustomer from './pages/ReportsCustomer.jsx'
 import Collection from './pages/Collection.jsx'
 import RoutePlan from './pages/RoutePlan.jsx'
 import Profile from './pages/Profile.jsx'
+import Citizen from './pages/Citizen.jsx'
 import './styles/login.css'
 import './styles/app.css'
 
@@ -60,6 +61,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
+      {/* Holding owners and households: their own sign-in, outside the staff app. */}
+      <Route path="/citizen" element={<Citizen />} />
       <Route path="/app" element={<Protected><Layout /></Protected>}>
         <Route index element={<Navigate to={homeFor(user)} replace />} />
         <Route path="dashboard" element={gated(<Dashboard />)} />

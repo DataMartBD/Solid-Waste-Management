@@ -23,6 +23,7 @@ api_patterns = [
     path("", include("swms.surveys.urls")),
     path("reports/", include("swms.reports.urls")),
     path("ai/", include("swms.ai.urls")),
+    path("citizen/", include("swms.citizens.urls")),
 ]
 
 urlpatterns = [

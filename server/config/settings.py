@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     "swms.reports",
     "swms.surveys",
     "swms.ai",
+    "swms.citizens",
 ]
 
 MIDDLEWARE = [
@@ -186,6 +187,7 @@ REST_FRAMEWORK = {
         "pin": "20/hour",
         "password": "30/hour",
         "ai": "30/hour",
+        "citizen": "30/hour",
     },
 }
 
