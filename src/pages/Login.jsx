@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth, ROLE_HOME, normalizePhone } from '../context/AuthContext.jsx'
 import { get } from '../api/client.js'
 import { useLang, LANGUAGES, digitsOnly } from '../i18n/index.jsx'
@@ -123,6 +123,10 @@ export default function Login() {
               {busy ? <span className="spinner" /> : <>{t('auth.signIn')} <IconArrow size={16} /></>}
             </button>
           </form>
+
+          <div className="center small" style={{ marginTop: 16 }}>
+            <Link to="/">← {t('landing.otherOptions')}</Link>
+          </div>
 
           {demoAccounts.length > 0 && (
             <div className="demo-box">

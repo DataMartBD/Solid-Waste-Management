@@ -25,6 +25,7 @@ import Collection from './pages/Collection.jsx'
 import RoutePlan from './pages/RoutePlan.jsx'
 import Profile from './pages/Profile.jsx'
 import Citizen from './pages/Citizen.jsx'
+import Landing from './pages/Landing.jsx'
 import './styles/login.css'
 import './styles/app.css'
 
@@ -60,6 +61,8 @@ export default function App() {
 
   return (
     <Routes>
+      {/* The front door: staff or holding owner / resident. */}
+      <Route path="/" element={<PublicOnly><Landing /></PublicOnly>} />
       <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
       {/* Holding owners and households: their own sign-in, outside the staff app. */}
       <Route path="/citizen" element={<Citizen />} />
@@ -88,7 +91,7 @@ export default function App() {
         <Route path="reports-customer" element={gated(<ReportsCustomer />)} />
         <Route path="profile" element={<Profile />} />
       </Route>
-      <Route path="*" element={<Navigate to={user ? homeFor(user) : '/login'} replace />} />
+      <Route path="*" element={<Navigate to={user ? homeFor(user) : '/'} replace />} />
     </Routes>
   )
 }

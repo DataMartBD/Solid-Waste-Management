@@ -63,12 +63,15 @@ function LangSwitch() {
 }
 
 function CitizenLogin({ onSignedIn }) {
-  const { t, digitsOnly } = useLang()
+  const { t, digits, digitsOnly } = useLang()
   const errorText = useErrorText()
   const [phone, setPhone] = useState('')
   const [pin, setPin] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // Once a full mobile number is typed, spell out the first-time PIN for it.
+  const typed = digitsOnly(phone)
+  const firstPin = /^01\d{9}$/.test(typed) ? typed.slice(-4) : ''
 
   async function submit(e) {
     e.preventDefault()
@@ -96,12 +99,13 @@ function CitizenLogin({ onSignedIn }) {
           inputMode="tel" autoComplete="tel" placeholder="01XXXXXXXXX" disabled={busy} required />
         <Field label={t('citizen.pin')} value={pin} onChange={(e) => setPin(e.target.value)}
           type="password" inputMode="numeric" maxLength={4} autoComplete="current-password"
-          hint={t('citizen.pinHint')} disabled={busy} required />
+          hint={firstPin ? t('citizen.pinFor', { pin: digits(firstPin) }) : t('citizen.pinHint')}
+          disabled={busy} required />
         {error && <div className="form-note bad"><span>{error}</span></div>}
         <button className="btn btn-primary citizen-big" disabled={busy}>
           {busy ? t('citizen.signingIn') : t('citizen.signIn')}
         </button>
-        <div className="center small mt-16"><Link to="/login">{t('citizen.staffLink')}</Link></div>
+        <div className="center small mt-16"><Link to="/">← {t('landing.otherOptions')}</Link></div>
       </form>
       <p className="center tiny muted-3">{t('citizen.tagline')}</p>
     </div>
