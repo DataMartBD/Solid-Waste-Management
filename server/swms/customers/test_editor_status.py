@@ -34,7 +34,7 @@ class EditorOmitsStatusTests(HoldingData):
         body = {
             "ward": self.ward.id, "road": self.road.name, "holdingNo": "42/K",
             "holdingType": self.holding_type.id, "ownerName": "Landlord Mia",
-            "ownerPhone": "", "ownerAltPhone": "", "ownerEmail": "",
+            "ownerPhone": "",
             "floors": None, "unitsTotal": None, "notes": "",
         }
         if families is not None:

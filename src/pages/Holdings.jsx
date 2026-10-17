@@ -151,8 +151,8 @@ export default function Holdings() {
       cell: ({ row }) => (
         <>
           <div style={{ fontWeight: 600 }}>{row.original.holdingNo}</div>
-          {row.original.holdingType && (
-            <div className="tiny muted-3">{t(`opt.holdingType.${row.original.holdingType}`)}</div>
+          {row.original.collectionPoint && (
+            <div className="tiny muted-3">{t(`holdings.collectionPoint.${row.original.collectionPoint}`)}</div>
           )}
         </>
       ),
@@ -177,13 +177,25 @@ export default function Holdings() {
         : <span className="muted-3">—</span>),
     },
     { accessorKey: 'ward', header: t('holdings.col.ward') },
-    { accessorKey: 'road', header: t('holdings.col.road') },
+    {
+      accessorKey: 'road',
+      header: t('holdings.col.road'),
+      cell: ({ row }) => (
+        <>
+          <div>{row.original.road}</div>
+          {row.original.lane && <div className="tiny muted-3">{row.original.lane}</div>}
+        </>
+      ),
+    },
     {
       accessorKey: 'ownerName',
       header: t('holdings.col.owner'),
       cell: ({ row }) => (
         <>
           <div>{row.original.ownerName}</div>
+          {row.original.ownerRole && row.original.ownerRole !== 'owner' && (
+            <div className="tiny muted-3">{t(`holdings.ownerRole.${row.original.ownerRole}`)}</div>
+          )}
           {row.original.ownerPhone && (
             <div className="tiny muted-3 mono">{row.original.ownerPhone}</div>
           )}
@@ -293,6 +305,7 @@ export default function Holdings() {
     { key: 'district', label: t('holdings.col.district') },
     { key: 'thana', label: t('holdings.col.thana') },
     { key: 'road', label: t('holdings.col.road') },
+    { key: 'lane', label: t('holdings.lane') },
     { key: 'ward', label: t('holdings.col.ward') },
     { key: 'ownerName', label: t('holdings.col.owner') },
     { key: 'ownerPhone', label: t('holdings.col.phone') },
@@ -405,7 +418,6 @@ export function HoldingForm({ holding, catalog, onClose, onSaved }) {
     ward: holding?.ward || '',
     road: holding?.road || '',
     holdingNo: holding?.holdingNo || '',
-    holdingType: holding?.holdingType || catalog?.holdingTypes?.[0]?.id || '',
     ownerName: holding?.ownerName || '',
     ownerPhone: holding?.ownerPhone || '',
     floors: holding?.floors ?? '',
@@ -435,6 +447,8 @@ export function HoldingForm({ holding, catalog, onClose, onSaved }) {
       ...form,
       floors: form.floors === '' ? null : Number(form.floors),
       unitsTotal: form.unitsTotal === '' ? null : Number(form.unitsTotal),
+      // Made while registering a customer into it, so its flats are registered.
+      ...(isNew ? { collectionPoint: 'floor' } : {}),
     }
     setBusy(true)
     try {
@@ -466,8 +480,6 @@ export function HoldingForm({ holding, catalog, onClose, onSaved }) {
           </FormRow>
           <FormRow>
             <Field half label={t('holdings.col.holdingNo')} value={form.holdingNo} onChange={set('holdingNo')} placeholder="142/B" />
-            <Field half as="select" label={t('holdings.holdingType')} value={form.holdingType} onChange={set('holdingType')}
-              options={(catalog?.holdingTypes || []).map((h) => ({ value: h.id, label: t(h.key) }))} />
           </FormRow>
           <FormRow>
             <Field half label={t('holdings.floors')} type="number" min="0" value={form.floors} onChange={set('floors')} />

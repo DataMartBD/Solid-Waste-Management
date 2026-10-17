@@ -9,6 +9,10 @@ export default {
     'opt.tier.commercial_small': 'Commercial — small',
     'opt.tier.commercial_large': 'Commercial — large',
 
+    'opt.customerType.family': 'Family',
+    'opt.customerType.hotel': 'Hotel',
+    'opt.customerType.residence': 'Residence',
+    'opt.customerType.office': 'Office',
     'opt.customerType.residential': 'Residential',
     'opt.customerType.commercial': 'Commercial',
     'opt.customerType.institutional': 'Institutional',
@@ -96,6 +100,10 @@ export default {
     'opt.tier.commercial_small': 'বাণিজ্যিক — ছোট',
     'opt.tier.commercial_large': 'বাণিজ্যিক — বড়',
 
+    'opt.customerType.family': 'পরিবার',
+    'opt.customerType.hotel': 'হোটেল',
+    'opt.customerType.residence': 'বাসা',
+    'opt.customerType.office': 'অফিস',
     'opt.customerType.residential': 'আবাসিক',
     'opt.customerType.commercial': 'বাণিজ্যিক',
     'opt.customerType.institutional': 'প্রাতিষ্ঠানিক',

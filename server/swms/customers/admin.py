@@ -32,8 +32,8 @@ class HoldingAdmin(admin.ModelAdmin):
     fieldsets = (
         (None, {"fields": ("id", "status", "holding_type", "notes")}),
         ("Service charge", {"fields": ("qr", "tier", "charge", "payment_mode", "payment_day", "dues")}),
-        ("Address", {"fields": ("ward", "road", "holding_no", "address", "floors", "units_total")}),
-        ("Owner", {"fields": ("owner_name", "owner_phone", "owner_alt_phone", "owner_email")}),
+        ("Address", {"fields": ("ward", "road", "lane", "holding_no", "address", "floors", "units_total", "collection_point")}),
+        ("Owner", {"fields": ("owner_name", "owner_role", "owner_phone")}),
         (
             "Location",
             {"fields": ("lat", "lng", "accuracy", "verified", "verified_at", "verified_by", "verified_by_user", "placed_by_hand")},

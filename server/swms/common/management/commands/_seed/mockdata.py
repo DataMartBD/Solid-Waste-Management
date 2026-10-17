@@ -65,6 +65,10 @@ TIERS = [
 # --------------------------------------------------------------------------- #
 
 CUSTOMER_TYPES = [
+    {"id": "family", "key": "opt.customerType.family", "label": "Family"},
+    {"id": "hotel", "key": "opt.customerType.hotel", "label": "Hotel"},
+    {"id": "residence", "key": "opt.customerType.residence", "label": "Residence"},
+    {"id": "office", "key": "opt.customerType.office", "label": "Office"},
     {"id": "residential", "key": "opt.customerType.residential", "label": "Residential"},
     {"id": "commercial", "key": "opt.customerType.commercial", "label": "Commercial"},
     {"id": "institutional", "key": "opt.customerType.institutional", "label": "Institutional"},

@@ -34,6 +34,27 @@ class HoldingStatus(models.TextChoices):
     INACTIVE = "inactive", "Inactive"
 
 
+class OwnerRole(models.TextChoices):
+    """In whose name the building is registered. A building with several
+    owners registers under its owners' association's President or Secretary."""
+
+    OWNER = "owner", "Owner"
+    PRESIDENT = "president", "President"
+    SECRETARY = "secretary", "Secretary"
+
+
+class CollectionPoint(models.TextChoices):
+    """Where the collector picks the waste up.
+
+    At a single point (everyone brings it to the ground floor) the building is
+    collected as one and its flats are not registered. Floor by floor, each
+    flat is a customer and households must equal units.
+    """
+
+    SINGLE = "single", "Single point"
+    FLOOR = "floor", "Floor by floor"
+
+
 class ServiceStatus(models.TextChoices):
     """A holding's service standing, derived from its households — never stored.
 
@@ -72,17 +93,25 @@ class Holding(TextKeyModel):
 
     ward = models.ForeignKey("catalog.Ward", on_delete=models.PROTECT, related_name="holdings")
     road = models.ForeignKey("catalog.Road", on_delete=models.PROTECT, related_name="holdings")
+    #: The lane or alley inside the road (গলি), typed by hand.
+    lane = models.CharField(max_length=120, blank=True)
     holding_no = models.CharField(max_length=24, help_text="Holding number, e.g. 142/B")
+    #: No longer asked for; kept for buildings registered when it was.
     holding_type = models.ForeignKey(
-        "catalog.HoldingType", on_delete=models.PROTECT, related_name="holdings"
+        "catalog.HoldingType", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="holdings",
     )
 
     # The owner of the building, who is often not the head of any household in
     # it — a landlord's tenants each have their own `Household.head`.
     owner_name = models.CharField(max_length=120)
+    owner_role = models.CharField(
+        max_length=10, choices=OwnerRole.choices, default=OwnerRole.OWNER
+    )
     owner_phone = models.CharField(max_length=20, blank=True)
-    owner_alt_phone = models.CharField(max_length=20, blank=True)
-    owner_email = models.EmailField(blank=True)
+    collection_point = models.CharField(
+        max_length=8, choices=CollectionPoint.choices, default=CollectionPoint.SINGLE
+    )
 
     address = models.CharField(max_length=200, blank=True)
     floors = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -178,8 +207,16 @@ class Holding(TextKeyModel):
         if not self.qr:
             self.qr = qr_tag(self.id)
         if not self.address:
-            self.address = f"Holding {self.holding_no}, {self.road.name}"
+            self.address = self.default_address()
         super().save(*args, **kwargs)
+
+    def default_address(self) -> str:
+        parts = [f"Holding {self.holding_no}", self.lane.strip(), self.road.name]
+        return ", ".join(p for p in parts if p)
+
+    @property
+    def is_single_point(self) -> bool:
+        return self.collection_point == CollectionPoint.SINGLE
 
     @property
     def active_household_count(self) -> int:
@@ -193,7 +230,7 @@ class Holding(TextKeyModel):
         families recorded equal it. More than declared is refused on save, so
         `False` means families are still to be recorded.
         """
-        if self.units_total is None:
+        if self.units_total is None or self.is_single_point:
             return None
         return self.active_household_count == self.units_total
 
@@ -228,7 +265,15 @@ class Holding(TextKeyModel):
 
     @property
     def service_status(self) -> str:
-        """`none` / `partial` / `full`, from the households on this holding."""
+        """`none` / `partial` / `full`, from the households on this holding.
+
+        A single-point building has no households: it is `full` once signed up
+        (a tier or an agreed charge) and active, else `none`.
+        """
+        if self.is_single_point:
+            signed_up = bool(self.tier_id or self.charge)
+            active = self.status == HoldingStatus.ACTIVE
+            return ServiceStatus.FULL if signed_up and active else ServiceStatus.NONE
         households = list(self.households.all())
         if not households:
             return ServiceStatus.NONE
@@ -387,7 +432,7 @@ class Household(ContactProfile, LocatableHolding):
             self.id = household_id()
         self.sync_from_holding()
         if not self.address:
-            base = f"Holding {self.holding_no}, {self.road.name}"
+            base = self.holding.default_address()
             self.address = f"Flat {self.unit}, {base}" if self.unit else base
         super().save(*args, **kwargs)
 
@@ -446,7 +491,7 @@ class PotentialCustomer(ContactProfile, LocatableHolding):
             self.id = potential_id()
         self.sync_from_holding()
         if not self.address:
-            base = f"Holding {self.holding_no}, {self.road.name}"
+            base = self.holding.default_address()
             self.address = f"Flat {self.unit}, {base}" if self.unit else base
         super().save(*args, **kwargs)
 

@@ -1,6 +1,6 @@
 """Which holdings a citizen may see, read from the phone numbers on record.
 
-A number on a holding (`owner_phone` or `owner_alt_phone`) gives **owner**
+A number on a holding (`owner_phone`) gives **owner**
 access to that holding: its daily collection and every complaint on it. A
 number on a household gives **household** access to the building it lives in:
 daily collection and that family's own complaints. Nothing else is shown to a
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from django.db.models import F, Func, Q, Value
+from django.db.models import F, Func, Value
 
 from swms.customers.models import Holding, HoldingStatus, Household
 
@@ -50,8 +50,8 @@ def access_for(phone: str) -> list[Access]:
 
     owned = (
         Holding.objects.filter(status=HoldingStatus.ACTIVE)
-        .annotate(owner_digits=_digits("owner_phone"), alt_digits=_digits("owner_alt_phone"))
-        .filter(Q(owner_digits__endswith=tail) | Q(alt_digits__endswith=tail))
+        .annotate(owner_digits=_digits("owner_phone"))
+        .filter(owner_digits__endswith=tail)
         .select_related("ward", "road")
         .order_by("holding_no")
     )

@@ -32,12 +32,35 @@ from swms.catalog.models import (
     TimeGap,
     Ward,
 )
+from swms.accounts.phone import is_valid_phone, normalize_phone
 from swms.agencies.models import Agency
 from swms.common.scoping import guard_agency, guard_ward
 from swms.common.serializers import SwmsModelSerializer
 from swms.fieldops.models import Collector
 
-from .models import Holding, HoldingStatus, Household, PotentialCustomer
+from .models import CollectionPoint, Holding, HoldingStatus, Household, OwnerRole, PotentialCustomer
+
+PHONE_MESSAGE = "Enter an 11-digit mobile number (01XXXXXXXXX)."
+
+
+def clean_phone(value: str) -> str:
+    """Blank, or exactly 11 digits starting 01 — +88, spaces and dashes are dropped."""
+    if not (value or "").strip():
+        return ""
+    phone = normalize_phone(value)
+    if not is_valid_phone(phone):
+        raise serializers.ValidationError(PHONE_MESSAGE)
+    return phone
+
+
+def first_option(model):
+    """The catalog's first active row: the default for a choice no longer asked for."""
+    row = model.objects.filter(active=True).order_by("sort_order", "id").first()
+    if row is None:
+        raise serializers.ValidationError(
+            f"No {model._meta.verbose_name} is configured to fall back on."
+        )
+    return row
 
 
 class RoadNameField(serializers.CharField):
@@ -118,6 +141,9 @@ class NestedHouseholdSerializer(serializers.Serializer):
     #: anything else on the building was edited.
     status = serializers.ChoiceField(choices=HoldingStatus.choices, required=False)
 
+    def validate_phone(self, value):
+        return clean_phone(value)
+
     def validate(self, attrs):
         total = attrs.get("members")
         if total is not None:
@@ -136,15 +162,17 @@ class HoldingSerializer(SwmsModelSerializer):
     ward = serializers.PrimaryKeyRelatedField(queryset=Ward.objects.all())
     road = RoadNameField()
     holdingNo = serializers.CharField(source="holding_no")
+    #: No longer asked for; accepted so older clients and the upload still work.
     holdingType = serializers.PrimaryKeyRelatedField(
-        source="holding_type", queryset=HoldingType.objects.all()
+        source="holding_type", queryset=HoldingType.objects.all(), required=False, allow_null=True
     )
+    lane = serializers.CharField(max_length=120, required=False, allow_blank=True)
     ownerName = serializers.CharField(source="owner_name")
+    ownerRole = serializers.ChoiceField(source="owner_role", choices=OwnerRole.choices, required=False)
     ownerPhone = serializers.CharField(source="owner_phone", required=False, allow_blank=True)
-    ownerAltPhone = serializers.CharField(
-        source="owner_alt_phone", required=False, allow_blank=True
+    collectionPoint = serializers.ChoiceField(
+        source="collection_point", choices=CollectionPoint.choices, required=False
     )
-    ownerEmail = serializers.EmailField(source="owner_email", required=False, allow_blank=True)
     unitsTotal = serializers.IntegerField(source="units_total", required=False, allow_null=True)
 
     lat = serializers.FloatField(allow_null=True, required=False)
@@ -215,12 +243,13 @@ class HoldingSerializer(SwmsModelSerializer):
             "thana",
             "ward",
             "road",
+            "lane",
             "holdingNo",
             "holdingType",
             "ownerName",
+            "ownerRole",
             "ownerPhone",
-            "ownerAltPhone",
-            "ownerEmail",
+            "collectionPoint",
             "address",
             "floors",
             "unitsTotal",
@@ -270,6 +299,9 @@ class HoldingSerializer(SwmsModelSerializer):
         guard_agency(self, agency.id if agency else None)
         return agency
 
+    def validate_ownerPhone(self, value):
+        return clean_phone(value)
+
     def validate_ward(self, ward):
         """Refuse a ward the caller is not scoped to.
 
@@ -288,8 +320,34 @@ class HoldingSerializer(SwmsModelSerializer):
         self._resolve_road(attrs)
         self._check_family_ids(attrs)
         self._check_flats(attrs)
+        self._check_single_point(attrs)
         self._check_units(attrs)
         return attrs
+
+    def _single_point(self, attrs) -> bool:
+        # A new building sent with customers but no choice is floor by floor —
+        # registering flats is what that means. The editor always says which.
+        if (self.instance is None and "collection_point" not in attrs
+                and attrs.get("households")):
+            attrs["collection_point"] = CollectionPoint.FLOOR
+        point = attrs.get("collection_point", getattr(self.instance, "collection_point", None))
+        return (point or CollectionPoint.SINGLE) == CollectionPoint.SINGLE
+
+    def _check_single_point(self, attrs):
+        """A single collection point registers no flats: refuse new customers.
+
+        Customers recorded before a building was switched to single point are
+        kept (and may still be edited or retired), but none are added.
+        """
+        if not self._single_point(attrs):
+            return
+        if any(not (row.get("id") or "").strip() for row in attrs.get("households") or []):
+            raise serializers.ValidationError({
+                "households": (
+                    "This holding has a single collection point, so its flats are not "
+                    "registered. Choose 'Floor by floor' to add customers."
+                )
+            })
 
     def _check_units(self, attrs):
         """Never more active families than the units the building has.
@@ -299,7 +357,7 @@ class HoldingSerializer(SwmsModelSerializer):
         the form's edits applied, plus the ones it adds.
         """
         units = attrs.get("units_total", getattr(self.instance, "units_total", None))
-        if units is None:
+        if units is None or self._single_point(attrs):
             return
         status = {}
         if self.instance is not None:
@@ -431,7 +489,13 @@ class HoldingSerializer(SwmsModelSerializer):
     def update(self, instance, validated_data):
         rows = validated_data.pop("households", [])
         defaults = validated_data.pop("householdDefaults", {})
+        before = (instance.lane, instance.road_id, instance.holding_no)
         holding = super().update(instance, validated_data)
+        moved = before != (holding.lane, holding.road_id, holding.holding_no)
+        if moved:
+            # The address is built from these, so it follows them.
+            holding.address = holding.default_address()
+            holding.save(update_fields=["address", "updated_at"])
         self._save_families(holding, rows, defaults)
         return holding
 
@@ -518,8 +582,8 @@ class HoldingSerializer(SwmsModelSerializer):
             "customer_type": pick(CustomerType, "customerType"),
             "storage": pick(StorageType, "storage"),
             "suitable_time": pick(SuitableTime, "suitableTime"),
-            # The flat is in this building, so it is of this building's type.
-            "holding_type": holding.holding_type,
+            # No longer asked for: the building's type if it has one, else the default.
+            "holding_type": holding.holding_type or first_option(HoldingType),
         }
 
     def _resolve_road(self, attrs):
@@ -568,20 +632,35 @@ class HoldingSerializerBase(SwmsModelSerializer):
 
     # --- contact profile --------------------------------------------------- #
     customerType = serializers.PrimaryKeyRelatedField(
-        source="customer_type", queryset=CustomerType.objects.all()
+        source="customer_type", queryset=CustomerType.objects.all(), required=False
     )
     altPhone = serializers.CharField(source="alt_phone", required=False, allow_blank=True)
     contactPerson = serializers.CharField(source="contact_person", required=False, allow_blank=True)
     bloodGroup = serializers.CharField(source="blood_group", required=False, allow_blank=True)
     membersUnder5 = serializers.IntegerField(source="members_under5", required=False)
     membersFemale = serializers.IntegerField(source="members_female", required=False)
-    storage = serializers.PrimaryKeyRelatedField(queryset=StorageType.objects.all())
+    # Storage, holding type and collection time are no longer asked for; the
+    # columns still need a value, so a missing one takes the default on create.
+    storage = serializers.PrimaryKeyRelatedField(queryset=StorageType.objects.all(), required=False)
     holdingType = serializers.PrimaryKeyRelatedField(
-        source="holding_type", queryset=HoldingType.objects.all()
+        source="holding_type", queryset=HoldingType.objects.all(), required=False
     )
     suitableTime = serializers.PrimaryKeyRelatedField(
-        source="suitable_time", queryset=SuitableTime.objects.all()
+        source="suitable_time", queryset=SuitableTime.objects.all(), required=False
     )
+
+    def validate_phone(self, value):
+        return clean_phone(value)
+
+    def create(self, validated_data):
+        holding = validated_data.get("holding")
+        validated_data.setdefault("customer_type", first_option(CustomerType))
+        validated_data.setdefault("storage", first_option(StorageType))
+        validated_data.setdefault("suitable_time", first_option(SuitableTime))
+        validated_data.setdefault(
+            "holding_type", (holding.holding_type if holding else None) or first_option(HoldingType)
+        )
+        return super().create(validated_data)
 
     #: Subclasses list the profile keys they expose.
     PROFILE_FIELDS = [
@@ -663,6 +742,14 @@ class HouseholdSerializer(HoldingSerializerBase):
         unit = attrs.get("unit", self.instance.unit if self.instance else "")
         if holding is None:
             return attrs
+
+        if self.instance is None and holding.is_single_point:
+            raise serializers.ValidationError({
+                "holding": (
+                    f"Holding {holding.holding_no} has a single collection point, so its "
+                    "flats are not registered."
+                )
+            })
 
         # Households must equal units: an active family may not take the
         # holding past the units it declared.

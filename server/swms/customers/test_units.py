@@ -37,6 +37,7 @@ class UnitsRuleTests(TestCase):
         holding = Holding.objects.create(
             ward=self.ward, road=self.road, holding_no=f"{units}-{families}",
             holding_type=self.htype, owner_name="Owner", units_total=units,
+            collection_point="floor",  # the units rule is a floor-by-floor rule
         )
         for index in range(families):
             Household.objects.create(holding=holding, head=f"F{index}", unit=str(index), **self.profile)
@@ -45,7 +46,7 @@ class UnitsRuleTests(TestCase):
     def body(self, **extra):
         return {
             "ward": self.ward.id, "road": self.road.name, "holdingNo": "9/A",
-            "holdingType": self.htype.id, "ownerName": "Owner", **extra,
+            "holdingType": self.htype.id, "ownerName": "Owner", "collectionPoint": "floor", **extra,
         }
 
     def test_the_holding_says_whether_households_equal_units(self):

@@ -23,28 +23,30 @@ import { QRCodeSVG } from 'qrcode.react'
 //
 // Everything is holding-wise: the service charge, the bill, the collection and
 // the QR tag belong to the building, so the charge is set on the left. The
-// families on the right are a record of who lives there.
+// customers on the right are a record of who lives there — and only when the
+// building is collected floor by floor. At a single collection point (everyone
+// brings their waste to one place) the flats are not registered at all.
 
 const BLANK_HOLDING = {
   agency: '',
-  district: '', thana: '', ward: '', road: '', holdingNo: '', holdingType: '',
-  ownerName: '', ownerPhone: '', ownerAltPhone: '', ownerEmail: '',
+  district: '', thana: '', ward: '', road: '', lane: '', holdingNo: '',
+  ownerRole: 'owner', ownerName: '', ownerPhone: '',
+  collectionPoint: 'single',
   floors: '', unitsTotal: '', notes: '',
   // Service charge — one per building.
   tier: '', charge: '', paymentMode: '', paymentDay: 5,
 }
 
-// A family row as the form holds it. `id` is absent until it has been saved,
+// A customer row as the form holds it. `id` is absent until it has been saved,
 // which is exactly what tells the server to create rather than update.
-function blankFamily(catalog) {
+// The first customer of a building starts filled in from its owner — in a
+// house where the building and the family are one, that is the whole entry.
+function blankFamily(catalog, owner) {
   return {
     _key: `new-${Math.random().toString(36).slice(2, 9)}`,
-    head: '', customerType: catalog?.customerTypes?.[0]?.id || '',
-    phone: '', altPhone: '', profession: '', email: '', contactPerson: '', bloodGroup: '',
-    unit: '', holdingType: catalog?.holdingTypes?.[0]?.id || '', floor: '', address: '',
-    members: '', membersUnder5: '', membersFemale: '',
-    storage: catalog?.storageTypes?.[0]?.id || '',
-    suitableTime: catalog?.suitableTimes?.[0]?.id || '',
+    head: owner?.name || '', customerType: catalog?.customerTypes?.[0]?.id || '',
+    phone: owner?.phone || '', altPhone: '', profession: '',
+    unit: '', floor: '', members: '',
   }
 }
 
@@ -55,13 +57,8 @@ function familyFromRecord(row) {
     id: row.id,
     head: row.head || '', customerType: row.customerType || '',
     phone: row.phone || '', altPhone: row.altPhone || '', profession: row.profession || '',
-    email: row.email || '', contactPerson: row.contactPerson || '',
-    bloodGroup: row.bloodGroup || '',
-    unit: row.unit || '', holdingType: row.holdingType || '', floor: row.floor || '',
-    address: row.address || '',
-    members: row.members ?? '', membersUnder5: row.membersUnder5 ?? '',
-    membersFemale: row.membersFemale ?? '',
-    storage: row.storage || '', suitableTime: row.suitableTime || '',
+    unit: row.unit || '', floor: row.floor || '', address: row.address || '',
+    members: row.members ?? '',
     // Read for the badge only. The editor does not send a status, so an
     // inactive family stays inactive rather than being flipped back by an
     // edit that was about something else.
@@ -121,10 +118,11 @@ export default function HoldingEditor() {
       setForm({
         agency: holding.agency || '',
         district: holding.district || '', thana: holding.thana || '',
-        ward: holding.ward || '', road: holding.road || '',
-        holdingNo: holding.holdingNo || '', holdingType: holding.holdingType || '',
+        ward: holding.ward || '', road: holding.road || '', lane: holding.lane || '',
+        holdingNo: holding.holdingNo || '',
+        ownerRole: holding.ownerRole || 'owner',
         ownerName: holding.ownerName || '', ownerPhone: holding.ownerPhone || '',
-        ownerAltPhone: holding.ownerAltPhone || '', ownerEmail: holding.ownerEmail || '',
+        collectionPoint: holding.collectionPoint || 'single',
         floors: holding.floors ?? '', unitsTotal: holding.unitsTotal ?? '',
         notes: holding.notes || '',
         tier: holding.tier || '', charge: holding.charge || '',
@@ -148,10 +146,9 @@ export default function HoldingEditor() {
 
   // Defaults for a brand-new building, once the catalog has arrived.
   useEffect(() => {
-    if (!isNew || !catalog?.holdingTypes?.length) return
+    if (!isNew || !catalog?.tiers) return
     setForm((f) => ({
       ...f,
-      holdingType: f.holdingType || catalog.holdingTypes[0].id,
       tier: f.tier || catalog.tiers?.[0]?.id || '',
       paymentMode: f.paymentMode || catalog.paymentModes?.[0]?.id || '',
     }))
@@ -179,7 +176,8 @@ export default function HoldingEditor() {
   }
 
   function addFamily() {
-    const row = blankFamily(catalog)
+    const row = blankFamily(catalog, families.length === 0
+      ? { name: form.ownerName.trim(), phone: form.ownerPhone.trim() } : null)
     setFamilies((rows) => [...rows, row])
     setOpen(row._key)
     setError('')
@@ -193,6 +191,8 @@ export default function HoldingEditor() {
     setRowErrors({})
   }
 
+  const singlePoint = form.collectionPoint === 'single'
+
   const payload = useMemo(() => ({
     ...form,
     // Omitted rather than sent empty when nobody picked one: the server fills it
@@ -205,18 +205,15 @@ export default function HoldingEditor() {
     charge: num(form.charge) ?? 0,
     paymentMode: form.paymentMode || null,
     paymentDay: num(form.paymentDay),
-    households: families.map((r) => ({
+    // A single collection point registers no flats, so none are sent.
+    households: singlePoint ? [] : families.map((r) => ({
       ...(r.id ? { id: r.id } : {}),
       head: r.head.trim(), customerType: r.customerType || undefined,
       phone: r.phone, altPhone: r.altPhone, profession: r.profession,
-      email: r.email, contactPerson: r.contactPerson, bloodGroup: r.bloodGroup,
-      unit: r.unit.trim(), holdingType: r.holdingType || undefined, floor: r.floor,
-      address: r.address,
-      members: num(r.members), membersUnder5: num(r.membersUnder5),
-      membersFemale: num(r.membersFemale),
-      storage: r.storage || undefined, suitableTime: r.suitableTime || undefined,
+      unit: r.unit.trim(), floor: r.floor,
+      members: num(r.members),
     })),
-  }), [form, families])
+  }), [form, families, singlePoint])
 
   async function submit(event) {
     event.preventDefault()
@@ -226,7 +223,7 @@ export default function HoldingEditor() {
     if (!form.holdingNo.trim()) { setError(t('holdings.holdingNoRequired')); return }
     if (!form.ownerName.trim()) { setError(t('holdings.ownerRequired')); return }
 
-    const blank = families.findIndex((r) => !r.head.trim())
+    const blank = singlePoint ? -1 : families.findIndex((r) => !r.head.trim())
     if (blank !== -1) {
       setRowErrors({ [blank]: { head: t('holdings.family.headRequired') } })
       setOpen(families[blank]._key)
@@ -252,8 +249,10 @@ export default function HoldingEditor() {
         setOpen(families[first]?._key ?? null)
         setError(t('holdings.family.fixRows'))
       } else {
-        setError(err?.fieldError?.('unitsTotal') || err?.fieldError?.('holdingNo') || err?.fieldError?.('paymentDay')
-          || err?.fieldError?.('charge') || err?.detail || t('common.requestFailed'))
+        setError(err?.fieldError?.('ownerPhone') || err?.fieldError?.('unitsTotal')
+          || err?.fieldError?.('holdingNo') || err?.fieldError?.('paymentDay')
+          || err?.fieldError?.('charge') || (typeof perRow === 'string' ? perRow : perRow?.[0])
+          || err?.detail || t('common.requestFailed'))
       }
     } finally {
       setBusy(false)
@@ -323,17 +322,24 @@ export default function HoldingEditor() {
                     ...roads.map((name) => ({ value: name, label: name }))]} />
               </FormRow>
               <FormRow>
+                <Field half label={t('holdings.lane')} value={form.lane}
+                  onChange={set('lane')} placeholder={t('holdings.lanePlaceholder')} disabled={busy}
+                  hint={t('holdings.laneHint')} />
                 <Field half label={t('holdings.col.holdingNo')} value={form.holdingNo}
                   onChange={set('holdingNo')} placeholder="142/B" disabled={busy} autoFocus={isNew} />
-                <Field half as="select" label={t('holdings.holdingType')} value={form.holdingType}
-                  onChange={set('holdingType')} disabled={busy} options={opt('holdingTypes')} />
               </FormRow>
               <FormRow>
                 <Field half label={t('holdings.floors')} type="number" min="0"
                   value={form.floors} onChange={set('floors')} disabled={busy} />
                 <Field half label={t('holdings.unitsTotal')} type="number" min="0"
                   value={form.unitsTotal} onChange={set('unitsTotal')} disabled={busy}
-                  hint={t('holdings.unitsHint')} />
+                  hint={singlePoint ? undefined : t('holdings.unitsHint')} />
+              </FormRow>
+              <FormRow>
+                <Field as="select" label={t('holdings.collectionPoint')} value={form.collectionPoint}
+                  onChange={set('collectionPoint')} disabled={busy}
+                  hint={t(singlePoint ? 'holdings.collectionPoint.singleHint' : 'holdings.collectionPoint.floorHint')}
+                  options={['single', 'floor'].map((v) => ({ value: v, label: t(`holdings.collectionPoint.${v}`) }))} />
               </FormRow>
             </FormSection>
 
@@ -353,16 +359,16 @@ export default function HoldingEditor() {
 
             <FormSection title={t('holdings.group.owner')}>
               <FormRow>
+                <Field narrow as="select" label={t('holdings.ownerRole')} value={form.ownerRole}
+                  onChange={set('ownerRole')} disabled={busy}
+                  options={['owner', 'president', 'secretary'].map((v) => ({ value: v, label: t(`holdings.ownerRole.${v}`) }))} />
                 <Field half label={t('holdings.ownerName')} value={form.ownerName}
-                  onChange={set('ownerName')} disabled={busy} />
-                <Field half label={t('holdings.ownerPhone')} value={form.ownerPhone}
-                  onChange={set('ownerPhone')} placeholder="01XXXXXXXXX" disabled={busy} />
+                  onChange={set('ownerName')} disabled={busy} hint={t('holdings.ownerRoleHint')} />
               </FormRow>
               <FormRow>
-                <Field half label={t('holdings.editor.ownerAltPhone')} value={form.ownerAltPhone}
-                  onChange={set('ownerAltPhone')} placeholder="01XXXXXXXXX" disabled={busy} />
-                <Field half label={t('holdings.editor.ownerEmail')} type="email"
-                  value={form.ownerEmail} onChange={set('ownerEmail')} disabled={busy} />
+                <Field half label={t('holdings.ownerPhone')} value={form.ownerPhone}
+                  onChange={set('ownerPhone')} placeholder="01XXXXXXXXX" inputMode="numeric"
+                  maxLength={11} disabled={busy} hint={t('holdings.phoneHint')} />
               </FormRow>
             </FormSection>
 
@@ -421,7 +427,17 @@ export default function HoldingEditor() {
             </FormSection>
           </Section>
 
-          {/* ---------------------------------------------- the families --- */}
+          {/* ---------------------------------------------- the customers --- */}
+          {singlePoint ? (
+            <Section title={t('holdings.editor.familiesPanel')}>
+              <div className="app-banner info">{t('holdings.collectionPoint.noFlats')}</div>
+              {families.some((r) => r.id) && (
+                <div className="tiny muted-3 mt-8">
+                  {t('holdings.collectionPoint.keptCustomers', { count: families.filter((r) => r.id).length })}
+                </div>
+              )}
+            </Section>
+          ) : (
           <Section
             title={<>{t('holdings.editor.familiesPanel')}{' '}
               <span className="tiny muted">
@@ -454,7 +470,6 @@ export default function HoldingEditor() {
                   expanded={open === row._key}
                   errors={rowErrors[index]}
                   busy={busy}
-                  catalog={catalog}
                   t={t}
                   opt={opt}
                   onToggle={() => setOpen(open === row._key ? null : row._key)}
@@ -464,6 +479,7 @@ export default function HoldingEditor() {
               ))}
             </div>
           </Section>
+          )}
         </div>
       </form>
     </div>
@@ -474,7 +490,7 @@ export default function HoldingEditor() {
 // underneath when it is open. Collapsed by default so a twelve-flat building is
 // a list you can read rather than twelve forms stacked on top of each other.
 function FamilyCard({
-  row, index, expanded, errors, busy, catalog, t, opt, onToggle, onChange, onDrop,
+  row, index, expanded, errors, busy, t, opt, onToggle, onChange, onDrop,
 }) {
   const set = (key) => (e) => onChange(key, e.target.value)
   const isSaved = Boolean(row.id)
@@ -523,25 +539,12 @@ function FamilyCard({
             </FormRow>
             <FormRow>
               <Field third label={t('households.field.phone')} value={row.phone}
-                onChange={set('phone')} placeholder="01XXXXXXXXX" disabled={busy} />
+                onChange={set('phone')} placeholder="01XXXXXXXXX" inputMode="numeric"
+                maxLength={11} disabled={busy} />
               <Field third label={t('households.field.altPhone')} value={row.altPhone}
                 onChange={set('altPhone')} placeholder="01XXXXXXXXX" disabled={busy} />
               <Field third label={t('households.field.profession')} value={row.profession}
                 onChange={set('profession')} disabled={busy} />
-            </FormRow>
-            <FormRow>
-              {/* Email takes a third rather than a half so all three still fit
-                  on one line in the narrower right-hand column. */}
-              <Field third label={t('households.field.email')} type="email" value={row.email}
-                onChange={set('email')} disabled={busy} />
-              <Field third label={t('households.field.contactPerson')} value={row.contactPerson}
-                onChange={set('contactPerson')} disabled={busy} />
-              {/* Eight fixed values, two characters each — it joins the row
-                  above rather than taking one of its own. */}
-              <Field narrow as="select" label={t('households.field.bloodGroup')}
-                value={row.bloodGroup} onChange={set('bloodGroup')} disabled={busy}
-                options={[{ value: '', label: '—' },
-                  ...(catalog?.bloodGroups || []).map((b) => ({ value: b, label: b }))]} />
             </FormRow>
           </FormSection>
 
@@ -549,37 +552,14 @@ function FamilyCard({
             <FormRow>
               <Field third label={t('holdings.unit')} value={row.unit} onChange={set('unit')}
                 hint={t('holdings.unitHint')} disabled={busy} />
-              <Field third as="select" label={t('households.field.holdingType')}
-                value={row.holdingType} onChange={set('holdingType')} disabled={busy}
-                options={opt('holdingTypes')} />
               <Field third label={t('households.field.floor')} value={row.floor}
                 onChange={set('floor')} disabled={busy} />
-            </FormRow>
-            {/* Ward, road and holding number are not here: they belong to the
-                building on the left and are copied down on save. */}
-            <Field as="textarea" label={t('households.field.address')} value={row.address}
-              onChange={set('address')} rows={2} disabled={busy}
-              hint={t('holdings.editor.addressHint')} />
-          </FormSection>
-
-          <FormSection title={t('households.group.waste')}>
-            <FormRow>
               <Field third type="number" min="0" label={t('households.field.membersCount')}
                 value={row.members} onChange={set('members')} disabled={busy} />
-              <Field third type="number" min="0" label={t('households.field.membersUnder5Full')}
-                value={row.membersUnder5} onChange={set('membersUnder5')} disabled={busy} />
-              <Field third type="number" min="0" label={t('households.field.membersFemale')}
-                value={row.membersFemale} onChange={set('membersFemale')} disabled={busy} />
             </FormRow>
-            <FormRow>
-              <Field half as="select" label={t('households.field.storage')} value={row.storage}
-                onChange={set('storage')} disabled={busy} options={opt('storageTypes')} />
-              <Field half as="select" label={t('households.field.suitableTime')}
-                value={row.suitableTime} onChange={set('suitableTime')} disabled={busy}
-                options={opt('suitableTimes')} />
-            </FormRow>
+            {/* The address is the building's, filled in on save. */}
+            <div className="tiny muted-3">{row.address || t('holdings.editor.addressHint')}</div>
           </FormSection>
-
         </div>
       )}
     </div>

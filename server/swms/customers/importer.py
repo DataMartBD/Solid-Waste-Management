@@ -5,7 +5,8 @@ spreadsheet with one row per holding —
 
     Holding No · Name · Mobile · City · Ward · Area · Address · Route · GPS Location
 
-— plus, optionally, Holding Type, Tier, Charge, Units and Agency. Every row is
+— plus, optionally, Lane, Registered As, Collection Point, Tier, Charge, Units
+and Agency. Every row is
 validated first and the whole file is reported row by row, so an operator can
 fix the sheet before anything is written. Importing then writes the valid rows
 in one transaction; an invalid row is never half-imported.
@@ -47,9 +48,20 @@ MAX_BYTES = 5 * 1024 * 1024
 
 #: Column headings in the template, in order. Required ones first.
 TEMPLATE_COLUMNS = [
-    "Holding No", "Name", "Mobile", "City", "Ward", "Area", "Address", "Route",
-    "GPS Location", "Holding Type", "Tier", "Charge", "Units", "Agency",
+    "Holding No", "Name", "Mobile", "City", "Ward", "Area", "Lane", "Address", "Route",
+    "GPS Location", "Registered As", "Collection Point", "Tier", "Charge", "Units", "Agency",
 ]
+
+#: Accepted spellings for "Registered As" and "Collection Point".
+OWNER_ROLES = {
+    "owner": "owner", "malik": "owner", "মালিক": "owner",
+    "president": "president", "sovapoti": "president", "সভাপতি": "president",
+    "secretary": "secretary", "সেক্রেটারি": "secretary", "সম্পাদক": "secretary",
+}
+COLLECTION_POINTS = {
+    "single": "single", "singlepoint": "single", "onepoint": "single", "groundfloor": "single",
+    "floor": "floor", "floorbyfloor": "floor", "perfloor": "floor", "eachfloor": "floor",
+}
 REQUIRED = {"holding_no", "name", "ward", "area"}
 
 #: Normalised heading → field. Several spellings are accepted for each.
@@ -61,6 +73,9 @@ ALIASES = {
     "ward": "ward", "wardno": "ward",
     "area": "area", "road": "area", "mohalla": "area", "block": "area",
     "address": "address",
+    "lane": "lane", "alley": "lane", "lanealley": "lane", "gali": "lane",
+    "registeredas": "owner_role", "ownerrole": "owner_role", "role": "owner_role",
+    "collectionpoint": "collection_point", "collection": "collection_point",
     "route": "route",
     "gpslocation": "gps", "gps": "gps", "location": "gps", "latlng": "gps",
     "latitude": "lat", "lat": "lat", "longitude": "lng", "lng": "lng", "long": "lng",
@@ -218,8 +233,9 @@ class _Lookups:
         return found
 
     def holding_type(self, text):
+        # No longer asked for; an old sheet that still has the column may fill it.
         if not text:
-            return self.holding_types[0] if self.holding_types else None
+            return None
         return self._match(self.holding_types, text, "id", "label")
 
     def tier(self, text):
@@ -291,10 +307,21 @@ def validate(rows: list[Row], user) -> list[Row]:
                 row.errors.append(f"Mobile '{d['mobile']}' is not a valid number (01XXXXXXXXX).")
         row.resolved["mobile"] = mobile
 
-        holding_type = look.holding_type(d.get("holding_type", ""))
-        if holding_type is None:
-            row.errors.append(f"Unknown holding type '{d.get('holding_type', '')}'.")
-        row.resolved["holding_type"] = holding_type
+        if d.get("holding_type"):
+            holding_type = look.holding_type(d["holding_type"])
+            if holding_type is None:
+                row.errors.append(f"Unknown holding type '{d['holding_type']}'.")
+            row.resolved["holding_type"] = holding_type
+
+        for key, choices, label, allowed in (
+            ("owner_role", OWNER_ROLES, "Registered As", "Owner, President or Secretary"),
+            ("collection_point", COLLECTION_POINTS, "Collection Point", "Single or Floor by floor"),
+        ):
+            if d.get(key):
+                value = choices.get(re.sub(r"[\s\-_/]", "", d[key]).casefold())
+                if value is None:
+                    row.errors.append(f"{label} '{d[key]}' must be {allowed}.")
+                row.resolved[key] = value
 
         if d.get("tier"):
             tier = look.tier(d["tier"])
@@ -390,9 +417,16 @@ def write(rows: list[Row], user) -> dict:
         holding.owner_name = d["name"].strip()
         if r.get("mobile"):
             holding.owner_phone = r["mobile"]
+        if d.get("lane"):
+            holding.lane = d["lane"].strip()
         if d.get("address"):
             holding.address = d["address"].strip()
-        holding.holding_type = r["holding_type"]
+        if r.get("holding_type"):
+            holding.holding_type = r["holding_type"]
+        if r.get("owner_role"):
+            holding.owner_role = r["owner_role"]
+        if r.get("collection_point"):
+            holding.collection_point = r["collection_point"]
         if r.get("tier"):
             holding.tier = r["tier"]
         if "charge" in r:
@@ -451,8 +485,8 @@ def template_workbook() -> bytes:
     sheet.title = "Holdings"
     sheet.append(TEMPLATE_COLUMNS)
     sheet.append([
-        "142/B", "Abdul Karim", "01711000000", "KCC", "W-14", "KDA Avenue",
-        "Holding 142/B, KDA Avenue", "", "22.8456, 89.5403", "", "", "", "4", "",
+        "142/B", "Abdul Karim", "01711000000", "KCC", "W-14", "KDA Avenue", "Lane 3",
+        "", "", "22.8456, 89.5403", "Owner", "Single", "", "", "4", "",
     ])
     for cell in sheet[1]:
         cell.font = Font(bold=True, color="FFFFFF")
@@ -471,10 +505,12 @@ def template_workbook() -> bytes:
         ["City", "No", "City code or name, e.g. KCC — helps find the ward"],
         ["Ward", "Yes", "Ward code (W-14), name, or number (14)"],
         ["Area", "Yes", "Road / mohalla in the ward; a new one is added"],
-        ["Address", "No", "Full address; built from holding and road if blank"],
+        ["Lane", "No", "Lane / alley (গলি) inside the road"],
+        ["Address", "No", "Full address; built from holding, lane and road if blank"],
         ["Route", "No", "Route code or name in the same ward; needs GPS"],
         ["GPS Location", "No", "latitude, longitude — e.g. 22.8456, 89.5403"],
-        ["Holding Type", "No", "From setup; the first type if blank"],
+        ["Registered As", "No", "Owner (default), President or Secretary"],
+        ["Collection Point", "No", "Single (default — flats not registered) or Floor by floor"],
         ["Tier", "No", "Service tier code or name"],
         ["Charge", "No", "Monthly charge in BDT; blank = the tier's rate"],
         ["Units", "No", "Number of flats/units in the building"],

@@ -6,7 +6,7 @@ An unknown number completing the SMS-code login used to become a new
 
 from __future__ import annotations
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -15,11 +15,6 @@ from swms.common.roles import Role
 from .models import OtpCode, ScopeKind, User
 
 
-@override_settings(REST_FRAMEWORK={
-    "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
-    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
-    "EXCEPTION_HANDLER": "swms.common.exceptions.swms_exception_handler",
-})
 class NoAutoProvisionTests(TestCase):
     def verify(self, phone):
         _row, code = OtpCode.issue(phone)

@@ -38,22 +38,17 @@ export function addressFor(holding, unit) {
 
 // The customer-information fields shared by both household types. Kept in one
 // place so registering, editing and converting all carry the same profile.
+// Email, contact person, blood group, holding type, under-5 and female members,
+// storage and collection time are no longer asked for: they are not sent, so a
+// saved record keeps what it had and a new one takes the server's default.
 function profileOf(d) {
   return {
     customerType: d.customerType,
     profession: d.profession || '',
     address: d.address || '',
-    email: d.email || '',
     altPhone: d.altPhone || '',
-    contactPerson: d.contactPerson || '',
-    bloodGroup: d.bloodGroup || '',
     members: num(d.members),
-    membersUnder5: num(d.membersUnder5),
-    membersFemale: num(d.membersFemale),
-    storage: d.storage,
-    holdingType: d.holdingType,
     floor: d.floor || '',
-    suitableTime: d.suitableTime,
   }
 }
 
@@ -282,17 +277,6 @@ export function HouseholdForm({
             <Field third label={t('households.field.profession')} value={form.profession} onChange={set('profession')} placeholder={t('households.ph.profession')} disabled={busy} />
           </FormRow>
           <FieldError>{fieldError('phone')}</FieldError>
-          <FormRow>
-            <Field third label={t('households.field.email')} type="email" value={form.email} onChange={set('email')} placeholder={t('households.ph.email')} disabled={busy} />
-            <Field third label={t('households.field.contactPerson')} value={form.contactPerson} onChange={set('contactPerson')} disabled={busy}
-              placeholder={t('households.ph.contactPerson')} hint={t('households.hint.contactPerson')} />
-            {/* Eight fixed values, two characters each — it rides along with the
-                email row rather than taking one of its own. */}
-            <Field narrow as="select" label={t('households.field.bloodGroup')} value={form.bloodGroup} onChange={set('bloodGroup')} disabled={busy}
-              options={[{ value: '', label: '—' }, ...bloodGroups.map((b) => ({ value: b, label: b }))]}
-              hint={t('households.hint.bloodGroup')} />
-          </FormRow>
-          <FieldError>{fieldError('email')}</FieldError>
         </FormSection>
 
         <FormSection title={t('households.group.address')}>
@@ -337,13 +321,16 @@ export function HouseholdForm({
                 unit: e.target.value,
                 address: f._holdingRow ? addressFor(f._holdingRow, e.target.value) : f.address,
               }))} />
-            <Field third as="select" label={t('households.field.holdingType')} value={form.holdingType} onChange={set('holdingType')} disabled={busy}
-              options={holdingTypes.map((ht) => ({ value: ht.id, label: optLabel(holdingTypes, ht.id) }))} />
             <Field third label={t('households.field.floor')} value={form.floor} onChange={set('floor')} placeholder={t('households.ph.floor')} disabled={busy} />
           </FormRow>
           <FieldError>{fieldError('unit')}</FieldError>
-          <Field as="textarea" label={t('households.field.address')} value={form.address} onChange={set('address')} disabled={busy}
-            placeholder={t('households.ph.address')} rows={2} />
+          {/* The address is the building's, filled in automatically. */}
+          <div className="field">
+            <label>{t('households.field.address')}</label>
+            <div className="input" style={{ background: 'var(--surface-2)' }}>
+              {form.address || t('holdings.editor.addressHint')}
+            </div>
+          </div>
         </FormSection>
 
         {/* No location block here any more. A building has one position, so the
@@ -353,14 +340,6 @@ export function HouseholdForm({
         <FormSection title={t('households.group.waste')} hint={t('households.hint.waste')}>
           <FormRow>
             <Field third type="number" min="0" label={t('households.field.membersCount')} value={form.members} onChange={set('members')} placeholder={digits('0')} disabled={busy} />
-            <Field third type="number" min="0" label={t('households.field.membersUnder5Full')} value={form.membersUnder5} onChange={set('membersUnder5')} placeholder={digits('0')} disabled={busy} />
-            <Field third type="number" min="0" label={t('households.field.membersFemale')} value={form.membersFemale} onChange={set('membersFemale')} placeholder={digits('0')} disabled={busy} />
-          </FormRow>
-          <FormRow>
-            <Field half as="select" label={t('households.field.storage')} value={form.storage} onChange={set('storage')} disabled={busy}
-              options={storageTypes.map((s) => ({ value: s.id, label: optLabel(storageTypes, s.id) }))} />
-            <Field half as="select" label={t('households.field.suitableTime')} value={form.suitableTime} onChange={set('suitableTime')} disabled={busy}
-              options={suitableTimes.map((s) => ({ value: s.id, label: optLabel(suitableTimes, s.id) }))} />
           </FormRow>
         </FormSection>
 
@@ -462,17 +441,12 @@ export function HouseholdDrawer({ hh, collectorName, lists, tierCharge, effectiv
             <dt>{t('households.field.profession')}</dt><dd>{hh.profession || '—'}</dd>
             <dt>{t('households.field.phone')}</dt><dd className="mono">{hh.phone ? digits(hh.phone) : '—'}</dd>
             <dt>{t('households.field.altPhoneShort')}</dt><dd className="mono">{hh.altPhone ? digits(hh.altPhone) : '—'}</dd>
-            <dt>{t('households.field.email')}</dt><dd>{hh.email || '—'}</dd>
-            <dt>{t('households.field.contactPerson')}</dt><dd>{hh.contactPerson || '—'}</dd>
-            <dt>{t('households.field.bloodGroup')}</dt>
-            <dd>{hh.bloodGroup ? <b style={{ color: 'var(--danger)' }}>{hh.bloodGroup}</b> : '—'}</dd>
           </KvGroup>
 
           <KvGroup title={t('households.group.address')}>
             <dt>{t('households.field.wardZone')}</dt><dd>{hh.ward}</dd>
             <dt>{t('households.col.road')}</dt><dd>{hh.road}</dd>
             <dt>{t('households.field.holdingNo')}</dt><dd>{hh.holdingNo}{hh.unit ? ` · ${hh.unit}` : ''}</dd>
-            <dt>{t('households.field.holdingType')}</dt><dd>{optLabel(holdingTypes, hh.holdingType)}</dd>
             <dt>{t('households.field.floor')}</dt><dd>{hh.floor ? digits(hh.floor) : '—'}</dd>
             <dt>{t('households.field.address')}</dt><dd>{hh.address || '—'}</dd>
           </KvGroup>
@@ -509,10 +483,6 @@ export function HouseholdDrawer({ hh, collectorName, lists, tierCharge, effectiv
 
           <KvGroup title={t('households.group.waste')}>
             <dt>{t('households.field.members')}</dt><dd>{hh.members ? n(hh.members) : '—'}</dd>
-            <dt>{t('households.field.membersUnder5')}</dt><dd>{hh.membersUnder5 == null ? '—' : n(hh.membersUnder5)}</dd>
-            <dt>{t('households.field.membersFemale')}</dt><dd>{hh.membersFemale == null ? '—' : n(hh.membersFemale)}</dd>
-            <dt>{t('households.field.storage')}</dt><dd>{optLabel(storageTypes, hh.storage)}</dd>
-            <dt>{t('households.field.suitableTime')}</dt><dd>{optLabel(suitableTimes, hh.suitableTime)}</dd>
           </KvGroup>
 
           {!potential && (

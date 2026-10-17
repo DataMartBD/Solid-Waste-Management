@@ -53,7 +53,10 @@ class HoldingFilter(filters.FilterSet):
         return queryset.filter(predicate) if value else queryset.exclude(predicate)
 
     def filter_units_mismatch(self, queryset, name, value):
-        queryset = queryset.filter(units_total__isnull=False).annotate(
+        # A single collection point registers no flats, so the rule is not theirs.
+        queryset = queryset.filter(units_total__isnull=False).exclude(
+            collection_point="single"
+        ).annotate(
             _families=Count("households", filter=Q(households__status="active"), distinct=True)
         )
         if value:
@@ -67,6 +70,10 @@ class HoldingFilter(filters.FilterSet):
         for one row but would drag the whole table through Python to filter a
         list. These counts say the same thing to the database.
         """
+        # A single-point building has no flats: it is in full service once
+        # signed up (a tier or an agreed charge) and active, else none.
+        single = Q(collection_point="single")
+        signed_up = Q(status="active") & (Q(tier__isnull=False) | Q(charge__gt=0))
         queryset = queryset.annotate(
             _total=Count("households", distinct=True),
             _active=Count(
@@ -74,11 +81,11 @@ class HoldingFilter(filters.FilterSet):
             ),
         )
         if value == "none":
-            return queryset.filter(_active=0)
+            return queryset.filter((single & ~signed_up) | (~single & Q(_active=0)))
         if value == "full":
-            return queryset.filter(_active__gt=0, _total=F("_active"))
+            return queryset.filter((single & signed_up) | (~single & Q(_active__gt=0, _total=F("_active"))))
         if value == "partial":
-            return queryset.filter(_active__gt=0, _total__gt=F("_active"))
+            return queryset.filter(~single, _active__gt=0, _total__gt=F("_active"))
         return queryset
 
 

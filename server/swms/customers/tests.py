@@ -53,6 +53,8 @@ class HoldingData(TestCase):
             holding_no=number,
             holding_type=cls.holding_type,
             owner_name="Landlord Mia",
+            # These tests are about the flats in a building, so its flats are registered.
+            collection_point="floor",
             lat=22.836 if verified else None,
             lng=89.530 if verified else None,
             verified=verified,

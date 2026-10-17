@@ -15,7 +15,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from swms.accounts.models import ScopeKind, User
-from swms.catalog.models import PaymentMode, StorageType, Tier
+from swms.catalog.models import CustomerType, PaymentMode, StorageType, Tier
 from swms.common.roles import Role
 
 from .models import Holding, Household
@@ -136,7 +136,8 @@ class CombinedEntryTests(HoldingData):
         """The form need not ask for all of them; the flats are still valid."""
         self.post(self.payload([self.family("1A")]))
         household = Household.objects.get(unit="1A")
-        self.assertEqual(household.customer_type_id, self.customer_type.id)
+        first = CustomerType.objects.filter(active=True).order_by("sort_order", "id").first()
+        self.assertEqual(household.customer_type_id, first.id)
         self.assertEqual(household.storage_id, self.storage.id)
         self.assertEqual(household.suitable_time_id, self.suitable_time.id)
 

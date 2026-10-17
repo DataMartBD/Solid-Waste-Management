@@ -33,7 +33,7 @@ export default {
     'households.allCustomerTypes': 'All customer types',
 
     'households.col.id': 'ID',
-    'households.col.head': 'Head',
+    'households.col.head': 'Customer',
     'households.col.type': 'Type',
     'households.col.ward': 'Ward',
     'households.col.road': 'Road',
@@ -85,7 +85,7 @@ export default {
     'households.group.survey': 'Survey findings',
 
     'households.field.serviceType': 'Service type',
-    'households.field.name': 'Name (head of household)',
+    'households.field.name': 'Customer name',
     'households.field.customerType': 'Customer type',
     'households.field.profession': 'Profession',
     'households.field.phone': 'Mobile number',
@@ -137,7 +137,7 @@ export default {
     'households.formEdit': 'Edit household',
     'households.potentialHint': 'Surveyed home not yet serviced — a future customer.',
     'households.underServiceHint': 'Actively giving waste to a collector; will be billed.',
-    'households.alertHeadRequired': 'Head of household name is required.',
+    'households.alertHeadRequired': 'Customer name is required.',
     'households.alertMembers': 'Members under 5 and female members cannot exceed the total family members.',
     'households.alertCoordPair': 'Enter both latitude and longitude, or leave both blank to send this holding to the verification queue.',
     'households.alertCoordRange': 'Latitude must be between {latMin} and {latMax} and longitude between {lngMin} and {lngMax}. Check that the pair has not been swapped.',
@@ -205,7 +205,7 @@ export default {
     'households.allCustomerTypes': 'সব গ্রাহক ধরন',
 
     'households.col.id': 'আইডি',
-    'households.col.head': 'গৃহকর্তা',
+    'households.col.head': 'গ্রাহক',
     'households.col.type': 'ধরন',
     'households.col.ward': 'ওয়ার্ড',
     'households.col.road': 'রোড',
@@ -257,7 +257,7 @@ export default {
     'households.group.survey': 'জরিপের ফলাফল',
 
     'households.field.serviceType': 'সেবার ধরন',
-    'households.field.name': 'নাম (গৃহকর্তা)',
+    'households.field.name': 'গ্রাহকের নাম',
     'households.field.customerType': 'গ্রাহকের ধরন',
     'households.field.profession': 'পেশা',
     'households.field.phone': 'মোবাইল নম্বর',
@@ -309,7 +309,7 @@ export default {
     'households.formEdit': 'হাউসহোল্ডস সম্পাদনা',
     'households.potentialHint': 'জরিপ হয়েছে, এখনো সেবা পায়নি — ভবিষ্যতের গ্রাহক।',
     'households.underServiceHint': 'নিয়মিত কালেক্টরকে বর্জ্য দিচ্ছে; বিল করা হবে।',
-    'households.alertHeadRequired': 'গৃহকর্তার নাম দিতে হবে।',
+    'households.alertHeadRequired': 'গ্রাহকের নাম দিতে হবে।',
     'households.alertMembers': '৫ বছরের কম ও নারী সদস্যের সংখ্যা মোট সদস্যসংখ্যার বেশি হতে পারবে না।',
     'households.alertCoordPair': 'অক্ষাংশ ও দ্রাঘিমাংশ দুটোই দিন, অথবা দুটোই ফাঁকা রাখুন — তাহলে হোল্ডিংটি যাচাইয়ের তালিকায় যাবে।',
     'households.alertCoordRange': 'অক্ষাংশ {latMin} থেকে {latMax} এবং দ্রাঘিমাংশ {lngMin} থেকে {lngMax}-এর মধ্যে হতে হবে। দুটি মান উল্টে যায়নি তো, দেখে নিন।',
