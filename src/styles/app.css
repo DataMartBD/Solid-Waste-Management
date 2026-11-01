@@ -598,3 +598,9 @@ table.data tbody tr.rowlink { cursor: pointer; }
     grid-template-columns: repeat(3, 1fr); gap: 4mm;
   }
 }
+
+/* Two equal boxes side by side, the same width and height (holding form footer). */
+.bottom-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; align-items: stretch; }
+.bottom-pair > .field { height: 100%; }
+.bottom-pair-box { flex: 1; min-height: 46px; margin: 0; }
+.form-note.bottom-pair-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

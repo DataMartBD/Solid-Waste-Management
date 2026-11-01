@@ -541,38 +541,6 @@ export default function HoldingEditor() {
                 )}
               </FormRow>
               {kacha && <div className="tiny muted-3">{t('holdings.collectionPoint.kachaAuto')}</div>}
-              {/* The device's location, saved with a new building. */}
-              {isNew && (
-                <div className={`form-note ${gps.status === 'ok' ? 'ok' : gps.status === 'failed' ? 'bad' : 'info'}`}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <span className="grow">
-                    {gps.status === 'reading' && t('holdings.gps.reading')}
-                    {gps.status === 'ok' && t('holdings.gps.ok', {
-                      lat: gps.lat.toFixed(6), lng: gps.lng.toFixed(6),
-                      accuracy: gps.accuracy == null ? '?' : gps.accuracy,
-                    })}
-                    {gps.status === 'failed' && t(`holdings.gps.${gps.reason}`)}
-                  </span>
-                  {gps.status !== 'reading' && (
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={readGps} disabled={busy}>
-                      {t('holdings.gps.again')}
-                    </button>
-                  )}
-                </div>
-              )}
-              {/* Only shown to someone the server cannot infer it for. An agency
-                  admin or a bound supervisor gets their own stamped on save, so
-                  asking them would be asking a question with one answer — and
-                  offering a choice they are not allowed to make. */}
-              {!myAgency && (
-                <FormRow>
-                  <Field size="md" as="select" label={t('holdings.agency')} value={form.agency}
-                    onChange={set('agency')} disabled={busy}
-                    hint={t('holdings.agencyHint')}
-                    options={[{ value: '', label: t('holdings.agencyNone') },
-                      ...(agencies || []).map((a) => ({ value: a.id, label: localName(a) }))]} />
-                </FormRow>
-              )}
             </FormSection>
 
             <FormSection>
@@ -643,6 +611,44 @@ export default function HoldingEditor() {
                   the door — not a coordinate typed at a desk. */}
               <div className="tiny muted-3">{t('holdings.editor.locationNote')}</div>
             </FormSection>
+            {/* Last on the card, side by side: the agency (only for someone the
+                server cannot infer it for — an agency admin or a bound
+                supervisor gets their own stamped on save) and, for a new
+                building, the device's location that is saved with it. */}
+            {(!myAgency || isNew) && (
+              <div className="bottom-pair mt-16">
+                {!myAgency && (
+                  <div className="field">
+                    <label htmlFor="holding-agency">{t('holdings.agency')}</label>
+                    <select id="holding-agency" className="select bottom-pair-box" value={form.agency}
+                      onChange={set('agency')} disabled={busy} title={t('holdings.agencyHint')}>
+                      <option value="">{t('holdings.agencyNone')}</option>
+                      {(agencies || []).map((a) => <option key={a.id} value={a.id}>{localName(a)}</option>)}
+                    </select>
+                  </div>
+                )}
+                {isNew && (
+                  <div className="field">
+                    <label>{t('holdings.gps.label')}</label>
+                    <div className={`form-note bottom-pair-box ${gps.status === 'ok' ? 'ok' : gps.status === 'failed' ? 'bad' : 'info'}`}>
+                      <span className="grow">
+                        {gps.status === 'reading' && t('holdings.gps.reading')}
+                        {gps.status === 'ok' && t('holdings.gps.ok', {
+                          lat: gps.lat.toFixed(6), lng: gps.lng.toFixed(6),
+                          accuracy: gps.accuracy == null ? '?' : gps.accuracy,
+                        })}
+                        {gps.status === 'failed' && t(`holdings.gps.${gps.reason}`)}
+                      </span>
+                      {gps.status !== 'reading' && (
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={readGps} disabled={busy}>
+                          {t('holdings.gps.again')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </Section>
 
           {/* ---------------------------------------------- the customers --- */}
