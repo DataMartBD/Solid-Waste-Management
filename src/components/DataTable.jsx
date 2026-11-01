@@ -125,7 +125,8 @@ export default function DataTable({
                             direction === 'asc' ? 'table.sortedAsc'
                               : direction === 'desc' ? 'table.sortedDesc'
                                 : 'table.sortBy',
-                            { column: String(header.column.columnDef.header ?? header.id) },
+                            // `meta.label` names a column whose header is markup, not text.
+                            { column: header.column.columnDef.meta?.label ?? String(header.column.columnDef.header ?? header.id) },
                           )}
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}

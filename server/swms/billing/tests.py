@@ -84,7 +84,7 @@ class BillingTestCase(TestCase):
 
     # --- factories --------------------------------------------------------- #
 
-    def make_holding(self, holding_no: str, *, charge: int = 0, status=HoldingStatus.ACTIVE,
+    def make_holding(self, holding_no: str, *, charge: int | None = None, status=HoldingStatus.ACTIVE,
                      routed: bool = True) -> Holding:
         """A building signed up for service — billing is holding-wise."""
         holding = Holding.objects.create(
@@ -96,7 +96,8 @@ class BillingTestCase(TestCase):
             verified=True,
             tier=self.tier,
             payment_mode=self.cash,
-            charge=charge,
+            # Amounts are typed by hand now; by default the tier's rate is typed in.
+            charge=self.tier.charge if charge is None else charge,
             status=status,
         )
         # A family lives there, but it is the building that is billed.
@@ -169,14 +170,16 @@ class GenerateBillsTests(BillingTestCase):
         self.assertFalse(Bill.objects.filter(holding=inactive).exists())
         self.assertFalse(Bill.objects.filter(holding=unrouted).exists())
 
-    def test_negotiated_charge_beats_the_tier_charge(self):
+    def test_the_typed_amount_is_billed_and_the_tier_sets_none(self):
         standard = self.make_holding("1/A")
         negotiated = self.make_holding("2/A", charge=175)
+        untyped = self.make_holding("3/A", charge=0)
 
         generate_bills(PERIOD)
 
         self.assertEqual(Bill.objects.get(holding=standard).amount, self.tier.charge)
         self.assertEqual(Bill.objects.get(holding=negotiated).amount, 175)
+        self.assertFalse(Bill.objects.filter(holding=untyped).exists())
 
     def test_dry_run_writes_nothing(self):
         self.make_holding("1/A")

@@ -356,18 +356,18 @@ def suggest_holding_type(survey) -> str | None:
     columns gets the same suggestion without this knowing anything about it.
     """
     premises = (survey.premises_type or "").lower()
-    if premises in ("commercial", "shop"):
-        return "shop"
-    if premises in ("institution", "office"):
-        return "office"
+    if premises in ("commercial", "shop", "institution", "office"):
+        return "commercial"
+    if premises == "mixed":
+        return "residential_mixed"
     if premises in ("", "other"):
         return None
-    # Residential or mixed. The number of families in the building is the only
-    # promoted signal for how big it is.
+    # Residential. The number of families in the building is the only promoted
+    # signal for how big it is.
     if survey.household_count and survey.household_count > 1:
         return "multi_storey"
     if survey.household_count == 1:
-        return "single_storey"
+        return "residential"
     return None
 
 

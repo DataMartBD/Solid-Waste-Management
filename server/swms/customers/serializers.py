@@ -38,9 +38,15 @@ from swms.common.scoping import guard_agency, guard_ward
 from swms.common.serializers import SwmsModelSerializer
 from swms.fieldops.models import Collector
 
-from .models import CollectionPoint, Holding, HoldingStatus, Household, OwnerRole, PotentialCustomer
+from .models import (
+    CollectionPoint, Holding, HoldingStatus, Household, Occupancy, OwnerRole,
+    PotentialCustomer,
+)
 
 PHONE_MESSAGE = "Enter an 11-digit mobile number (01XXXXXXXXX)."
+
+#: The building type whose collection point is always a single point.
+KACHA = "kacha"
 
 
 def clean_phone(value: str) -> str:
@@ -97,6 +103,8 @@ class NestedHouseholdSerializer(serializers.Serializer):
 
     # --- who ------------------------------------------------------------- #
     head = serializers.CharField(max_length=120)
+    occupancy = serializers.ChoiceField(choices=Occupancy.choices, required=False, allow_blank=True)
+    charge = serializers.IntegerField(required=False, min_value=0)
     customerType = serializers.PrimaryKeyRelatedField(
         source="customer_type", queryset=CustomerType.objects.all(), required=False
     )
@@ -218,8 +226,11 @@ class HoldingSerializer(SwmsModelSerializer):
     tier = serializers.PrimaryKeyRelatedField(
         queryset=Tier.objects.all(), required=False, allow_null=True
     )
-    #: 0 means "use the tier's standard charge" rather than "free".
+    #: The building's own amount, typed by hand (building / both bases).
     charge = serializers.IntegerField(required=False, min_value=0)
+    flatsCharge = serializers.IntegerField(source="flats_charge", read_only=True)
+    #: The building photo; uploaded through `POST /holdings/{id}/photo/`.
+    photoUrl = serializers.SerializerMethodField()
     paymentMode = serializers.PrimaryKeyRelatedField(
         source="payment_mode", queryset=PaymentMode.objects.all(), required=False,
         allow_null=True,
@@ -265,6 +276,7 @@ class HoldingSerializer(SwmsModelSerializer):
             "qr",
             "tier",
             "charge",
+            "flatsCharge",
             "paymentMode",
             "paymentDay",
             "effectiveCharge",
@@ -276,12 +288,19 @@ class HoldingSerializer(SwmsModelSerializer):
             "activeHouseholdCount",
             "households",
             "householdDefaults",
+            "photoUrl",
         ]
         read_only_fields = ["id", "verified", "address", "qr", "dues"]
 
     def get_routeId(self, obj) -> str | None:
         stop = getattr(obj, "route_stop", None)
         return stop.route_id if stop else None
+
+    def get_photoUrl(self, obj) -> str | None:
+        if not obj.photo:
+            return None
+        request = self.context.get("request")
+        return request.build_absolute_uri(obj.photo.url) if request else obj.photo.url
 
     def get_householdCount(self, obj) -> int:
         return obj.households.count()
@@ -316,20 +335,40 @@ class HoldingSerializer(SwmsModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        # A kacha house (কাঁচা বাড়ি) is always collected at one place.
+        kind = attrs.get("holding_type", getattr(self.instance, "holding_type", None))
+        if kind is not None and kind.pk == KACHA:
+            attrs["collection_point"] = CollectionPoint.SINGLE
         self._check_geography(attrs)
         self._resolve_road(attrs)
         self._check_family_ids(attrs)
+        self._check_new_customer_phones(attrs)
         self._check_flats(attrs)
         self._check_single_point(attrs)
         self._check_units(attrs)
         return attrs
 
+    def _check_new_customer_phones(self, attrs):
+        """A customer added here needs a mobile number (name and mobile are the
+        two things the customer table asks for). Customers saved before are not
+        held to it, so an old record without one can still be edited."""
+        rows = attrs.get("households") or []
+        errors = [
+            {"phone": "Enter the mobile number."}
+            if not (row.get("id") or "").strip() and not (row.get("phone") or "").strip() else {}
+            for row in rows
+        ]
+        if any(errors):
+            raise serializers.ValidationError({"households": errors})
+
     def _single_point(self, attrs) -> bool:
-        # A new building sent with customers but no choice is floor by floor —
-        # registering flats is what that means. The editor always says which.
+        # A new building sent with customers but no choice registers its flats
+        # and keeps a building charge too ("both") — so a client that sends a
+        # building charge with flats is billed what it sent. The editor always
+        # says which.
         if (self.instance is None and "collection_point" not in attrs
                 and attrs.get("households")):
-            attrs["collection_point"] = CollectionPoint.FLOOR
+            attrs["collection_point"] = CollectionPoint.BOTH
         point = attrs.get("collection_point", getattr(self.instance, "collection_point", None))
         return (point or CollectionPoint.SINGLE) == CollectionPoint.SINGLE
 
@@ -481,6 +520,7 @@ class HoldingSerializer(SwmsModelSerializer):
     def create(self, validated_data):
         rows = validated_data.pop("households", [])
         defaults = validated_data.pop("householdDefaults", {})
+        self._save_new_road(validated_data)
         holding = super().create(validated_data)
         self._save_families(holding, rows, defaults)
         return holding
@@ -489,6 +529,7 @@ class HoldingSerializer(SwmsModelSerializer):
     def update(self, instance, validated_data):
         rows = validated_data.pop("households", [])
         defaults = validated_data.pop("householdDefaults", {})
+        self._save_new_road(validated_data)
         before = (instance.lane, instance.road_id, instance.holding_no)
         holding = super().update(instance, validated_data)
         moved = before != (holding.lane, holding.road_id, holding.holding_no)
@@ -504,9 +545,9 @@ class HoldingSerializer(SwmsModelSerializer):
     #: serializer later cannot reach the model without somebody deciding it may.
     _FAMILY_TEXT = [
         "head", "phone", "alt_phone", "profession", "email", "contact_person",
-        "blood_group", "unit", "floor", "address",
+        "blood_group", "unit", "floor", "address", "occupancy",
     ]
-    _FAMILY_NUMBERS = ["members", "members_under5", "members_female"]
+    _FAMILY_NUMBERS = ["members", "members_under5", "members_female", "charge"]
     _FAMILY_LINKS = ["customer_type", "holding_type", "storage", "suitable_time"]
 
     def _save_families(self, holding, rows, defaults):
@@ -586,6 +627,12 @@ class HoldingSerializer(SwmsModelSerializer):
             "holding_type": holding.holding_type or first_option(HoldingType),
         }
 
+    @staticmethod
+    def _save_new_road(validated_data):
+        road = validated_data.get("road")
+        if road is not None and road.pk is None:
+            road.save()
+
     def _resolve_road(self, attrs):
         """Turn the incoming road *name* into a Road row inside the right ward."""
         if "road" not in attrs:
@@ -596,12 +643,16 @@ class HoldingSerializer(SwmsModelSerializer):
             raise serializers.ValidationError({"road": "A road is required."})
         if ward is None:
             raise serializers.ValidationError({"ward": "A ward is required."})
+        if len(name) > 120:
+            raise serializers.ValidationError({"road": "A road name is at most 120 characters."})
+        # The road is typed by hand: a name the ward does not have yet is added
+        # to it, the same way the Excel upload adds a new area. Matching ignores
+        # case and extra spaces, so "kda  avenue" finds "KDA Avenue".
+        name = " ".join(name.split())
         road = Road.objects.filter(ward=ward, name__iexact=name).first()
-        if road is None:
-            raise serializers.ValidationError(
-                {"road": f"'{name}' is not a known road in {ward.short_label}."}
-            )
-        attrs["road"] = road
+        # A new road is only written with the holding, so a form refused for
+        # another reason leaves no stray road behind.
+        attrs["road"] = road if road is not None else Road(ward=ward, name=name)
 
 
 class HoldingSerializerBase(SwmsModelSerializer):
@@ -723,7 +774,7 @@ class HouseholdSerializer(HoldingSerializerBase):
     class Meta:
         model = Household
         fields = (
-            ["id", "status"]
+            ["id", "status", "occupancy", "charge"]
             + HoldingSerializerBase.LOCATION_FIELDS
             + HoldingSerializerBase.PROFILE_FIELDS
             + ["routeId"]

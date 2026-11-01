@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { PageHeader, EmptyState } from '../components/ui.jsx'
 import { Modal, Field, FormRow, ModalActions } from '../components/Modal.jsx'
+import { SearchSelect } from '../components/SearchSelect.jsx'
 import { IconPlus, IconRefresh } from '../components/Icons.jsx'
 import { setup } from '../api/endpoints.js'
 import { useData } from '../context/DataContext.jsx'
@@ -236,7 +237,11 @@ function firstError(err, fields, fallback) {
 }
 
 function CityForm({ city, cityTypes, onClose, onSaved }) {
-  const { t, optLabel } = useLang()
+  const { t, optLabel, lang } = useLang()
+  // A district from the national list, so the Holding form can show this city
+  // under the district a building is in. A name typed before is kept.
+  const { catalog } = useData()
+  const districts = catalog?.districts || []
   const isNew = !city.id
   const [form, setForm] = useState({
     id: city.id || '',
@@ -284,7 +289,15 @@ function CityForm({ city, cityTypes, onClose, onSaved }) {
               .map((ct) => ({ value: ct.id, label: optLabel(cityTypes, ct.id) }))]} />
         </FormRow>
         <FormRow>
-          <Field half label={t('setup.col.district')} value={form.district} onChange={set('district')} disabled={busy} />
+          <SearchSelect half label={t('setup.col.district')} value={form.district}
+            onChange={(value) => set('district')({ target: { value } })} disabled={busy}
+            hint={t('setup.districtHint')} placeholder={t('common.typeToSearch')} emptyText={t('common.noMatch')}
+            options={[
+              ...(form.district && !districts.some((d) => d.name === form.district)
+                ? [{ value: form.district, label: form.district }] : []),
+              ...districts.map((d) => ({
+                value: d.name, label: (lang === 'bn' && d.nameBn) || d.name, keywords: [d.name, d.nameBn],
+              }))]} />
           <Field half as="select" label={t('setup.col.status')} value={form.active ? 'yes' : 'no'}
             onChange={(e) => setForm((f) => ({ ...f, active: e.target.value === 'yes' }))} disabled={busy}
             options={[{ value: 'yes', label: t('setup.active') }, { value: 'no', label: t('setup.inactive') }]} />

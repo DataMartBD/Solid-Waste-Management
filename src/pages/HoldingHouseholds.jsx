@@ -4,14 +4,14 @@ import { PageHeader, StatCard, EmptyState } from '../components/ui.jsx'
 import { ExportMenu } from '../components/ExportMenu.jsx'
 import DataTable from '../components/DataTable.jsx'
 import {
-  HouseholdForm, HouseholdDrawer, TYPE_META, TODAY,
-  underPayload, potentialPayload, addressFor,
+  HouseholdForm, TYPE_META,
+  underPayload, potentialPayload,
 } from '../components/HouseholdForm.jsx'
 import { holdings as holdingsApi } from '../api/endpoints.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useData } from '../context/DataContext.jsx'
 import { useLang } from '../i18n/index.jsx'
-import { IconHome, IconPlus, IconEdit, IconEye, IconTrash, IconArrow } from '../components/Icons.jsx'
+import { IconHome, IconPlus, IconEdit, IconTrash, IconArrow, IconCheck } from '../components/Icons.jsx'
 
 // The families inside one building.
 //
@@ -60,7 +60,6 @@ export default function HoldingHouseholds() {
   const [error, setError] = useState('')
   const [note, setNote] = useState(null)
   const [editing, setEditing] = useState(null)   // a family being added or changed
-  const [viewing, setViewing] = useState(null)   // the detail drawer
   const [busy, setBusy] = useState(false)
 
   const lists = useMemo(() => ({
@@ -154,26 +153,117 @@ export default function HoldingHouseholds() {
     })
   }
 
+  // One customer is edited in its own row: the cells turn into inputs, and ✓
+  // saves just that customer. A surveyed potential customer keeps its survey form.
+  const [inline, setInline] = useState(null)
+  const [inlineErrors, setInlineErrors] = useState({})
+  const startInline = (row) => {
+    setInline({
+      id: row.id, head: row.head || '', phone: row.phone || '', unit: row.unit || '',
+      members: row.members ?? '', occupancy: row.occupancy || 'rented',
+      charge: row.charge ? String(row.charge) : '',
+    })
+    setInlineErrors({})
+    setNote(null)
+  }
+  const setCell = (key) => (e) => {
+    const value = e.target.value
+    setInline((r) => ({ ...r, [key]: value }))
+    setInlineErrors((errs) => ({ ...errs, [key]: undefined }))
+  }
+
+  async function saveInline() {
+    const errs = {}
+    if (!inline.head.trim()) errs.head = t('holdings.family.headRequired')
+    if (!inline.phone.trim()) errs.phone = t('holdings.flatTable.phoneRequired')
+    else if (!/^01\d{9}$/.test(inline.phone.trim())) errs.phone = t('holdings.phoneHint')
+    if (Object.keys(errs).length) { setInlineErrors(errs); return }
+    setBusy(true)
+    const result = await update('households', inline.id, {
+      head: inline.head.trim(), phone: inline.phone.trim(), unit: inline.unit.trim(),
+      members: inline.members === '' ? 0 : Number(inline.members),
+      occupancy: inline.occupancy, charge: inline.charge === '' ? 0 : Number(inline.charge),
+    })
+    setBusy(false)
+    if (!result.ok) {
+      const fieldOf = (key) => result.error?.fieldError?.(key)
+      const server = {
+        head: fieldOf('head'), phone: fieldOf('phone'), unit: fieldOf('unit') || fieldOf('holding'),
+        members: fieldOf('members'), charge: fieldOf('charge'),
+      }
+      if (Object.values(server).some(Boolean)) setInlineErrors(server)
+      else setNote({ tone: 'bad', text: result.error?.detail || t('common.requestFailed') })
+      return
+    }
+    setInline(null)
+    load()
+    setNote({ tone: 'ok', text: t('households.saved') })
+  }
+
+  const editingRow = (row) => inline && row._type !== 'potential' && row.id === inline.id
+  const cellInput = (key, props = {}) => (
+    <>
+      <input className="input" value={inline[key]} onChange={setCell(key)} disabled={busy}
+        aria-label={props['aria-label']} style={{ minWidth: props.width || 90 }} {...props} />
+      {inlineErrors[key] && <div className="tiny" style={{ color: 'var(--danger)' }}>{inlineErrors[key]}</div>}
+    </>
+  )
+
   const columns = useMemo(() => [
     {
       accessorKey: 'unit',
-      header: t('holdings.unit'),
-      cell: ({ row }) => (
-        <>
-          <div style={{ fontWeight: 600 }}>{row.original.unit || '—'}</div>
-          {row.original.floor && <div className="tiny muted-3">{row.original.floor}</div>}
-        </>
-      ),
+      header: t('holdings.flatTable.unit'),
+      cell: ({ row }) => (editingRow(row.original)
+        ? cellInput('unit', { placeholder: t('holdings.flatTable.unitPh'), 'aria-label': t('holdings.flatTable.unit'), width: 80 })
+        : (
+          <>
+            <div style={{ fontWeight: 600 }}>{row.original.unit || '—'}</div>
+            {row.original.floor && <div className="tiny muted-3">{row.original.floor}</div>}
+          </>
+        )),
     },
     {
       accessorKey: 'head',
-      header: t('households.field.name'),
-      cell: ({ row }) => (
-        <>
-          <div>{row.original.head}</div>
-          {row.original.phone && <div className="tiny muted-3 mono">{row.original.phone}</div>}
-        </>
-      ),
+      header: <>{t('holdings.flatTable.name')}<span className="req-mark"> *</span></>,
+      meta: { label: t('holdings.flatTable.name') },
+      cell: ({ row }) => (editingRow(row.original)
+        ? cellInput('head', { 'aria-label': t('holdings.flatTable.name'), width: 160 })
+        : row.original.head),
+    },
+    {
+      accessorKey: 'phone',
+      header: <>{t('holdings.flatTable.phone')}<span className="req-mark"> *</span></>,
+      meta: { label: t('holdings.flatTable.phone') },
+      cell: ({ row }) => (editingRow(row.original)
+        ? cellInput('phone', { placeholder: '01XXXXXXXXX', inputMode: 'numeric', maxLength: 11, 'aria-label': t('holdings.flatTable.phone'), width: 130 })
+        : <span className="mono">{row.original.phone || '—'}</span>),
+    },
+    {
+      accessorKey: 'members',
+      header: t('holdings.flatTable.members'),
+      cell: ({ row }) => (editingRow(row.original)
+        ? cellInput('members', { type: 'number', min: 0, 'aria-label': t('holdings.flatTable.members'), width: 70 })
+        : (row.original.members ? n(row.original.members) : '—')),
+    },
+    {
+      accessorKey: 'occupancy',
+      header: t('holdings.flatTable.occupancy'),
+      cell: ({ row }) => (editingRow(row.original)
+        ? (
+          <select className="select" value={inline.occupancy} onChange={setCell('occupancy')} disabled={busy}
+            aria-label={t('holdings.flatTable.occupancy')}>
+            <option value="rented">{t('holdings.occupancy.rented')}</option>
+            <option value="own">{t('holdings.occupancy.own')}</option>
+          </select>
+        )
+        : (row.original.occupancy ? t(`holdings.occupancy.${row.original.occupancy}`) : '—')),
+    },
+    {
+      accessorKey: 'charge',
+      header: t('holdings.flatTable.charge'),
+      cell: ({ row }) => (editingRow(row.original)
+        ? cellInput('charge', { type: 'number', min: 0, placeholder: '0', 'aria-label': t('holdings.flatTable.charge'), width: 80 })
+        : (row.original.charge ? taka(row.original.charge) : '—')),
     },
     {
       accessorKey: '_type',
@@ -185,11 +275,6 @@ export default function HoldingHouseholds() {
       ),
     },
     {
-      accessorKey: 'members',
-      header: t('households.field.membersCount'),
-      cell: ({ row }) => (row.original.members ? n(row.original.members) : '—'),
-    },
-    {
       accessorKey: 'status',
       header: t('households.field.status'),
       cell: ({ row }) => t(`status.${row.original.status}`),
@@ -199,12 +284,19 @@ export default function HoldingHouseholds() {
       header: '',
       enableSorting: false,
       meta: { stopClick: true },
-      cell: ({ row }) => (
+      cell: ({ row }) => (editingRow(row.original) ? (
         <div className="row gap-8" style={{ justifyContent: 'flex-end' }}>
-          <button type="button" className="act-btn" title={t('common.view')}
-            onClick={() => setViewing(row.original)}>
-            <IconEye size={16} />
+          <button type="button" className="act-btn" title={t('common.save')} disabled={busy}
+            style={{ color: 'var(--brand)' }} onClick={saveInline}>
+            <IconCheck size={16} />
           </button>
+          <button type="button" className="act-btn" title={t('common.cancel')} disabled={busy}
+            onClick={() => { setInline(null); setInlineErrors({}) }}>
+            ✕
+          </button>
+        </div>
+      ) : (
+        <div className="row gap-8" style={{ justifyContent: 'flex-end' }}>
           {canWrite && row.original._type === 'potential' && (
             <button type="button" className="act-btn" title={t('households.bringUnderService')}
               style={{ color: 'var(--brand)' }} disabled={busy}
@@ -213,30 +305,34 @@ export default function HoldingHouseholds() {
             </button>
           )}
           {canWrite && (
-            <button type="button" className="act-btn" title={t('common.edit')}
-              onClick={() => setEditing(row.original)}>
+            <button type="button" className="act-btn" title={t('common.edit')} disabled={busy || Boolean(inline)}
+              onClick={() => (row.original._type === 'potential'
+                ? setEditing(row.original)
+                : startInline(row.original))}>
               <IconEdit size={16} />
             </button>
           )}
           {canWrite && (
-            <button type="button" className="act-btn" title={t('common.delete')} disabled={busy}
+            <button type="button" className="act-btn" title={t('common.delete')} disabled={busy || Boolean(inline)}
               onClick={() => removeRow(row.original)}>
               <IconTrash size={16} />
             </button>
           )}
         </div>
-      ),
+      )),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t, n, canWrite, busy])
+  ], [t, n, taka, canWrite, busy, id, inline, inlineErrors])
 
   const exportColumns = [
     { key: 'id', label: t('households.col.id') },
     { key: 'unit', label: t('holdings.unit') },
-    { key: 'head', label: t('households.field.name') },
+    { key: 'head', label: t('holdings.flatTable.name') },
     { key: 'phone', label: t('households.field.phone') },
     { key: '_type', label: t('households.col.type') },
-    { key: 'members', label: t('households.field.membersCount') },
+    { key: 'members', label: t('holdings.flatTable.members') },
+    { key: 'occupancy', label: t('holdings.flatTable.occupancy'), get: (r) => (r.occupancy ? t(`holdings.occupancy.${r.occupancy}`) : '') },
+    { key: 'charge', label: t('holdings.flatTable.charge') },
     { key: 'status', label: t('households.field.status') },
   ]
 
@@ -260,15 +356,15 @@ export default function HoldingHouseholds() {
             rows={rows}
             filename={`holding-${id}-households`}
           />
+          {/* The building and its customers are edited together, in the
+              Holding Master editor; a single collection point registers no flats. */}
           {canWrite && (
-            <button className="btn btn-primary" onClick={() => setEditing({
-              _type: 'under_service',
-              holding: id,
-              _holdingRow: holding,
-              address: holding ? addressFor(holding, '') : '',
-              head: '', phone: '', unit: '', status: 'active',
-              surveyedAt: TODAY,
-            })}>
+            <button type="button" className="btn" onClick={() => navigate(`/app/holdings/${id}/edit`, { state: { from: `/app/holdings/${id}/households` } })}>
+              <IconEdit size={16} /> {t('holdings.editHolding')}
+            </button>
+          )}
+          {canWrite && holding && holding.collectionPoint !== 'single' && (
+            <button className="btn btn-primary" onClick={() => navigate(`/app/holdings/${id}/edit`, { state: { from: `/app/holdings/${id}/households` } })}>
               <IconPlus size={16} /> {t('holdings.addFamily')}
             </button>
           )}
@@ -315,20 +411,6 @@ export default function HoldingHouseholds() {
           tierCharge={tierCharge}
           onClose={() => setEditing(null)}
           onSave={save}
-        />
-      )}
-
-      {viewing && (
-        <HouseholdDrawer
-          hh={viewing}
-          collectorName={collectorName}
-          lists={lists}
-          tierCharge={tierCharge}
-          effectiveCharge={effectiveCharge}
-          busy={busy}
-          onClose={() => setViewing(null)}
-          onEdit={canWrite ? () => { setEditing(viewing); setViewing(null) } : null}
-          onConvert={canWrite ? () => { convert(viewing); setViewing(null) } : null}
         />
       )}
     </div>

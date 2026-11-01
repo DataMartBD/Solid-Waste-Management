@@ -56,7 +56,7 @@ class UnitsRuleTests(TestCase):
 
     def test_more_families_than_units_is_refused_in_the_editor(self):
         response = self.client.post(reverse("holding-list"), self.body(
-            unitsTotal=1, households=[{"head": "A", "unit": "1"}, {"head": "B", "unit": "2"}],
+            unitsTotal=1, households=[{"phone": "01712345678", "head": "A", "unit": "1"}, {"phone": "01712345678", "head": "B", "unit": "2"}],
         ), format="json")
         self.assertEqual(response.status_code, 400)
         self.assertIn("Households must equal units", str(response.json()))
@@ -64,7 +64,7 @@ class UnitsRuleTests(TestCase):
 
     def test_fewer_families_than_units_saves_and_is_flagged(self):
         response = self.client.post(reverse("holding-list"), self.body(
-            unitsTotal=3, households=[{"head": "A", "unit": "1"}],
+            unitsTotal=3, households=[{"phone": "01712345678", "head": "A", "unit": "1"}],
         ), format="json")
         self.assertEqual(response.status_code, 201, response.json())
         self.assertFalse(response.json()["unitsMatch"])
@@ -82,7 +82,7 @@ class UnitsRuleTests(TestCase):
         response = self.client.patch(reverse("holding-detail", args=[holding.id]), {
             "households": [
                 {"id": family.id, "head": family.head, "unit": family.unit, "status": "inactive"},
-                {"head": "Newcomer", "unit": "9"},
+                {"phone": "01712345678", "head": "Newcomer", "unit": "9"},
             ],
         }, format="json")
         self.assertEqual(response.status_code, 200, response.json())

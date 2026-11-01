@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
 import {
   ApiError, clearTokens, get, patch, post, readTokens, request,
-  setSessionExpiredHandler, writeTokens,
+  setRemember, setSessionExpiredHandler, writeTokens,
 } from '../api/client.js'
 
 const AuthContext = createContext(null)
@@ -124,13 +124,14 @@ export function AuthProvider({ children }) {
 
   // The login screen's only sign-in call. Unlike verifyOtp this publishes the
   // session immediately — there is no PIN offer to hold the router back for.
-  const signInWithPassword = useCallback(async (phone, password) => {
+  const signInWithPassword = useCallback(async (phone, password, remember = true) => {
     try {
       const data = await post(
         '/auth/login/',
         { phone: normalizePhone(phone), password },
         { auth: false },
       )
+      setRemember(remember)
       writeTokens({ access: data.access, refresh: data.refresh })
       setUser(data.user)
       return { ok: true, session: data.user }

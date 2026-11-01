@@ -119,6 +119,13 @@ export const holdings = {
   remove: (id) => del(`/holdings/${id}/`),
   // Pinning the building makes every household in it routable at once.
   verify: (id, body) => post(`/holdings/${id}/verify/`, body),
+  // The building photo: one image, replaced by a new upload.
+  uploadPhoto: (id, file) => {
+    const form = new FormData()
+    form.append('image', file)
+    return post(`/holdings/${id}/photo/`, form)
+  },
+  removePhoto: (id) => del(`/holdings/${id}/photo/`),
   households: (id) => get(`/holdings/${id}/households/`),
   // The route planner's to-do list: buildings not yet on any round.
   unplanned: (params) => get('/holdings/unplanned/', params),

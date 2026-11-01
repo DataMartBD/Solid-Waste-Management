@@ -44,15 +44,29 @@ class OwnerRole(models.TextChoices):
 
 
 class CollectionPoint(models.TextChoices):
-    """Where the collector picks the waste up.
+    """Where the collector picks the waste up — which also sets the charge.
 
-    At a single point (everyone brings it to the ground floor) the building is
-    collected as one and its flats are not registered. Floor by floor, each
-    flat is a customer and households must equal units.
+    * single — everyone brings it to one place: flats are not registered, and
+      the building has one typed monthly charge;
+    * floor — collected floor by floor: each flat is a customer with its own
+      typed charge, and the building's bill is their total;
+    * both — part of the building at one place (shops, common parts) and the
+      flats floor by floor: the building charge plus the flats' charges.
+
+    Amounts are always typed by hand. Households must equal units wherever
+    flats are registered.
     """
 
     SINGLE = "single", "Single point"
     FLOOR = "floor", "Floor by floor"
+    BOTH = "both", "Both"
+
+
+class Occupancy(models.TextChoices):
+    """Whether the customer lives in their own flat or rents it."""
+
+    OWN = "own", "Own"
+    RENTED = "rented", "Rented"
 
 
 class ServiceStatus(models.TextChoices):
@@ -114,6 +128,8 @@ class Holding(TextKeyModel):
     )
 
     address = models.CharField(max_length=200, blank=True)
+    #: A photo of the building, taken when it is registered.
+    photo = models.ImageField(upload_to="holdings/%Y/%m/", null=True, blank=True)
     floors = models.PositiveSmallIntegerField(null=True, blank=True)
     units_total = models.PositiveSmallIntegerField(
         null=True, blank=True, help_text="Flats in the building, as declared at survey"
@@ -173,8 +189,8 @@ class Holding(TextKeyModel):
     tier = models.ForeignKey(
         "catalog.Tier", null=True, blank=True, on_delete=models.PROTECT, related_name="holdings"
     )
-    #: Monthly charge in BDT agreed for this holding. 0 means "the tier's
-    #: standard charge".
+    #: Monthly charge in BDT for the building, typed by hand. Billed for a
+    #: single collection point, and added to the flats' charges for `both`.
     charge = models.PositiveIntegerField(default=0)
     payment_mode = models.ForeignKey(
         "catalog.PaymentMode", null=True, blank=True, on_delete=models.PROTECT, related_name="+"
@@ -235,11 +251,18 @@ class Holding(TextKeyModel):
         return self.active_household_count == self.units_total
 
     @property
+    def flats_charge(self) -> int:
+        """The total of the active flats' own charges."""
+        return sum(h.charge for h in self.households.all() if h.status == HoldingStatus.ACTIVE)
+
+    @property
     def effective_charge(self) -> int:
-        """The agreed charge, else the tier's standard one, else nothing."""
-        if self.charge and self.charge > 0:
-            return self.charge
-        return self.tier.charge if self.tier_id else 0
+        """The monthly amount billed, by the collection point. Never from the tier."""
+        if self.collection_point == CollectionPoint.FLOOR:
+            return self.flats_charge
+        if self.collection_point == CollectionPoint.BOTH:
+            return (self.charge or 0) + self.flats_charge
+        return self.charge or 0
 
     @property
     def is_routable(self) -> bool:
@@ -271,7 +294,7 @@ class Holding(TextKeyModel):
         (a tier or an agreed charge) and active, else `none`.
         """
         if self.is_single_point:
-            signed_up = bool(self.tier_id or self.charge)
+            signed_up = self.effective_charge > 0
             active = self.status == HoldingStatus.ACTIVE
             return ServiceStatus.FULL if signed_up and active else ServiceStatus.NONE
         households = list(self.households.all())
@@ -333,7 +356,7 @@ class LocatableHolding(TextKeyModel):
     ward = models.ForeignKey("catalog.Ward", on_delete=models.PROTECT, related_name="+")
     road = models.ForeignKey("catalog.Road", on_delete=models.PROTECT, related_name="+")
     holding_no = models.CharField(max_length=24, help_text="Holding number, e.g. 142/B")
-    head = models.CharField(max_length=120, help_text="Head of household / contact name")
+    head = models.CharField(max_length=120, help_text="Customer name")
     phone = models.CharField(max_length=20, blank=True)
 
     class Meta:
@@ -398,6 +421,13 @@ class Household(ContactProfile, LocatableHolding):
         blank=True,
         help_text="Flat or unit within the holding, e.g. 3B. Blank for a single-family holding.",
     )
+
+    #: The flat's own monthly charge in BDT, typed by hand — billed (as part
+    #: of the building's bill) when the building is collected floor by floor or both.
+    charge = models.PositiveIntegerField(default=0)
+
+    #: Own flat or rented — asked for each customer in a floor-by-floor building.
+    occupancy = models.CharField(max_length=8, choices=Occupancy.choices, blank=True)
 
     status = models.CharField(
         max_length=10, choices=HoldingStatus.choices, default=HoldingStatus.ACTIVE

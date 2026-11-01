@@ -441,6 +441,14 @@ export function HouseholdDrawer({ hh, collectorName, lists, tierCharge, effectiv
             <dt>{t('households.field.profession')}</dt><dd>{hh.profession || '—'}</dd>
             <dt>{t('households.field.phone')}</dt><dd className="mono">{hh.phone ? digits(hh.phone) : '—'}</dd>
             <dt>{t('households.field.altPhoneShort')}</dt><dd className="mono">{hh.altPhone ? digits(hh.altPhone) : '—'}</dd>
+            {hh._type !== 'potential' && (
+              <>
+                <dt>{t('holdings.flatTable.occupancy')}</dt>
+                <dd>{hh.occupancy ? t(`holdings.occupancy.${hh.occupancy}`) : '—'}</dd>
+                <dt>{t('holdings.flatTable.charge')}</dt>
+                <dd>{hh.charge ? taka(hh.charge) : '—'}</dd>
+              </>
+            )}
           </KvGroup>
 
           <KvGroup title={t('households.group.address')}>

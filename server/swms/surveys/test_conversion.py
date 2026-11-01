@@ -30,13 +30,14 @@ class ConversionFixture(FormFixture):
         super().setUpTestData()
         cls.road = Road.objects.create(ward=cls.ward, name="KDA Avenue")
         cls.other_road = Road.objects.create(ward=cls.other_ward, name="Mohsin Road")
+        # The building types catalog migration 0012 offers.
         for pk, label in [
-            ("single_storey", "Single-storey house"),
+            ("residential", "Residential"),
+            ("commercial", "Commercial"),
             ("multi_storey", "Multi-storey building"),
-            ("shop", "Shop"),
-            ("office", "Office"),
+            ("residential_mixed", "Residential mixed"),
         ]:
-            HoldingType.objects.create(id=pk, key=f"opt.holdingType.{pk}", label=label)
+            HoldingType.objects.get_or_create(id=pk, defaults={"key": f"opt.holdingType.{pk}", "label": label})
 
     #: The tiny form asks nothing about the house number, road, owner or unit
     #: count — the engine that promotes those is covered in `tests.py`, so here
@@ -216,12 +217,12 @@ class SuggestionTests(ConversionFixture):
 
     def test_commercial_suggests_a_shop(self):
         self.assertEqual(
-            suggest_holding_type(self.reviewed(premises_type="commercial")), "shop"
+            suggest_holding_type(self.reviewed(premises_type="commercial")), "commercial"
         )
 
     def test_an_institution_suggests_an_office(self):
         self.assertEqual(
-            suggest_holding_type(self.reviewed(premises_type="institution")), "office"
+            suggest_holding_type(self.reviewed(premises_type="institution")), "commercial"
         )
 
     def test_several_families_suggest_a_multi_storey_building(self):
@@ -231,7 +232,7 @@ class SuggestionTests(ConversionFixture):
 
     def test_one_family_suggests_a_single_storey_house(self):
         self.assertEqual(
-            suggest_holding_type(self.reviewed(household_count=1)), "single_storey"
+            suggest_holding_type(self.reviewed(household_count=1)), "residential"
         )
 
     def test_it_declines_to_guess_rather_than_guessing_wrong(self):
@@ -262,7 +263,7 @@ class ConversionApiTests(ConversionFixture):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["canConvert"])
         self.assertEqual(response.data["road"], self.road.id)
-        self.assertEqual(response.data["holdingType"], "single_storey")
+        self.assertEqual(response.data["holdingType"], "residential")
         self.assertEqual(response.data["ownerName"], "Nasima Khatun")
         self.assertIsNone(response.data["existing"])
 
@@ -369,7 +370,7 @@ class SurveyFromHoldingTests(ConversionFixture):
     def existing(self, number="99/Z"):
         return Holding.objects.create(
             ward=self.ward, road=self.road, holding_no=number,
-            holding_type_id="single_storey", owner_name="Nasima Khatun",
+            holding_type_id="residential", owner_name="Nasima Khatun",
         )
 
     def test_a_survey_can_name_the_building_it_was_started_from(self):

@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Modal, Field, ModalActions } from '../components/Modal.jsx'
-import { citizenApi, readCitizenToken, writeCitizenToken } from '../citizen/api.js'
+import { citizenApi, readCitizenToken, savedCitizenPhone, writeCitizenToken } from '../citizen/api.js'
 import { useLang, LANGUAGES } from '../i18n/index.jsx'
 import '../styles/citizen.css'
 
@@ -43,7 +43,13 @@ export default function Citizen() {
   }, [token, account])
 
   if (!token) {
-    return <CitizenLogin onSignedIn={(res) => { writeCitizenToken(res.token); setAccount(res.account); setToken(res.token) }} />
+    return (
+      <CitizenLogin onSignedIn={(res, remember) => {
+        writeCitizenToken(res.token, { remember, phone: res.account.phone })
+        setAccount(res.account)
+        setToken(res.token)
+      }} />
+    )
   }
   if (!account) return <div className="citizen-shell"><div className="citizen-loading"><span className="spinner spinner-dark" /></div></div>
   return <CitizenHome account={account} setAccount={setAccount} onSignOut={signOut} />
@@ -65,8 +71,9 @@ function LangSwitch() {
 function CitizenLogin({ onSignedIn }) {
   const { t, digits, digitsOnly } = useLang()
   const errorText = useErrorText()
-  const [phone, setPhone] = useState('')
+  const [phone, setPhone] = useState(savedCitizenPhone)
   const [pin, setPin] = useState('')
+  const [remember, setRemember] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   // Once a full mobile number is typed, spell out the first-time PIN for it.
@@ -78,7 +85,7 @@ function CitizenLogin({ onSignedIn }) {
     setBusy(true)
     setError('')
     try {
-      onSignedIn(await citizenApi.login(digitsOnly(phone), digitsOnly(pin)))
+      onSignedIn(await citizenApi.login(digitsOnly(phone), digitsOnly(pin)), remember)
     } catch (err) {
       setError(errorText(err))
       setPin('')
@@ -101,6 +108,11 @@ function CitizenLogin({ onSignedIn }) {
           type="password" inputMode="numeric" maxLength={4} autoComplete="current-password"
           hint={firstPin ? t('citizen.pinFor', { pin: digits(firstPin) }) : t('citizen.pinHint')}
           disabled={busy} required />
+        <label className="remember-row">
+          <input type="checkbox" checked={remember} disabled={busy}
+            onChange={(e) => setRemember(e.target.checked)} />
+          <span>{t('citizen.rememberMe')}</span>
+        </label>
         {error && <div className="form-note bad"><span>{error}</span></div>}
         <button className="btn btn-primary citizen-big" disabled={busy}>
           {busy ? t('citizen.signingIn') : t('citizen.signIn')}

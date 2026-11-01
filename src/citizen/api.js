@@ -7,16 +7,28 @@
 import { request } from '../api/client.js'
 
 const KEY = 'swms.citizen'
+const SAVED_PHONE = 'swms.citizenPhone'
 
 export function readCitizenToken() {
-  try { return localStorage.getItem(KEY) || null } catch { return null }
+  try { return localStorage.getItem(KEY) || sessionStorage.getItem(KEY) || null } catch { return null }
 }
 
-export function writeCitizenToken(token) {
+// "Remember me": kept in localStorage (survives closing the browser) or in
+// sessionStorage (ends with it). The mobile number is remembered with it.
+export function writeCitizenToken(token, { remember = true, phone } = {}) {
   try {
-    if (token) localStorage.setItem(KEY, token)
-    else localStorage.removeItem(KEY)
+    localStorage.removeItem(KEY)
+    sessionStorage.removeItem(KEY)
+    if (token) (remember ? localStorage : sessionStorage).setItem(KEY, token)
+    if (token && phone !== undefined) {
+      if (remember) localStorage.setItem(SAVED_PHONE, phone)
+      else localStorage.removeItem(SAVED_PHONE)
+    }
   } catch { /* private mode: the session will not survive a reload */ }
+}
+
+export function savedCitizenPhone() {
+  try { return localStorage.getItem(SAVED_PHONE) || '' } catch { return '' }
 }
 
 const call = (path, options = {}) => {

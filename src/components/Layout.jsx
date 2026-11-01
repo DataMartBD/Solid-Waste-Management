@@ -68,6 +68,8 @@ const NAV_GROUPS = [
   },
 ]
 
+const SIDEBAR_KEY = 'swms.sidebarHidden'
+
 export default function Layout() {
   const { user, logout } = useAuth()
   const { theme, toggle } = useTheme()
@@ -76,6 +78,18 @@ export default function Layout() {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [menu, setMenu] = useState(false)
+  // On a desktop the sidebar can be hidden to give pages the full width; the
+  // choice is remembered. On a narrow screen it is a drawer (`open`) instead.
+  const [hidden, setHidden] = useState(() => {
+    try { return localStorage.getItem(SIDEBAR_KEY) === '1' } catch { return false }
+  })
+  function toggleSidebar() {
+    if (window.matchMedia?.('(max-width: 980px)').matches) { setOpen((o) => !o); return }
+    setHidden((h) => {
+      try { localStorage.setItem(SIDEBAR_KEY, h ? '0' : '1') } catch { /* private mode */ }
+      return !h
+    })
+  }
 
   const openComplaints = complaints.filter((c) => ['open', 'assigned', 'in_progress'].includes(c.status)).length
   const initials = (user?.name || 'FO').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
@@ -93,7 +107,7 @@ export default function Layout() {
   }
 
   return (
-    <div className="shell">
+    <div className={`shell${hidden ? ' sidebar-hidden' : ''}`}>
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="sidebar-brand">
           {/* color must track --brand: it goes pale mint in dark mode, where the
@@ -138,7 +152,8 @@ export default function Layout() {
 
       <div className="main">
         <header className="topbar">
-          <button className="hamburger" onClick={() => setOpen((o) => !o)} aria-label={t('nav.menu')}>
+          <button className="hamburger" onClick={toggleSidebar} aria-label={t('nav.menu')}
+            title={hidden ? t('nav.showSidebar') : t('nav.hideSidebar')} aria-pressed={!hidden}>
             <span /><span /><span />
           </button>
           <div className="topbar-search">

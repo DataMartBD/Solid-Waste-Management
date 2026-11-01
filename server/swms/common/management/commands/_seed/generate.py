@@ -156,8 +156,11 @@ def attach_profile(record: dict, index: int) -> dict:
         "membersUnder5": (1 if index % 3 == 0 else 0) if members else 0,
         "membersFemale": 1 + (index % 3) if members else 0,
         "storage": STORAGE_TYPES[index % len(STORAGE_TYPES)]["id"],
+        # The building types offered today: commercial, else one of the four
+        # residential kinds in turn.
         "holdingType": (
-            HOLDING_TYPES[4 + (index % 2)]["id"] if commercial else HOLDING_TYPES[index % 4]["id"]
+            "commercial" if commercial
+            else ("residential", "kacha", "multi_storey", "residential_mixed")[index % 4]
         ),
         "floor": FLOORS[index % len(FLOORS)],
         "suitableTime": SUITABLE_TIMES[index % len(SUITABLE_TIMES)]["id"],

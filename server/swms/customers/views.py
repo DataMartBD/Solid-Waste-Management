@@ -73,7 +73,7 @@ class HoldingFilter(filters.FilterSet):
         # A single-point building has no flats: it is in full service once
         # signed up (a tier or an agreed charge) and active, else none.
         single = Q(collection_point="single")
-        signed_up = Q(status="active") & (Q(tier__isnull=False) | Q(charge__gt=0))
+        signed_up = Q(status="active") & Q(charge__gt=0)
         queryset = queryset.annotate(
             _total=Count("households", distinct=True),
             _active=Count(
@@ -126,6 +126,38 @@ class HoldingViewSet(StampsCreatorAgencyMixin, SwmsModelViewSet):
             placed_by_hand=data["placedByHand"],
             user=request.user,
         )
+        return Response(self.get_serializer(self.get_queryset().get(pk=holding.pk)).data)
+
+    @extend_schema(
+        request={"multipart/form-data": inline_serializer(
+            "HoldingPhoto", {"image": serializers.ImageField()})},
+        responses={200: None},
+    )
+    @action(detail=True, methods=["post", "delete"], parser_classes=[MultiPartParser, FormParser])
+    def photo(self, request, pk=None):
+        """Set (POST, one `image` file) or remove (DELETE) the building's photo.
+
+        The file is checked to really be a small image before it is stored, the
+        same way complaint photos are; a new photo replaces the old one.
+        """
+        from swms.complaints.views import validate_image_upload
+
+        holding = self.get_object()
+        if request.method == "DELETE":
+            if holding.photo:
+                holding.photo.delete(save=False)
+            holding.photo = None
+            holding.save(update_fields=["photo", "updated_at"])
+        else:
+            upload = request.FILES.get("image") or next(iter(request.FILES.values()), None)
+            if upload is None:
+                raise DomainError("Attach an image.", code="no_file")
+            validate_image_upload(upload)
+            old = holding.photo.name if holding.photo else None
+            holding.photo = upload
+            holding.save(update_fields=["photo", "updated_at"])
+            if old and old != holding.photo.name:
+                holding.photo.storage.delete(old)
         return Response(self.get_serializer(self.get_queryset().get(pk=holding.pk)).data)
 
     @action(detail=True, methods=["get"])

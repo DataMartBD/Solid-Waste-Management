@@ -17,6 +17,7 @@ vi.mock('../citizen/api.js', () => ({
   citizenApi: api,
   readCitizenToken: () => store.token,
   writeCitizenToken: (token) => { store.token = token },
+  savedCitizenPhone: () => '',
 }))
 
 const LANG = {

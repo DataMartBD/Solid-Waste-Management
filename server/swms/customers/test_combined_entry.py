@@ -49,7 +49,7 @@ class CombinedEntryTests(HoldingData):
         return body
 
     def family(self, unit, head="Head", **overrides):
-        row = {"unit": unit, "head": head}
+        row = {"unit": unit, "head": head, "phone": "01712345678"}
         row.update(overrides)
         return row
 
@@ -89,18 +89,18 @@ class CombinedEntryTests(HoldingData):
     def test_the_service_charge_is_the_buildings(self):
         """One tier and one charge for the holding, however many flats it has."""
         response = self.post(self.payload(
-            [self.family("Shop"), self.family("1A")], tier=self.premium.id,
+            [self.family("Shop"), self.family("1A")], tier=self.premium.id, charge=600,
         ))
         holding = Holding.objects.get(pk=response.data["id"])
         self.assertEqual(holding.tier_id, "premium")
-        self.assertEqual(response.data["effectiveCharge"], self.premium.charge)
+        self.assertEqual(response.data["effectiveCharge"], 600)
 
-    def test_the_charge_is_left_to_the_tier(self):
-        """0 means 'use the tier's standard charge' — not 'free'."""
+    def test_the_tier_is_only_a_label(self):
+        """The amount is typed by hand: a tier alone charges nothing."""
         response = self.post(self.payload([self.family("1A")], tier=self.tier.id))
         holding = Holding.objects.get(pk=response.data["id"])
         self.assertEqual(holding.charge, 0)
-        self.assertEqual(holding.effective_charge, self.tier.charge)
+        self.assertEqual(holding.effective_charge, 0)
 
     def test_an_agreed_charge_overrides_the_tier(self):
         response = self.post(self.payload(
@@ -109,11 +109,11 @@ class CombinedEntryTests(HoldingData):
         holding = Holding.objects.get(pk=response.data["id"])
         self.assertEqual((holding.effective_charge, holding.payment_day), (420, 12))
 
-    def test_a_family_carries_no_charge(self):
-        """Sending charge terms on a flat changes nothing: they are not its to hold."""
+    def test_a_flat_keeps_its_own_charge_but_no_tier(self):
+        """A flat has its own amount (used by flat-based charging), never a tier."""
         self.post(self.payload([self.family("1A", tier=self.premium.id, charge=999)]))
         household = Household.objects.get(unit="1A")
-        self.assertFalse(hasattr(household, "charge"))
+        self.assertEqual(household.charge, 999)
         self.assertFalse(hasattr(household, "tier_id"))
 
     def test_the_flats_take_the_buildings_type(self):
@@ -194,8 +194,10 @@ class CombinedEntryTests(HoldingData):
         self.assertFalse(Holding.objects.exists())
 
     def test_a_bad_building_does_not_create_orphan_families(self):
+        # A road is typed by hand now (a new one is added), so the building is
+        # made invalid by its owner's phone instead.
         response = self.post(self.payload(
-            [self.family("1A")], road="Nowhere Lane"))
+            [self.family("1A")], ownerPhone="12345"))
         self.assertEqual(response.status_code, 400)
         self.assertFalse(Household.objects.exists())
 

@@ -18,6 +18,10 @@ export default {
     'opt.customerType.institutional': 'Institutional',
     'opt.customerType.industrial': 'Industrial',
 
+    'opt.holdingType.residential': 'Residential',
+    'opt.holdingType.commercial': 'Commercial',
+    'opt.holdingType.kacha': 'Kacha house',
+    'opt.holdingType.residential_mixed': 'Residential mixed',
     'opt.holdingType.single_storey': 'Single-storey house',
     'opt.holdingType.multi_storey': 'Multi-storey building',
     'opt.holdingType.apartment': 'Apartment / flat',
@@ -109,6 +113,10 @@ export default {
     'opt.customerType.institutional': 'প্রাতিষ্ঠানিক',
     'opt.customerType.industrial': 'শিল্প',
 
+    'opt.holdingType.residential': 'আবাসিক',
+    'opt.holdingType.commercial': 'বাণিজ্যিক',
+    'opt.holdingType.kacha': 'কাঁচা বাড়ি',
+    'opt.holdingType.residential_mixed': 'আবাসিক মিশ্র',
     'opt.holdingType.single_storey': 'একতলা বাড়ি',
     'opt.holdingType.multi_storey': 'বহুতল ভবন',
     'opt.holdingType.apartment': 'অ্যাপার্টমেন্ট / ফ্ল্যাট',

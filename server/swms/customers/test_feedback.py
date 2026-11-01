@@ -93,3 +93,133 @@ class HoldingFeedbackTests(FeedbackData):
         response = self.client.post(reverse("household-list"),
                                     {"holding": holding.pk, "head": "Rahim"}, format="json")
         self.assertEqual(response.status_code, 201, response.data)
+
+
+class FlatTableTests(FeedbackData):
+    def test_flats_save_with_name_mobile_unit_members_and_occupancy(self):
+        response = self.create(collectionPoint="floor", unitsTotal=2, households=[
+            {"head": "Rahim", "phone": "01811444555", "unit": "1A", "members": 4, "occupancy": "own"},
+            {"head": "Karim", "phone": "01812345678", "unit": "1B", "members": 2, "occupancy": "rented"},
+        ])
+        self.assertEqual(response.status_code, 201, response.data)
+        rows = dict(Household.objects.filter(holding_id=response.data["id"]).values_list("unit", "occupancy"))
+        self.assertEqual(rows, {"1A": "own", "1B": "rented"})
+
+    def test_an_unknown_occupancy_is_refused(self):
+        response = self.create(collectionPoint="floor",
+                               households=[{"head": "Rahim", "unit": "1A", "occupancy": "lease"}])
+        self.assertEqual(response.status_code, 400)
+
+
+class TypedRoadTests(FeedbackData):
+    def test_a_new_road_name_is_added_to_the_ward(self):
+        from swms.catalog.models import Road
+
+        response = self.create(road="  Notun   Rasta ")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["road"], "Notun Rasta")
+        self.assertTrue(Road.objects.filter(ward=self.ward, name="Notun Rasta").exists())
+
+    def test_a_known_road_is_matched_ignoring_case(self):
+        from swms.catalog.models import Road
+
+        before = Road.objects.count()
+        response = self.create(road="kda avenue")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(Road.objects.count(), before)
+
+    def test_a_refused_form_leaves_no_new_road(self):
+        from swms.catalog.models import Road
+
+        response = self.create(road="Ghost Road", ownerPhone="123")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Road.objects.filter(name="Ghost Road").exists())
+
+
+class CollectionPointChargeTests(FeedbackData):
+    """The collection point decides the charge: one place, floor by floor, or both."""
+
+    def flats(self, point, charge=0):
+        return self.create(collectionPoint=point, charge=charge, unitsTotal=3, households=[
+            {"phone": "01712345678", "head": "A", "unit": "1A", "charge": 300},
+            {"phone": "01712345678", "head": "B", "unit": "1B", "charge": 200},
+            {"phone": "01712345678", "head": "C", "unit": "1C"},  # partial: this flat is not charged
+        ])
+
+    def test_a_single_point_bills_the_typed_building_amount(self):
+        response = self.create(collectionPoint="single", charge=500)
+        self.assertEqual(response.data["effectiveCharge"], 500)
+
+    def test_floor_by_floor_bills_the_total_of_the_flats(self):
+        response = self.flats("floor", charge=999)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["effectiveCharge"], 500)  # the building amount is not used
+        self.assertEqual(response.data["flatsCharge"], 500)
+
+    def test_both_adds_the_building_and_the_flats(self):
+        response = self.flats("both", charge=400)
+        self.assertEqual(response.data["effectiveCharge"], 900)
+
+    def test_the_tier_sets_no_amount(self):
+        response = self.create(tier=self.tier.id, charge=0)
+        self.assertEqual(response.data["effectiveCharge"], 0)
+
+    def test_a_retired_flat_is_not_charged(self):
+        holding = Holding.objects.get(pk=self.flats("floor").data["id"])
+        Household.objects.filter(holding=holding, unit="1A").update(status="inactive")
+        holding.refresh_from_db()
+        self.assertEqual(holding.effective_charge, 200)
+
+
+class KachaTests(FeedbackData):
+    def test_a_kacha_house_is_always_a_single_point(self):
+        from swms.catalog.models import HoldingType
+
+        HoldingType.objects.get_or_create(id="kacha", defaults={"key": "opt.holdingType.kacha", "label": "Kacha"})
+        response = self.create(holdingType="kacha", collectionPoint="floor", charge=100)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["collectionPoint"], "single")
+        self.assertEqual(response.data["effectiveCharge"], 100)
+
+
+class HoldingPhotoTests(FeedbackData):
+    def image(self, name="front.png"):
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        buffer = BytesIO()
+        Image.new("RGB", (40, 30), "green").save(buffer, "PNG")
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type="image/png")
+
+    def test_a_photo_is_uploaded_shown_and_removed(self):
+        import tempfile
+
+        from django.test import override_settings
+
+        with tempfile.TemporaryDirectory() as media, override_settings(MEDIA_ROOT=media):
+            holding_id = self.create().data["id"]
+            url = reverse("holding-photo", args=[holding_id])
+            response = self.client.post(url, {"image": self.image()}, format="multipart")
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertIn("/holdings/", response.data["photoUrl"])
+
+            response = self.client.delete(url)
+            self.assertEqual(response.status_code, 200)
+            self.assertIsNone(response.data["photoUrl"])
+
+    def test_a_file_that_is_not_an_image_is_refused(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        holding_id = self.create().data["id"]
+        fake = SimpleUploadedFile("x.png", b"not an image", content_type="image/png")
+        response = self.client.post(reverse("holding-photo", args=[holding_id]), {"image": fake}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+
+
+class CustomerMobileTests(FeedbackData):
+    def test_a_new_customer_needs_a_mobile(self):
+        response = self.create(collectionPoint="floor", households=[{"head": "Rahim", "unit": "1A"}])
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(list(response.data["fields"]["households"][0]), ["phone"])

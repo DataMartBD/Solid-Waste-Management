@@ -37,9 +37,33 @@ export function Modal({ title, subtitle, onClose, children, width = 520 }) {
   )
 }
 
+// Widths sized to what a field holds, for <FormRow>s that wrap: each grows to
+// share the row but never shrinks below what its content needs.
+//   xs   a count (floors, flats)          md   a dropdown (district, ward, type)
+//   sm   a phone, a number, a date        lg   a name, a road, a lane
+//   full the whole row (notes)
+export const FIELD_SIZES = {
+  xs: { flex: '1 1 100px', minWidth: 90 },
+  sm: { flex: '1 1 150px', minWidth: 130 },
+  md: { flex: '2 1 210px', minWidth: 170 },
+  lg: { flex: '3 1 300px', minWidth: 220 },
+  full: { flex: '1 1 100%' },
+}
+
+// A label, with a red asterisk when the field must be filled in.
+export function FieldLabel({ htmlFor, label, mark }) {
+  if (!label) return null
+  return (
+    <label htmlFor={htmlFor}>
+      {label}{mark && <span className="req-mark" aria-hidden="true"> *</span>}
+    </label>
+  )
+}
+
 // Labeled form control. `as` = 'input' | 'select' | 'textarea'
-// `half` / `third` set the width when the field sits inside a <FormRow>.
-export function Field({ label, hint, as = 'input', options, children, half, third, narrow, id, ...props }) {
+// `half` / `third` / `narrow` or `size` set the width inside a <FormRow>;
+// `mark` shows the field is mandatory.
+export function Field({ label, hint, as = 'input', options, children, half, third, narrow, size, mark, id, ...props }) {
   // `narrow` is for a value that is short and always will be — a blood group,
   // a day of the month, a floor. Giving those the same width as an email
   // address wastes a row and makes the form look longer than it is.
@@ -48,7 +72,7 @@ export function Field({ label, hint, as = 'input', options, children, half, thir
   // is wider than its share of a narrow column pushes the field onto a line of
   // its own — which is the whole thing `narrow` exists to avoid. "AB+" and a
   // dropdown arrow need very little.
-  const width = narrow
+  const width = size ? FIELD_SIZES[size] : narrow
     ? { flex: '0 1 130px', minWidth: 104 }
     : third ? { flex: '1 1 29%', minWidth: 130 }
       : half ? { flex: '1 1 45%', minWidth: 160 } : undefined
@@ -61,7 +85,7 @@ export function Field({ label, hint, as = 'input', options, children, half, thir
   const described = { 'aria-describedby': hintId }
   return (
     <div className="field" style={width}>
-      {label && <label htmlFor={fieldId}>{label}</label>}
+      <FieldLabel htmlFor={fieldId} label={label} mark={mark} />
       {as === 'select' ? (
         <select id={fieldId} className="select" {...described} {...props}>{children || options?.map((o) => (
           <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o}</option>
@@ -84,9 +108,11 @@ export function FormRow({ children }) {
 export function FormSection({ title, hint, children, first }) {
   return (
     <fieldset style={{ border: 0, padding: 0, margin: first ? '0 0 4px' : '18px 0 4px' }}>
-      <legend style={{ padding: 0, marginBottom: 10, fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--text-3)' }}>
-        {title}
-      </legend>
+      {title && (
+        <legend style={{ padding: 0, marginBottom: 10, fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--text-3)' }}>
+          {title}
+        </legend>
+      )}
       {hint && <div className="tiny muted-3" style={{ marginTop: -6, marginBottom: 10 }}>{hint}</div>}
       <div className="col gap-12" style={{ display: 'flex', flexDirection: 'column' }}>{children}</div>
     </fieldset>

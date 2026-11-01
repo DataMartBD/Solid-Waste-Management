@@ -5,7 +5,7 @@ spreadsheet with one row per holding —
 
     Holding No · Name · Mobile · City · Ward · Area · Address · Route · GPS Location
 
-— plus, optionally, Lane, Registered As, Collection Point, Tier, Charge, Units
+— plus, optionally, Lane, Building Type, Holding Owner Type, Collection Point, Charge, Units
 and Agency. Every row is
 validated first and the whole file is reported row by row, so an operator can
 fix the sheet before anything is written. Importing then writes the valid rows
@@ -49,10 +49,11 @@ MAX_BYTES = 5 * 1024 * 1024
 #: Column headings in the template, in order. Required ones first.
 TEMPLATE_COLUMNS = [
     "Holding No", "Name", "Mobile", "City", "Ward", "Area", "Lane", "Address", "Route",
-    "GPS Location", "Registered As", "Collection Point", "Tier", "Charge", "Units", "Agency",
+    "GPS Location", "Building Type", "Holding Owner Type", "Collection Point", "Charge",
+    "Units", "Agency",
 ]
 
-#: Accepted spellings for "Registered As" and "Collection Point".
+#: Accepted spellings for "Holding Owner Type" and "Collection Point".
 OWNER_ROLES = {
     "owner": "owner", "malik": "owner", "মালিক": "owner",
     "president": "president", "sovapoti": "president", "সভাপতি": "president",
@@ -61,6 +62,7 @@ OWNER_ROLES = {
 COLLECTION_POINTS = {
     "single": "single", "singlepoint": "single", "onepoint": "single", "groundfloor": "single",
     "floor": "floor", "floorbyfloor": "floor", "perfloor": "floor", "eachfloor": "floor",
+    "both": "both", "উভয়": "both",
 }
 REQUIRED = {"holding_no", "name", "ward", "area"}
 
@@ -74,12 +76,13 @@ ALIASES = {
     "area": "area", "road": "area", "mohalla": "area", "block": "area",
     "address": "address",
     "lane": "lane", "alley": "lane", "lanealley": "lane", "gali": "lane",
+    "holdingownertype": "owner_role", "ownertype": "owner_role",
     "registeredas": "owner_role", "ownerrole": "owner_role", "role": "owner_role",
     "collectionpoint": "collection_point", "collection": "collection_point",
     "route": "route",
     "gpslocation": "gps", "gps": "gps", "location": "gps", "latlng": "gps",
     "latitude": "lat", "lat": "lat", "longitude": "lng", "lng": "lng", "long": "lng",
-    "holdingtype": "holding_type", "type": "holding_type",
+    "holdingtype": "holding_type", "type": "holding_type", "buildingtype": "holding_type",
     "tier": "tier", "charge": "charge", "monthlycharge": "charge",
     "units": "units", "unitstotal": "units", "flats": "units",
     "agency": "agency",
@@ -233,7 +236,7 @@ class _Lookups:
         return found
 
     def holding_type(self, text):
-        # No longer asked for; an old sheet that still has the column may fill it.
+        # Optional: matched by code or English name, e.g. "Multi-storey building".
         if not text:
             return None
         return self._match(self.holding_types, text, "id", "label")
@@ -314,8 +317,8 @@ def validate(rows: list[Row], user) -> list[Row]:
             row.resolved["holding_type"] = holding_type
 
         for key, choices, label, allowed in (
-            ("owner_role", OWNER_ROLES, "Registered As", "Owner, President or Secretary"),
-            ("collection_point", COLLECTION_POINTS, "Collection Point", "Single or Floor by floor"),
+            ("owner_role", OWNER_ROLES, "Holding Owner Type", "Owner, President or Secretary"),
+            ("collection_point", COLLECTION_POINTS, "Collection Point", "Single, Floor by floor or Both"),
         ):
             if d.get(key):
                 value = choices.get(re.sub(r"[\s\-_/]", "", d[key]).casefold())
@@ -486,7 +489,7 @@ def template_workbook() -> bytes:
     sheet.append(TEMPLATE_COLUMNS)
     sheet.append([
         "142/B", "Abdul Karim", "01711000000", "KCC", "W-14", "KDA Avenue", "Lane 3",
-        "", "", "22.8456, 89.5403", "Owner", "Single", "", "", "4", "",
+        "", "", "22.8456, 89.5403", "Multi-storey building", "Owner", "Single", "500", "4", "",
     ])
     for cell in sheet[1]:
         cell.font = Font(bold=True, color="FFFFFF")
@@ -509,10 +512,10 @@ def template_workbook() -> bytes:
         ["Address", "No", "Full address; built from holding, lane and road if blank"],
         ["Route", "No", "Route code or name in the same ward; needs GPS"],
         ["GPS Location", "No", "latitude, longitude — e.g. 22.8456, 89.5403"],
-        ["Registered As", "No", "Owner (default), President or Secretary"],
-        ["Collection Point", "No", "Single (default — flats not registered) or Floor by floor"],
-        ["Tier", "No", "Service tier code or name"],
-        ["Charge", "No", "Monthly charge in BDT; blank = the tier's rate"],
+        ["Building Type", "No", "Residential, Commercial, Kacha house, Multi-storey building or Residential mixed"],
+        ["Holding Owner Type", "No", "Owner (default), President or Secretary"],
+        ["Collection Point", "No", "Single (default — flats not registered), Floor by floor or Both"],
+        ["Charge", "No", "The building's monthly charge in BDT (typed); blank = none"],
         ["Units", "No", "Number of flats/units in the building"],
         ["Agency", "No", "Agency code (e.g. PCM); yours if you belong to one"],
     ]:

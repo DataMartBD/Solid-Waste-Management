@@ -109,6 +109,10 @@
   .login-brand-panel { display: none; }
 }
 
+/* "Remember me" */
+.remember-row { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13.5px; color: var(--text-2); cursor: pointer; }
+.remember-row input { width: 16px; height: 16px; accent-color: var(--brand); }
+
 /* ---- Front door: staff or citizen ---- */
 .landing-choices { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
 .landing-choice {

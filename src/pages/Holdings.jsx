@@ -9,8 +9,9 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useData } from '../context/DataContext.jsx'
 import { useLang } from '../i18n/index.jsx'
 import VerifyLocationModal from '../components/VerifyLocationModal.jsx'
+import { QrPrintModal } from '../components/QrLabels.jsx'
 import {
-  IconHome, IconPlus, IconCheck, IconAlert, IconMap, IconClipboard, IconDownload,
+  IconHome, IconPlus, IconCheck, IconAlert, IconMap, IconClipboard, IconDownload, IconQr,
 } from '../components/Icons.jsx'
 
 // Derived server-side from the households on each holding, so it cannot go
@@ -28,7 +29,7 @@ const SERVICE_TONES = { full: 'ok', partial: 'warn', none: 'muted' }
 const GEO_TIMEOUT = 8000 // ms — a collector in a poor-signal lane must not wait
 
 // One GPS read, always settled: resolves with a fix or a reason, never hangs.
-function captureFix() {
+export function captureFix() {
   return new Promise((resolve) => {
     if (!navigator.geolocation) { resolve({ ok: false, reason: 'unsupported' }); return }
     let settled = false
@@ -59,6 +60,8 @@ export default function Holdings() {
   const { t, n, taka } = useLang()
   const { canWrite, user, isAdmin } = useAuth()
   const [importing, setImporting] = useState(false)
+  // QR stickers to print: one holding, or every holding in the list.
+  const [printing, setPrinting] = useState(null)
   const { catalog } = useData()
   const navigate = useNavigate()
 
@@ -151,8 +154,8 @@ export default function Holdings() {
       cell: ({ row }) => (
         <>
           <div style={{ fontWeight: 600 }}>{row.original.holdingNo}</div>
-          {row.original.collectionPoint && (
-            <div className="tiny muted-3">{t(`holdings.collectionPoint.${row.original.collectionPoint}`)}</div>
+          {row.original.holdingType && (
+            <div className="tiny muted-3">{t(`opt.holdingType.${row.original.holdingType}`)}</div>
           )}
         </>
       ),
@@ -267,6 +270,12 @@ export default function Holdings() {
       meta: { stopClick: true },
       cell: ({ row }) => (
         <div className="row gap-8" style={{ justifyContent: 'flex-end' }}>
+          {row.original.qr && (
+            <button type="button" className="icon-btn" title={t('holdings.qrPrint.button')}
+              onClick={() => setPrinting([row.original])}>
+              <IconQr size={16} />
+            </button>
+          )}
           {canWrite && (
             <button type="button" className="icon-btn" title={t('holdings.verify')}
               onClick={() => openVerify(row.original)}>
@@ -329,6 +338,10 @@ export default function Holdings() {
             rows={rows}
             filename="holdings"
           />
+          {/* Stickers for every holding in the list, on A4. */}
+          <button className="btn" disabled={rows.length === 0} onClick={() => setPrinting(rows)}>
+            <IconQr size={16} /> {t('holdings.qrPrint.all')}
+          </button>
           {/* Bulk upload is an administrator's job: it can create a city's
               whole register in one go. */}
           {isAdmin && (
@@ -343,6 +356,7 @@ export default function Holdings() {
           )}
         </>}
       />
+      {printing && <QrPrintModal holdings={printing} onClose={() => setPrinting(null)} />}
       {importing && (
         <ImportModal onClose={() => setImporting(false)} onDone={() => { setImporting(false); load() }} />
       )}
@@ -439,7 +453,7 @@ export function HoldingForm({ holding, catalog, onClose, onSaved }) {
     e.preventDefault()
     if (busy) return
     if (!form.ward) { setError(t('holdings.wardRequired')); return }
-    if (!form.road) { setError(t('holdings.roadRequired')); return }
+    if (!form.road.trim()) { setError(t('holdings.roadRequired')); return }
     if (!form.holdingNo.trim()) { setError(t('holdings.holdingNoRequired')); return }
     if (!form.ownerName.trim()) { setError(t('holdings.ownerRequired')); return }
 
@@ -475,8 +489,11 @@ export function HoldingForm({ holding, catalog, onClose, onSaved }) {
           <FormRow>
             <Field half as="select" label={t('holdings.col.ward')} value={form.ward} onChange={set('ward')}
               options={[{ value: '', label: '—' }, ...(catalog?.wards || []).map((w) => ({ value: w.id, label: w.name }))]} />
-            <Field half as="select" label={t('holdings.col.road')} value={form.road} onChange={set('road')}
-              options={[{ value: '', label: '—' }, ...roads.map((name) => ({ value: name, label: name }))]} />
+            <Field half label={t('holdings.col.road')} value={form.road} onChange={set('road')}
+              list="quick-road-names" placeholder={t('holdings.roadPlaceholder')} disabled={!form.ward} />
+            <datalist id="quick-road-names">
+              {roads.map((name) => <option key={name} value={name} />)}
+            </datalist>
           </FormRow>
           <FormRow>
             <Field half label={t('holdings.col.holdingNo')} value={form.holdingNo} onChange={set('holdingNo')} placeholder="142/B" />

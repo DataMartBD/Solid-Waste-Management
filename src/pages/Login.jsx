@@ -5,12 +5,20 @@ import { get } from '../api/client.js'
 import { useLang, LANGUAGES, digitsOnly } from '../i18n/index.jsx'
 import { IconPhone, IconArrow, IconLock } from '../components/Icons.jsx'
 
+const SAVED_PHONE = 'swms.lastPhone'
+
 export default function Login() {
   const { signInWithPassword } = useAuth()
   const { t, digits, lang, setLang } = useLang()
   const navigate = useNavigate()
 
-  const [phone, setPhone] = useState('')
+  // "Remember me" also brings back the last number signed in with.
+  const [remember, setRememberBox] = useState(() => {
+    try { return localStorage.getItem('swms.remember') !== '0' } catch { return true }
+  })
+  const [phone, setPhone] = useState(() => {
+    try { return localStorage.getItem(SAVED_PHONE) || '' } catch { return '' }
+  })
   const [password, setPassword] = useState('')
   const [reveal, setReveal] = useState(false)
   const [error, setError] = useState('')
@@ -33,9 +41,13 @@ export default function Login() {
     if (!password) { setError(t('auth.passwordRequired')); return }
     setError('')
     setBusy(true)
-    const res = await signInWithPassword(normalized, password)
+    const res = await signInWithPassword(normalized, password, remember)
     setBusy(false)
     if (!res.ok) { setPassword(''); setError(t(res.error)); return }
+    try {
+      if (remember) localStorage.setItem(SAVED_PHONE, normalized)
+      else localStorage.removeItem(SAVED_PHONE)
+    } catch { /* private mode */ }
     navigate(ROLE_HOME[res.session.role] || '/app/dashboard', { replace: true })
   }
 
@@ -85,7 +97,7 @@ export default function Login() {
                   placeholder="01XXXXXXXXX"
                   value={phone}
                   maxLength={13}
-                  autoFocus
+                  autoFocus={!phone}
                   onChange={(e) => { setPhone(digitsOnly(e.target.value)); setError('') }}
                 />
                 <span style={{ color: 'var(--brand)', display: 'flex', paddingRight: 4 }}><IconPhone size={18} /></span>
@@ -117,6 +129,12 @@ export default function Login() {
                 </button>
               </div>
             </div>
+
+            <label className="remember-row">
+              <input type="checkbox" checked={remember} disabled={busy}
+                onChange={(e) => setRememberBox(e.target.checked)} />
+              <span>{t('auth.rememberMe')}</span>
+            </label>
 
             {error && <div className="login-error">{error}</div>}
             <button className="btn btn-primary" style={{ width: '100%', marginTop: 18, height: 44 }} disabled={busy}>

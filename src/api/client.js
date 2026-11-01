@@ -42,17 +42,34 @@ export class ApiError extends Error {
 
 // --- token store ----------------------------------------------------------
 
+// "Remember me": a remembered session is kept in localStorage and survives the
+// browser being closed; otherwise it lives in sessionStorage and ends with the
+// browser. The choice itself is remembered so token refreshes stay put.
+const REMEMBER_KEY = 'swms.remember'
+
+export function isRemembered() {
+  try { return localStorage.getItem(REMEMBER_KEY) !== '0' } catch { return true }
+}
+
+export function setRemember(on) {
+  try { localStorage.setItem(REMEMBER_KEY, on ? '1' : '0') } catch { /* private mode */ }
+}
+
 export function readTokens() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(TOKEN_KEY) || 'null')
+    const raw = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY)
+    const parsed = JSON.parse(raw || 'null')
     return parsed && parsed.access ? parsed : null
   } catch { return null }
 }
 
 export function writeTokens(tokens) {
   try {
-    if (tokens?.access) localStorage.setItem(TOKEN_KEY, JSON.stringify(tokens))
-    else localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(TOKEN_KEY)
+    sessionStorage.removeItem(TOKEN_KEY)
+    if (tokens?.access) {
+      (isRemembered() ? localStorage : sessionStorage).setItem(TOKEN_KEY, JSON.stringify(tokens))
+    }
   } catch { /* private mode — the session just won't survive a reload */ }
   return tokens
 }

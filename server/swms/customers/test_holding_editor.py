@@ -165,7 +165,7 @@ class FullFieldEditorTests(HoldingData):
         existing = Household.objects.get(unit="1A")
         response = self.patch(holding, {"households": [
             {"id": existing.id, "head": "Edited", "unit": "1A"},
-            {"head": "Brand New", "unit": "2B"},
+            {"phone": "01712345678", "head": "Brand New", "unit": "2B"},
         ]})
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(Household.objects.count(), 2)

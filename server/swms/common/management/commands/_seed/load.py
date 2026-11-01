@@ -108,7 +108,8 @@ def load_catalog() -> dict[tuple[str, str], int]:
     for model, rows in _OPTION_TABLES:
         model.objects.bulk_create(
             (
-                model(id=row["id"], key=row["key"], label=row["label"], sort_order=order)
+                model(id=row["id"], key=row["key"], label=row["label"], sort_order=order,
+                      active=row.get("active", True))
                 for order, row in enumerate(rows)
             ),
             ignore_conflicts=True,
@@ -267,9 +268,9 @@ def load_holdings(
                 "tier_id": first["tier"],
                 "payment_mode_id": first["paymentMode"],
                 "payment_day": first["paymentDay"],
-                "charge": first["charge"] if len(served) == 1 else sum(
-                    f["charge"] or tier_charge.get(f["tier"], 0) for f in served
-                ),
+                # Typed amounts only now: a family that paid "the tier's rate"
+                # gets that rate written in.
+                "charge": sum(f["charge"] or tier_charge.get(f["tier"], 0) for f in served),
             }
         holdings.append(
             Holding(

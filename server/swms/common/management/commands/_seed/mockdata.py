@@ -76,14 +76,25 @@ CUSTOMER_TYPES = [
 ]
 
 HOLDING_TYPES = [
-    {"id": "single_storey", "key": "opt.holdingType.single_storey",
-     "label": "Single-storey house"},
+    # The building types offered today (catalog migration 0012) …
+    {"id": "residential", "key": "opt.holdingType.residential", "label": "Residential"},
+    {"id": "commercial", "key": "opt.holdingType.commercial", "label": "Commercial"},
+    {"id": "kacha", "key": "opt.holdingType.kacha", "label": "Kacha house"},
     {"id": "multi_storey", "key": "opt.holdingType.multi_storey",
      "label": "Multi-storey building"},
-    {"id": "apartment", "key": "opt.holdingType.apartment", "label": "Apartment / flat"},
-    {"id": "tin_shed", "key": "opt.holdingType.tin_shed", "label": "Tin-shed / semi-pucca"},
-    {"id": "shop", "key": "opt.holdingType.shop", "label": "Shop / market stall"},
-    {"id": "office", "key": "opt.holdingType.office", "label": "Office / institution"},
+    {"id": "residential_mixed", "key": "opt.holdingType.residential_mixed",
+     "label": "Residential mixed"},
+    # … and the older ones, hidden but kept for the demo buildings that use them.
+    {"id": "single_storey", "key": "opt.holdingType.single_storey",
+     "label": "Single-storey house", "active": False},
+    {"id": "apartment", "key": "opt.holdingType.apartment", "label": "Apartment / flat",
+     "active": False},
+    {"id": "tin_shed", "key": "opt.holdingType.tin_shed", "label": "Tin-shed / semi-pucca",
+     "active": False},
+    {"id": "shop", "key": "opt.holdingType.shop", "label": "Shop / market stall",
+     "active": False},
+    {"id": "office", "key": "opt.holdingType.office", "label": "Office / institution",
+     "active": False},
 ]
 
 STORAGE_TYPES = [

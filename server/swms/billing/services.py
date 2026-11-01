@@ -133,8 +133,8 @@ def generate_bills(
     families live in it. An unrouted holding is not on anybody's round, so nobody
     serves it and it is not charged; billing a holding we never visit is
     precisely the "billed but not served" exception the reconciliation report is
-    built to surface. A holding with no tier and no agreed charge has not been
-    signed up for service, so it is not billed either.
+    built to surface. A holding whose charge comes to nothing (no amount typed
+    for the building or its flats) has not been signed up, so it is not billed.
 
     Idempotence comes from the `(holding, period)` unique constraint plus the
     exclusion below, so re-running a month tops up holdings signed up since the
@@ -156,6 +156,7 @@ def generate_bills(
         Holding.objects.filter(status=HoldingStatus.ACTIVE, route_stop__isnull=False)
         .exclude(pk__in=already_billed)
         .select_related("tier")
+        .prefetch_related("households")
         .order_by("pk")
     )
 
@@ -167,8 +168,8 @@ def generate_bills(
             period=period,
             issued_at=issued_on,
             due_on=due_on,
-            # An agreed charge beats the tier's standard rate; `effective_charge`
-            # is the single place that decision is made.
+            # By the holding's charge basis — building, its flats, or both;
+            # `effective_charge` is the single place that is decided.
             amount=holding.effective_charge,
         )
         for holding in candidates
