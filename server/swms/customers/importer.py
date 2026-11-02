@@ -239,6 +239,10 @@ class _Lookups:
         # Optional: matched by code or English name, e.g. "Multi-storey building".
         if not text:
             return None
+        # "Residential mixed" was the label until it became "Mixed"; sheets
+        # filled in before then still say it.
+        if text.strip().lower() == "residential mixed":
+            text = "residential_mixed"
         return self._match(self.holding_types, text, "id", "label")
 
     def tier(self, text):
@@ -512,7 +516,7 @@ def template_workbook() -> bytes:
         ["Address", "No", "Full address; built from holding, lane and road if blank"],
         ["Route", "No", "Route code or name in the same ward; needs GPS"],
         ["GPS Location", "No", "latitude, longitude — e.g. 22.8456, 89.5403"],
-        ["Building Type", "No", "Residential, Commercial, Kacha house, Multi-storey building or Residential mixed"],
+        ["Building Type", "No", "Residential, Commercial, Kacha house, Multi-storey building or Mixed"],
         ["Holding Owner Type", "No", "Owner (default), President or Secretary"],
         ["Collection Point", "No", "Single (default — flats not registered), Floor by floor or Both"],
         ["Charge", "No", "The building's monthly charge in BDT (typed); blank = none"],

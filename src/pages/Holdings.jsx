@@ -28,6 +28,14 @@ const SERVICE_TONES = { full: 'ok', partial: 'warn', none: 'muted' }
 // coordinate outside Bangladesh.
 const GEO_TIMEOUT = 8000 // ms — a collector in a poor-signal lane must not wait
 
+// A ward reads as its bare number ("Ward No-01" → "1"), in English digits in
+// both languages; null when its name carries no number.
+export function wardNo(w) {
+  const digits = (w?.name || w?.nameBn || '')
+    .replace(/[০-৯]/g, (d) => '০১২৩৪৫৬৭৮৯'.indexOf(d)).match(/\d+/g)
+  return digits ? String(Number(digits[digits.length - 1])) : null
+}
+
 // One GPS read, always settled: resolves with a fix or a reason, never hangs.
 export function captureFix() {
   return new Promise((resolve) => {
@@ -57,7 +65,7 @@ export function captureFix() {
 }
 
 export default function Holdings() {
-  const { t, n, taka } = useLang()
+  const { t, n, taka, localName } = useLang()
   const { canWrite, user, isAdmin } = useAuth()
   const [importing, setImporting] = useState(false)
   // QR stickers to print: one holding, or every holding in the list.
@@ -147,6 +155,14 @@ export default function Holdings() {
 
   // The register is a DataTable now: sorting, paging and the whole-list search
   // come from TanStack, so this page only says what a column *is*.
+  const wardsById = useMemo(() => new Map((catalog?.wards || []).map((w) => [w.id, w])), [catalog])
+  const citiesById = useMemo(() => new Map((catalog?.cities || []).map((c) => [c.id, c])), [catalog])
+  // Column, export and filter all show the ward's number, falling back to its
+  // name, then its id.
+  const wardText = useCallback((id) => {
+    const w = wardsById.get(id)
+    return wardNo(w) || w?.name || id
+  }, [wardsById])
   const columns = useMemo(() => [
     {
       accessorKey: 'holdingNo',
@@ -179,7 +195,11 @@ export default function Holdings() {
         // which district a ward is in — so it is blank rather than guessed.
         : <span className="muted-3">—</span>),
     },
-    { accessorKey: 'ward', header: t('holdings.col.ward') },
+    {
+      accessorKey: 'ward',
+      header: t('holdings.col.ward'),
+      cell: ({ row }) => wardText(row.original.ward),
+    },
     {
       accessorKey: 'road',
       header: t('holdings.col.road'),
@@ -304,7 +324,7 @@ export default function Holdings() {
         </div>
       ),
     },
-  ], [t, n, taka, canWrite, navigate])
+  ], [t, n, taka, canWrite, navigate, wardText])
 
   const exportColumns = [
     { key: 'id', label: t('holdings.col.id') },
@@ -315,7 +335,7 @@ export default function Holdings() {
     { key: 'thana', label: t('holdings.col.thana') },
     { key: 'road', label: t('holdings.col.road') },
     { key: 'lane', label: t('holdings.lane') },
-    { key: 'ward', label: t('holdings.col.ward') },
+    { key: 'ward', label: t('holdings.col.ward'), get: (r) => wardText(r.ward) },
     { key: 'ownerName', label: t('holdings.col.owner') },
     { key: 'ownerPhone', label: t('holdings.col.phone') },
     { key: 'householdCount', label: t('holdings.col.households') },
@@ -383,7 +403,11 @@ export default function Holdings() {
         </div>
         <select className="select" style={{ width: 'auto' }} value={ward} onChange={(e) => setWard(e.target.value)}>
           <option value="">{t('holdings.allWards')}</option>
-          {(catalog?.wards || []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+          {(catalog?.wards || []).map((w) => {
+            // Wards of every city are listed, so each says whose it is.
+            const owner = citiesById.get(w.city)
+            return <option key={w.id} value={w.id}>{owner ? `${wardText(w.id)} · ${localName(owner)}` : wardText(w.id)}</option>
+          })}
         </select>
       </div>
 

@@ -83,7 +83,7 @@ HOLDING_TYPES = [
     {"id": "multi_storey", "key": "opt.holdingType.multi_storey",
      "label": "Multi-storey building"},
     {"id": "residential_mixed", "key": "opt.holdingType.residential_mixed",
-     "label": "Residential mixed"},
+     "label": "Mixed"},
     # … and the older ones, hidden but kept for the demo buildings that use them.
     {"id": "single_storey", "key": "opt.holdingType.single_storey",
      "label": "Single-storey house", "active": False},

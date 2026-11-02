@@ -35,7 +35,7 @@ class ConversionFixture(FormFixture):
             ("residential", "Residential"),
             ("commercial", "Commercial"),
             ("multi_storey", "Multi-storey building"),
-            ("residential_mixed", "Residential mixed"),
+            ("residential_mixed", "Mixed"),
         ]:
             HoldingType.objects.get_or_create(id=pk, defaults={"key": f"opt.holdingType.{pk}", "label": label})
 

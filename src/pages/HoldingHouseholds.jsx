@@ -11,6 +11,7 @@ import { holdings as holdingsApi } from '../api/endpoints.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useData } from '../context/DataContext.jsx'
 import { useLang } from '../i18n/index.jsx'
+import { wardNo } from './Holdings.jsx'
 import { IconHome, IconPlus, IconEdit, IconTrash, IconArrow, IconCheck } from '../components/Icons.jsx'
 
 // The families inside one building.
@@ -34,9 +35,10 @@ import { IconHome, IconPlus, IconEdit, IconTrash, IconArrow, IconCheck } from '.
 // from the road to the district. Missing parts are dropped rather than left as
 // gaps — every holding registered before district and thana existed has neither,
 // and "Owner · KDA Avenue · W-14 ·  · " reads as a bug.
-function addressLine(holding) {
+function addressLine(holding, wards) {
+  const ward = (wards || []).find((w) => w.id === holding.ward)
   return [
-    holding.ownerName, holding.road, holding.ward, holding.thana, holding.district,
+    holding.ownerName, holding.road, wardNo(ward) || holding.ward, holding.thana, holding.district,
   ].filter(Boolean).join(' · ')
 }
 
@@ -344,7 +346,7 @@ export default function HoldingHouseholds() {
     <div className="fade-in">
       <PageHeader
         title={holding ? t('holdings.householdsTitle', { holding: holding.holdingNo }) : t('households.title')}
-        subtitle={holding ? addressLine(holding) : undefined}
+        subtitle={holding ? addressLine(holding, data.catalog?.wards) : undefined}
         actions={<>
           <button type="button" className="btn" onClick={() => navigate('/app/holdings')}>
             {t('holdings.editor.backToList')}

@@ -18,6 +18,7 @@ import { PageHeader, StatCard, Section, Status, CHART_TOOLTIP } from '../compone
 import { IconCheck, IconBill, IconHome, IconTruck, IconAlert, IconClock, IconRefresh } from '../components/Icons.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useData } from '../context/DataContext.jsx'
+import { wardNo } from './Holdings.jsx'
 import { useLang } from '../i18n/index.jsx'
 
 const TREND_DAYS = 7
@@ -41,7 +42,7 @@ export default function Dashboard() {
   const { t, n, taka, percent, date, day, digits, lang } = useLang()
   const {
     api, visits, complaints, holdings, collectors, bills, payments, vans,
-    holdingById, collectorName,
+    holdingById, collectorName, catalog,
   } = useData()
 
   // One fetch, three states. A failed request renders its message rather than a
@@ -248,7 +249,7 @@ export default function Dashboard() {
                       <div style={{ fontWeight: 600 }}>{h.head}</div>
                       <div className="tiny muted-3 mono">{h.holdingNo} · {h.id}</div>
                     </td>
-                    <td>{h.ward}</td>
+                    <td>{wardNo((catalog?.wards || []).find((w) => w.id === h.ward)) || h.ward}</td>
                     <td className="mono">{t('dashboard.households.onTimeOf', { paid: n(h.onTime), total: n(h.billCount) })}</td>
                     <td>{h.dues > 0 ? <span style={{ color: 'var(--danger)' }}>{taka(h.dues)}</span> : <span className="muted-3">{taka(0)}</span>}</td>
                     <td>

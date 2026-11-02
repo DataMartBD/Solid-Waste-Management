@@ -342,7 +342,7 @@ export default {
     'holdings.collectionPoint.singleHint': 'সব ময়লা এক জায়গা থেকে নেওয়া হয়: ফ্ল্যাট নিবন্ধন হবে না, ভবনের একটি মাসিক চার্জ।',
     'holdings.collectionPoint.floorHint': 'প্রতি ফ্লোর থেকে নেওয়া হয়: প্রতিটি ফ্ল্যাট নিজের চার্জসহ নিবন্ধন করুন; বিল হবে সবগুলোর যোগফল।',
     'holdings.collectionPoint.bothHint': 'কিছু অংশ এক জায়গা থেকে (যেমন দোকান) ও ফ্ল্যাট প্রতি ফ্লোর থেকে: ভবনের চার্জ ও প্রতিটি ফ্ল্যাটের চার্জ যোগ হবে।',
-    'holdings.collectionPoint.noFlats': 'এক জায়গা থেকে সংগ্রহ: এই হোল্ডিংয়ে ফ্ল্যাট নিবন্ধন হবে না। সংগ্রহ, কিউআর, চার্জ ও অভিযোগ ভবন অনুযায়ী চলবে।',
+    'holdings.collectionPoint.noFlats': 'এই হোল্ডিংয়ে আলাদা ভাবে প্রতিটা ফ্ল্যাট নিবন্ধন হবেনা।',
     'holdings.collectionPoint.keptCustomers': 'আগে নিবন্ধিত {count}টি গ্রাহক রাখা আছে, তবে নতুন যোগ হবে না।',
     'holdings.floors': 'তলার সংখ্যা',
     'holdings.unitsTotal': 'ফ্ল্যাট/ইউনিটের সংখ্যা',

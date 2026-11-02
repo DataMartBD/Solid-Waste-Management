@@ -5,6 +5,7 @@ import { ExportMenu } from '../components/ExportMenu.jsx'
 import { IconAlert, IconClock, IconCheck, IconPlus, IconEye, IconArrow, IconPhone, IconSearch, IconUsers } from '../components/Icons.jsx'
 import { useData } from '../context/DataContext.jsx'
 import { useLang } from '../i18n/index.jsx'
+import { wardNo } from './Holdings.jsx'
 import {
   COMPLAINT_TYPES, PRIORITIES, priorityMeta, typeLabelKey, priorityLabelKey,
   slaOf, slaTone, slaLabelKey, nextStatus, isActive, isClosedOut,
@@ -45,8 +46,10 @@ function SlaMeter({ complaint, wide }) {
 }
 
 export default function Complaints() {
-  const { complaints, collectors, holdings, households, ready, create, act, api, collectorName } = useData()
+  const { complaints, collectors, holdings, households, ready, create, act, api, collectorName, catalog } = useData()
   const { t, n, dateTime } = useLang()
+  // The ward's number ("Ward No-01" → "1"), falling back to its id.
+  const wardText = (id) => wardNo((catalog?.wards || []).find((w) => w.id === id)) || id
 
   const [status, setStatus] = useState('all') // all | active | done
   const [type, setType] = useState('all')
@@ -114,7 +117,7 @@ export default function Complaints() {
     { key: 'type', label: t('complaints.col.type'), get: (r) => t(typeLabelKey(r.type)) },
     { key: 'priority', label: t('complaints.col.priority'), get: (r) => t(priorityLabelKey(r.priority)) },
     { key: 'holding', label: t('complaints.col.household'), get: (r) => `${r.head || ''} · ${r.holdingNo || r.holding}` },
-    { key: 'ward', label: t('complaints.col.ward') },
+    { key: 'ward', label: t('complaints.col.ward'), get: (r) => wardText(r.ward) },
     { key: 'channel', label: t('complaints.col.channel'), get: (r) => t(`complaints.channelBadge.${r.channel}`) },
     { key: 'assigned', label: t('complaints.col.assigned'), get: (r) => collectorName(r.assigned) },
     { key: 'status', label: t('complaints.col.status'), get: (r) => t(`status.${r.status}`) },
@@ -236,7 +239,7 @@ export default function Complaints() {
                   <td>
                     <div className="small">{c.head || c.holding}</div>
                     <div className="tiny muted-3 mono">{c.holdingNo}</div>
-                    <div className="tiny muted-3 mono">{c.ward}</div>
+                    <div className="tiny muted-3 mono">{wardText(c.ward)}</div>
                   </td>
                   <td><PriorityBadge value={c.priority} /></td>
                   <td><span className="badge badge-muted">{t(`complaints.channelBadge.${c.channel}`)}</span></td>
@@ -262,7 +265,7 @@ export default function Complaints() {
       </div>
 
       {selected && (
-        <ComplaintDrawer
+        <ComplaintDrawer wardText={wardText}
           complaint={selected} collectors={collectors}
           collectorName={collectorName} onClose={() => setSelectedId(null)}
           busy={busyId === selected.id} error={error}
@@ -277,7 +280,7 @@ export default function Complaints() {
       )}
 
       {showForm && (
-        <ComplaintForm collectors={collectors} holdings={holdings} households={households} onClose={() => setShowForm(false)}
+        <ComplaintForm wardText={wardText} collectors={collectors} holdings={holdings} households={households} onClose={() => setShowForm(false)}
           onSave={async (data, assignTo) => {
             setError(null)
             // `id`, `status`, `sla`, `ward` and `activity` are all the server's to
@@ -314,7 +317,7 @@ export default function Complaints() {
   )
 }
 
-function ComplaintDrawer({ complaint: c, collectors, collectorName, onClose, busy, error, onAdvance, onReassign, onPriority, onResolve, onReopen, onNote, onPhotos }) {
+function ComplaintDrawer({ complaint: c, collectors, collectorName, wardText, onClose, busy, error, onAdvance, onReassign, onPriority, onResolve, onReopen, onNote, onPhotos }) {
   const { t, n, dateTime, digits } = useLang()
   const [note, setNote] = useState('')
   const fileInput = useRef(null)
@@ -382,7 +385,7 @@ function ComplaintDrawer({ complaint: c, collectors, collectorName, onClose, bus
           {/* head / holding / road / phone travel on the ticket itself. */}
           <dl className="kv">
             <dt>{t('complaints.col.household')}</dt><dd>{c.head || c.holding} <span className="muted-3 mono">({c.holdingNo})</span></dd>
-            <dt>{t('complaints.detail.wardRoad')}</dt><dd>{c.ward}{c.road ? ` · ${c.road}` : ''}</dd>
+            <dt>{t('complaints.detail.wardRoad')}</dt><dd>{wardText(c.ward)}{c.road ? ` · ${c.road}` : ''}</dd>
             {c.phone && <><dt>{t('complaints.detail.contact')}</dt><dd className="mono row gap-8"><IconPhone size={13} /> {digits(c.phone)}</dd></>}
             <dt>{t('complaints.col.opened')}</dt><dd>{dateTime(c.opened)}</dd>
           </dl>
@@ -464,8 +467,8 @@ const localDay = (offset = 0) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function ComplaintForm({ collectors, holdings, households, onClose, onSave }) {
-  const { t, n, wardName, date } = useLang()
+function ComplaintForm({ collectors, holdings, households, wardText, onClose, onSave }) {
+  const { t, n, date } = useLang()
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
     holding: holdings[0]?.id || '', household: '', type: 'missed_collection', channel: 'app',
@@ -511,7 +514,7 @@ function ComplaintForm({ collectors, holdings, households, onClose, onSave }) {
             options={[{ value: '', label: t('complaints.unassigned') }, ...collectors.map((c) => ({ value: c.id, label: c.name }))]} />
         </FormRow>
         <FormRow>
-          <Field half label={t('complaints.col.ward')} value={ward ? wardName(ward) : '—'} readOnly
+          <Field half label={t('complaints.col.ward')} value={ward ? wardText(ward) : '—'} readOnly
             hint={t('complaints.form.wardHint')} />
           {form.type === 'missed_collection' && (
             <Field half as="select" label={t('complaints.form.missedOn')} value={form.missedOn} onChange={set('missedOn')}

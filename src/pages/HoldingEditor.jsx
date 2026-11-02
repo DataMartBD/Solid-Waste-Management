@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { PageHeader, Section, EmptyState } from '../components/ui.jsx'
 import { Field, FormRow, FormSection } from '../components/Modal.jsx'
 import { SearchSelect } from '../components/SearchSelect.jsx'
-import { captureFix } from './Holdings.jsx'
+import { captureFix, wardNo } from './Holdings.jsx'
 import { holdings as api } from '../api/endpoints.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useData } from '../context/DataContext.jsx'
@@ -108,8 +108,6 @@ export default function HoldingEditor() {
   const [form, setForm] = useState(() => (
     isNew && myWards?.length === 1 ? { ...BLANK_HOLDING, ward: myWards[0] } : BLANK_HOLDING
   ))
-  // Read-only facts about a saved building: its QR tag and what it owes.
-  const [service, setService] = useState({ qr: null, dues: 0, effectiveCharge: 0 })
   // A new building's location is read from this device as the form opens and
   // saved with it — the person registering it is normally standing at it.
   const [gps, setGps] = useState({ status: isNew ? 'reading' : 'off' })
@@ -166,10 +164,6 @@ export default function HoldingEditor() {
         charge: holding.charge || '',
         paymentMode: holding.paymentMode || '', paymentDay: holding.paymentDay ?? 5,
       })
-      setService({
-        qr: holding.qr || null, dues: holding.dues ?? 0,
-        effectiveCharge: holding.effectiveCharge ?? 0,
-      })
       setPhotoUrl(holding.photoUrl || null)
       const rows = Array.isArray(members) ? members : members.results || []
       setFamilies(rows.map(familyFromRecord))
@@ -216,13 +210,15 @@ export default function HoldingEditor() {
     && (!city || w.city === city))
   // Built once per city / language, not on every keystroke — with no city
   // chosen this is every ward in the country.
+  // A ward reads as its bare number; a name without one is shown whole.
+  const wardLabel = (w) => wardNo(w) || localName(w)
   const wardOptions = useMemo(() => {
     const cities = new Map((catalog?.cities || []).map((c) => [c.id, c]))
     return wardChoices.map((w) => {
       const owner = city ? null : cities.get(w.city)
       return {
         value: w.id,
-        label: owner ? `${localName(w)} · ${localName(owner)}` : localName(w),
+        label: owner ? `${wardLabel(w)} · ${localName(owner)}` : wardLabel(w),
         keywords: [w.id, w.name, w.nameBn, owner?.name, owner?.nameBn],
       }
     })
@@ -562,10 +558,6 @@ export default function HoldingEditor() {
                   value={dayToDate(form.paymentDay)}
                   onChange={(e) => { setForm((f) => ({ ...f, paymentDay: dateToDay(e.target.value) })); setError('') }}
                   hint={t('holdings.editor.paymentDayHint')} disabled={busy} />
-                {!isNew && (
-                  <Field size="sm" label={t('households.field.duesOutstanding')}
-                    value={taka(service.dues || 0)} readOnly disabled />
-                )}
               </FormRow>
             </FormSection>
 
