@@ -223,3 +223,18 @@ class CustomerMobileTests(FeedbackData):
         response = self.create(collectionPoint="floor", households=[{"head": "Rahim", "unit": "1A"}])
         self.assertEqual(response.status_code, 400)
         self.assertEqual(list(response.data["fields"]["households"][0]), ["phone"])
+
+
+class CityFilterTests(FeedbackData):
+    def test_the_list_narrows_to_one_city(self):
+        from swms.catalog.models import City, Ward, Zone
+        city = City.objects.create(id="GCC", name="Gazipur City Corporation")
+        ward = Ward.objects.create(
+            id="GCC-W37", name="Ward No. 37", zone=Zone.objects.create(id="GCC-Z0", name="Unassigned", city=city),
+        )
+        here = self.make_holding("37/1", ward=ward)
+        self.make_holding("14/1")
+        response = self.client.get(reverse("holding-list"), {"city": "GCC"})
+        self.assertEqual(response.status_code, 200)
+        rows = response.data["results"] if isinstance(response.data, dict) else response.data
+        self.assertEqual([r["id"] for r in rows], [here.id])

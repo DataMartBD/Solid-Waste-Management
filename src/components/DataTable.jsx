@@ -43,6 +43,15 @@ const FEATURES = tableFeatures({
 
 const PAGE_SIZES = [10, 25, 50, 100]
 
+// The search box ignores case and which digits are typed: ০১৭১১ finds a phone
+// stored as 01711, and 5 still finds a Bangla name written with ৫.
+const fold = (text) => String(text ?? '')
+  .replace(/[০-৯]/g, (d) => '০১২৩৪৫৬৭৮৯'.indexOf(d)).toLowerCase()
+export function searchText(row, columnId, filterValue) {
+  const q = fold(filterValue).trim()
+  return !q || fold(row.getValue(columnId)).includes(q)
+}
+
 export default function DataTable({
   columns,
   data,
@@ -71,6 +80,7 @@ export default function DataTable({
     columns,
     data,
     state: { globalFilter, sorting, pagination },
+    globalFilterFn: searchText,
     onGlobalFilterChange: setGlobalFilter,
     onSortingChange: setSorting,
     onPaginationChange: setPagination,

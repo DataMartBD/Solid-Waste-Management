@@ -73,6 +73,20 @@ describe('DataTable', () => {
     expect(bodyRows()).toEqual([['14/58', 'Abdul Karim', '1']])
   })
 
+  it('matches Bangla digits typed against English ones, and the other way', () => {
+    const rows = [
+      { id: 'H1', holdingNo: '1', owner: 'Karim 01711222333', families: 1 },
+      { id: 'H2', holdingNo: '2', owner: 'রোড ৫', families: 2 },
+    ]
+    const { unmount } = render(<DataTable columns={COLUMNS} data={rows} />)
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '০১৭১১' } })
+    expect(bodyRows()).toEqual([['1', 'Karim 01711222333', '1']])
+    unmount()
+    render(<DataTable columns={COLUMNS} data={rows} />)
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'রোড 5' } })
+    expect(bodyRows()).toEqual([['2', 'রোড ৫', '2']])
+  })
+
   it('shows the empty state when a search matches nothing', () => {
     render(<DataTable columns={COLUMNS} data={ROWS} empty={<div>nothing here</div>} />)
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'zzz' } })

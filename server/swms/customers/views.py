@@ -37,6 +37,7 @@ class HoldingFilter(filters.FilterSet):
 
     ward = filters.CharFilter(field_name="ward_id")
     zone = filters.CharFilter(field_name="ward__zone_id")
+    city = filters.CharFilter(field_name="ward__zone__city_id")
     road = filters.CharFilter(field_name="road__name", lookup_expr="iexact")
     holdingType = filters.CharFilter(field_name="holding_type_id")
     located = filters.BooleanFilter(method="filter_located")

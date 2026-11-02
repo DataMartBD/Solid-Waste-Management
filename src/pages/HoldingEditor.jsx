@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { PageHeader, Section, EmptyState } from '../components/ui.jsx'
 import { Field, FormRow, FormSection } from '../components/Modal.jsx'
 import { SearchSelect } from '../components/SearchSelect.jsx'
-import { captureFix, wardNo } from './Holdings.jsx'
+import { captureFix, wardNo, sortWards } from './Holdings.jsx'
 import { holdings as api } from '../api/endpoints.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useData } from '../context/DataContext.jsx'
@@ -206,24 +206,21 @@ export default function HoldingEditor() {
   const wardCity = (wardId) => (catalog?.wards || []).find((w) => w.id === wardId)?.city || ''
   const city = form.city || wardCity(form.ward)
   const cityChoices = (catalog?.cities || []).filter((c) => !form.district || c.district === form.district)
-  const wardChoices = (catalog?.wards || []).filter((w) => (!myWards || myWards.includes(w.id))
-    && (!city || w.city === city))
-  // Built once per city / language, not on every keystroke — with no city
-  // chosen this is every ward in the country.
+  // No wards are listed until a city or pourashava is chosen.
+  const wardChoices = city
+    ? (catalog?.wards || []).filter((w) => (!myWards || myWards.includes(w.id)) && w.city === city)
+    : []
+  // Built once per city / language, not on every keystroke.
   // A ward reads as its bare number; a name without one is shown whole.
   const wardLabel = (w) => wardNo(w) || localName(w)
-  const wardOptions = useMemo(() => {
-    const cities = new Map((catalog?.cities || []).map((c) => [c.id, c]))
-    return wardChoices.map((w) => {
-      const owner = city ? null : cities.get(w.city)
-      return {
-        value: w.id,
-        label: owner ? `${wardLabel(w)} · ${localName(owner)}` : wardLabel(w),
-        keywords: [w.id, w.name, w.nameBn, owner?.name, owner?.nameBn],
-      }
-    })
+  const wardOptions = useMemo(() => (
+    sortWards(wardChoices, () => '').map((w) => ({
+      value: w.id,
+      label: wardLabel(w),
+      keywords: [w.id, w.name, w.nameBn],
+    }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catalog, city, myWards?.join(','), localName])
+  ), [catalog, city, myWards?.join(','), localName])
   const setCity = (e) => {
     setForm((f) => ({ ...f, city: e.target.value, ward: '', road: '' }))
     setError('')
@@ -487,11 +484,11 @@ export default function HoldingEditor() {
                   options={cityChoices.map((c) => ({
                     value: c.id, label: localName(c), keywords: [c.id, c.name, c.nameBn],
                   }))} />
-                {/* With no city chosen, every ward is listed, so each says whose it is. */}
                 <SearchSelect size="md" mark label={t('holdings.col.ward')} value={form.ward}
                   onChange={(value) => { setForm((f) => ({ ...f, ward: value, road: '' })); setError('') }}
-                  disabled={busy} placeholder={t('common.typeToSearch')} emptyText={t('common.noMatch')}
-                  hint={city && wardChoices.length === 0 ? t('holdings.noWardInCity') : undefined}
+                  disabled={busy || !city} placeholder={t('common.typeToSearch')} emptyText={t('common.noMatch')}
+                  hint={!city ? t('holdings.editor.pickCityFirst')
+                    : wardChoices.length === 0 ? t('holdings.noWardInCity') : undefined}
                   options={wardOptions} />
               </FormRow>
               <FormRow>

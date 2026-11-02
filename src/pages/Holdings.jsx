@@ -4,6 +4,7 @@ import { PageHeader, StatCard, EmptyState } from '../components/ui.jsx'
 import DataTable from '../components/DataTable.jsx'
 import { Modal, Field, FormRow, FormSection, ModalActions } from '../components/Modal.jsx'
 import { ExportMenu } from '../components/ExportMenu.jsx'
+import { SearchSelect } from '../components/SearchSelect.jsx'
 import { holdings as api } from '../api/endpoints.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useData } from '../context/DataContext.jsx'
@@ -34,6 +35,18 @@ export function wardNo(w) {
   const digits = (w?.name || w?.nameBn || '')
     .replace(/[০-৯]/g, (d) => '০১২৩৪৫৬৭৮৯'.indexOf(d)).match(/\d+/g)
   return digits ? String(Number(digits[digits.length - 1])) : null
+}
+
+// Wards listed by city, then by number ascending — 1, 2 … 30 of one city
+// before the next city's 1. A ward without a number goes after its city's
+// numbered wards. `cityName` is the city's display name for a ward.
+export function sortWards(wards, cityName) {
+  const num = (w) => Number(wardNo(w) ?? Infinity)
+  return [...(wards || [])].sort((a, b) => (
+    String(cityName(a)).localeCompare(String(cityName(b)))
+    || num(a) - num(b)
+    || String(a.name).localeCompare(String(b.name))
+  ))
 }
 
 // One GPS read, always settled: resolves with a fix or a reason, never hangs.
@@ -76,6 +89,7 @@ export default function Holdings() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [cityFilter, setCityFilter] = useState('')
   const [ward, setWard] = useState('')
   const [service, setService] = useState('')
 
@@ -133,7 +147,9 @@ export default function Holdings() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await api.list({ ward: ward || undefined, serviceStatus: service || undefined })
+      const data = await api.list({
+        city: cityFilter || undefined, ward: ward || undefined, serviceStatus: service || undefined,
+      })
       setRows(Array.isArray(data) ? data : data.results || [])
       setError('')
     } catch {
@@ -141,7 +157,7 @@ export default function Holdings() {
     } finally {
       setLoading(false)
     }
-  }, [ward, service, t])
+  }, [cityFilter, ward, service, t])
 
   useEffect(() => { load() }, [load])
 
@@ -157,6 +173,18 @@ export default function Holdings() {
   // come from TanStack, so this page only says what a column *is*.
   const wardsById = useMemo(() => new Map((catalog?.wards || []).map((w) => [w.id, w])), [catalog])
   const citiesById = useMemo(() => new Map((catalog?.cities || []).map((c) => [c.id, c])), [catalog])
+  // The filter picks a city first, then one of its wards as a plain number —
+  // the country's ~3,500 wards in one list could not be told apart. Only
+  // cities with wards in the catalog (the user's scope) are offered.
+  const filterCities = useMemo(() => {
+    const ids = new Set((catalog?.wards || []).map((w) => w.city))
+    return [...ids].map((id) => citiesById.get(id)).filter(Boolean)
+      .sort((a, b) => String(localName(a)).localeCompare(String(localName(b))))
+  }, [catalog, citiesById, localName])
+  const sortedWards = useMemo(
+    () => (cityFilter ? sortWards((catalog?.wards || []).filter((w) => w.city === cityFilter), () => '') : []),
+    [catalog, cityFilter],
+  )
   // Column, export and filter all show the ward's number, falling back to its
   // name, then its id.
   const wardText = useCallback((id) => {
@@ -211,7 +239,10 @@ export default function Holdings() {
       ),
     },
     {
-      accessorKey: 'ownerName',
+      id: 'ownerName',
+      // Name and phone joined, so the search box finds a holding by the owner's
+      // mobile too; sorting still goes by name, which comes first.
+      accessorFn: (row) => [row.ownerName, row.ownerPhone].filter(Boolean).join(' '),
       header: t('holdings.col.owner'),
       cell: ({ row }) => (
         <>
@@ -401,13 +432,20 @@ export default function Holdings() {
             <button key={k || 'all'} type="button" className={service === k ? 'on' : ''} onClick={() => setService(k)}>{l}</button>
           ))}
         </div>
-        <select className="select" style={{ width: 'auto' }} value={ward} onChange={(e) => setWard(e.target.value)}>
+        {/* Typed into, not scrolled: there are some 330 cities and pourashavas.
+            Empty (or cleared with ×) means every city. */}
+        <div style={{ width: 280 }}>
+          <SearchSelect value={cityFilter} placeholder={t('holdings.allCities')}
+            emptyText={t('common.noMatch')}
+            onChange={(value) => { setCityFilter(value); setWard('') }}
+            options={filterCities.map((c) => ({
+              value: c.id, label: localName(c), keywords: [c.id, c.name, c.nameBn],
+            }))} />
+        </div>
+        <select className="select" style={{ width: 'auto' }} value={ward} disabled={!cityFilter}
+          onChange={(e) => setWard(e.target.value)}>
           <option value="">{t('holdings.allWards')}</option>
-          {(catalog?.wards || []).map((w) => {
-            // Wards of every city are listed, so each says whose it is.
-            const owner = citiesById.get(w.city)
-            return <option key={w.id} value={w.id}>{owner ? `${wardText(w.id)} · ${localName(owner)}` : wardText(w.id)}</option>
-          })}
+          {sortedWards.map((w) => <option key={w.id} value={w.id}>{wardText(w.id)}</option>)}
         </select>
       </div>
 
