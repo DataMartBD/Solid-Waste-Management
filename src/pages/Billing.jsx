@@ -21,6 +21,11 @@ function thisMonth() {
 const FILTERS = [['all', 'common.all'], ['paid', 'status.paid'], ['unpaid', 'status.unpaid'],
   ['partial', 'status.partial'], ['overdue', 'status.overdue']]
 
+// Payment modes not offered when recording a household's payment. Bank transfer
+// stays in the catalog (agencies remit to KCC that way, and old payments still
+// show their method) — it just can't be picked here.
+const HIDDEN_PAYMENT_MODES = ['bank']
+
 export default function Billing() {
   const { bills, paymentModes, ready, act, api } = useData()
   const { isAdmin } = useAuth()
@@ -258,7 +263,10 @@ export default function Billing() {
 
 function PaymentForm({ bill, paymentModes, busy, onClose, onSave }) {
   const { t, taka, period, date, optLabel } = useLang()
-  const [method, setMethod] = useState(bill.method || paymentModes[0]?.id || 'cash')
+  const modes = paymentModes.filter((m) => !HIDDEN_PAYMENT_MODES.includes(m.id))
+  const [method, setMethod] = useState(
+    (bill.method && !HIDDEN_PAYMENT_MODES.includes(bill.method) ? bill.method : null)
+    || modes[0]?.id || 'cash')
   // Part payment is the norm at the door, so the amount is editable — it just
   // starts at everything still owed. The server rejects an overpayment and names
   // the outstanding figure in the message.
@@ -311,7 +319,7 @@ function PaymentForm({ bill, paymentModes, busy, onClose, onSave }) {
             value={amount} onChange={(e) => setAmount(e.target.value)}
             hint={t('billing.amountHint', { amount: taka(bill.outstanding) })} />
           <Field half as="select" label={t('billing.paymentMethod')} value={method} onChange={(e) => setMethod(e.target.value)}
-            options={paymentModes.map((m) => ({ value: m.id, label: t(m.key) }))} />
+            options={modes.map((m) => ({ value: m.id, label: t(m.key) }))} />
         </FormRow>
         <Field label={t('billing.reference')} value={reference} onChange={(e) => setReference(e.target.value)}
           placeholder={t('billing.referencePlaceholder')} hint={t('billing.referenceHint')} />

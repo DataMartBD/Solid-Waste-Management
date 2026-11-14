@@ -17,6 +17,7 @@ from .models import (
     CurrentPractice,
     CustomerType,
     HoldingType,
+    StructureType,
     PaymentMode,
     PotentialReason,
     Road,
@@ -42,6 +43,7 @@ def option_serializer(model_cls, *, extra=()):
 
 CustomerTypeSerializer = option_serializer(CustomerType)
 HoldingTypeSerializer = option_serializer(HoldingType)
+StructureTypeSerializer = option_serializer(StructureType)
 StorageTypeSerializer = option_serializer(StorageType)
 SuitableTimeSerializer = option_serializer(SuitableTime)
 PaymentModeSerializer = option_serializer(PaymentMode)

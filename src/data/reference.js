@@ -46,6 +46,18 @@ export function zoneName(zones, id) {
   return (zones || []).find((row) => row.id === id)?.name || id || '—'
 }
 
+// Uses suggested for a flat in a commercial or mixed building (ব্যবহার). Only
+// suggestions: the column takes any text, and saves the words as shown.
+export const FLAT_USAGE_OPTIONS = ['office', 'shop', 'showroom', 'hotel', 'restaurant', 'hostel']
+
+// Whether a building's customers are asked what their flat is used for: a
+// commercial or mixed multi-storey building collected floor by floor (or both).
+export function asksFlatUsage({ holdingType, structureType, collectionPoint } = {}) {
+  return structureType === 'multi_storey'
+    && Boolean(collectionPoint) && collectionPoint !== 'single'
+    && ['commercial', 'residential_mixed'].includes(holdingType)
+}
+
 // The empty catalog used before the first fetch resolves, so components can
 // render their frame without guarding every list access.
 export const EMPTY_CATALOG = {
@@ -56,6 +68,7 @@ export const EMPTY_CATALOG = {
   bloodGroups: [],
   customerTypes: [],
   holdingTypes: [],
+  structureTypes: [],
   storageTypes: [],
   suitableTimes: [],
   paymentModes: [],

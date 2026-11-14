@@ -23,6 +23,7 @@ from swms.catalog.models import (
     CustomerType,
     GeoLocation,
     HoldingType,
+    StructureType,
     PaymentMode,
     PotentialReason,
     Road,
@@ -47,6 +48,8 @@ PHONE_MESSAGE = "Enter an 11-digit mobile number (01XXXXXXXXX)."
 
 #: The building type whose collection point is always a single point.
 KACHA = "kacha"
+#: Building types that became structure types.
+STRUCTURE_HOLDING_TYPES = ("kacha", "multi_storey")
 
 
 def clean_phone(value: str) -> str:
@@ -104,6 +107,7 @@ class NestedHouseholdSerializer(serializers.Serializer):
     # --- who ------------------------------------------------------------- #
     head = serializers.CharField(max_length=120)
     occupancy = serializers.ChoiceField(choices=Occupancy.choices, required=False, allow_blank=True)
+    usage = serializers.CharField(max_length=60, required=False, allow_blank=True)
     charge = serializers.IntegerField(required=False, min_value=0)
     customerType = serializers.PrimaryKeyRelatedField(
         source="customer_type", queryset=CustomerType.objects.all(), required=False
@@ -170,9 +174,13 @@ class HoldingSerializer(SwmsModelSerializer):
     ward = serializers.PrimaryKeyRelatedField(queryset=Ward.objects.all())
     road = RoadNameField()
     holdingNo = serializers.CharField(source="holding_no")
-    #: No longer asked for; accepted so older clients and the upload still work.
+    #: Building type by use (ব্যবহার অনুযায়ী).
     holdingType = serializers.PrimaryKeyRelatedField(
         source="holding_type", queryset=HoldingType.objects.all(), required=False, allow_null=True
+    )
+    #: Building type by structure (অবকাঠামো অনুযায়ী).
+    structureType = serializers.PrimaryKeyRelatedField(
+        source="structure_type", queryset=StructureType.objects.all(), required=False, allow_null=True
     )
     lane = serializers.CharField(max_length=120, required=False, allow_blank=True)
     ownerName = serializers.CharField(source="owner_name")
@@ -257,6 +265,7 @@ class HoldingSerializer(SwmsModelSerializer):
             "lane",
             "holdingNo",
             "holdingType",
+            "structureType",
             "ownerName",
             "ownerRole",
             "ownerPhone",
@@ -335,8 +344,14 @@ class HoldingSerializer(SwmsModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        # "Kacha" and "Multi-storey" are structures, not uses. An older client
+        # that still sends one as the building type has it moved across.
+        legacy = attrs.get("holding_type")
+        if legacy is not None and legacy.pk in STRUCTURE_HOLDING_TYPES:
+            attrs.setdefault("structure_type", StructureType.objects.filter(pk=legacy.pk).first())
+            attrs["holding_type"] = HoldingType.objects.filter(pk="residential").first()
         # A kacha house (কাঁচা বাড়ি) is always collected at one place.
-        kind = attrs.get("holding_type", getattr(self.instance, "holding_type", None))
+        kind = attrs.get("structure_type", getattr(self.instance, "structure_type", None))
         if kind is not None and kind.pk == KACHA:
             attrs["collection_point"] = CollectionPoint.SINGLE
         self._check_geography(attrs)
@@ -545,7 +560,7 @@ class HoldingSerializer(SwmsModelSerializer):
     #: serializer later cannot reach the model without somebody deciding it may.
     _FAMILY_TEXT = [
         "head", "phone", "alt_phone", "profession", "email", "contact_person",
-        "blood_group", "unit", "floor", "address", "occupancy",
+        "blood_group", "unit", "floor", "address", "occupancy", "usage",
     ]
     _FAMILY_NUMBERS = ["members", "members_under5", "members_female", "charge"]
     _FAMILY_LINKS = ["customer_type", "holding_type", "storage", "suitable_time"]
@@ -774,7 +789,7 @@ class HouseholdSerializer(HoldingSerializerBase):
     class Meta:
         model = Household
         fields = (
-            ["id", "status", "occupancy", "charge"]
+            ["id", "status", "occupancy", "usage", "charge"]
             + HoldingSerializerBase.LOCATION_FIELDS
             + HoldingSerializerBase.PROFILE_FIELDS
             + ["routeId"]

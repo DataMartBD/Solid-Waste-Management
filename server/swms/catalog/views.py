@@ -38,6 +38,7 @@ from .models import (
     CustomerType,
     GeoLocation,
     HoldingType,
+    StructureType,
     PaymentMode,
     PotentialReason,
     Road,
@@ -57,6 +58,7 @@ from .serializers import (
     CurrentPracticeSerializer,
     CustomerTypeSerializer,
     HoldingTypeSerializer,
+    StructureTypeSerializer,
     PaymentModeSerializer,
     PotentialReasonSerializer,
     RoadSerializer,
@@ -72,6 +74,7 @@ from .serializers import (
 OPTION_LISTS = {
     "customerTypes": (CustomerType, CustomerTypeSerializer),
     "holdingTypes": (HoldingType, HoldingTypeSerializer),
+    "structureTypes": (StructureType, StructureTypeSerializer),
     "storageTypes": (StorageType, StorageTypeSerializer),
     "suitableTimes": (SuitableTime, SuitableTimeSerializer),
     "paymentModes": (PaymentMode, PaymentModeSerializer),

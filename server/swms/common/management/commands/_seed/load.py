@@ -39,6 +39,7 @@ from swms.catalog.models import (
     CurrentPractice,
     CustomerType,
     HoldingType,
+    StructureType,
     PaymentMode,
     PotentialReason,
     Road,
@@ -62,10 +63,14 @@ from .js import local, local_midnight, localize
 
 BATCH = 500
 
+#: Demo holding types that are structures (see mock.STRUCTURE_TYPES).
+_STRUCTURES = {row["id"] for row in mock.STRUCTURE_TYPES}
+
 #: Which option table each list loads into, in dependency order.
 _OPTION_TABLES = [
     (CustomerType, mock.CUSTOMER_TYPES),
     (HoldingType, mock.HOLDING_TYPES),
+    (StructureType, mock.STRUCTURE_TYPES),
     (StorageType, mock.STORAGE_TYPES),
     (SuitableTime, mock.SUITABLE_TIMES),
     (PaymentMode, mock.PAYMENT_MODES),
@@ -280,7 +285,13 @@ def load_holdings(
                 ward_id=row["ward"],
                 road_id=roads[(row["ward"], row["road"])],
                 holding_no=row["holding"],
-                holding_type_id=row["holdingType"],
+                # A demo type that is really a structure is filed as one.
+                holding_type_id=(
+                    "residential" if row["holdingType"] in _STRUCTURES else row["holdingType"]
+                ),
+                structure_type_id=(
+                    row["holdingType"] if row["holdingType"] in _STRUCTURES else None
+                ),
                 agency=agency,
                 owner_name=row["head"],
                 owner_phone=row["phone"],

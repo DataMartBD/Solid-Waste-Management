@@ -10,6 +10,7 @@ from .models import (
     CustomerType,
     GeoLocation,
     HoldingType,
+    StructureType,
     PaymentMode,
     PotentialReason,
     Road,
@@ -33,6 +34,7 @@ class OptionAdmin(admin.ModelAdmin):
 for model in (
     CustomerType,
     HoldingType,
+    StructureType,
     StorageType,
     SuitableTime,
     PaymentMode,

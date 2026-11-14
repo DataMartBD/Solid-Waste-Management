@@ -306,13 +306,6 @@ export default function Holdings() {
       ),
     },
     {
-      accessorKey: 'verified',
-      header: t('holdings.col.located'),
-      cell: ({ row }) => (row.original.verified
-        ? <span className="badge badge-ok"><span className="dot" />{t('holdings.located')}</span>
-        : <span className="badge badge-warn"><span className="dot" />{t('holdings.notLocated')}</span>),
-    },
-    {
       id: 'actions',
       header: '',
       enableSorting: false,

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { PageHeader, StatCard, EmptyState } from '../components/ui.jsx'
 import { ExportMenu } from '../components/ExportMenu.jsx'
 import DataTable from '../components/DataTable.jsx'
+import { SuggestInput } from '../components/SuggestInput.jsx'
 import {
   HouseholdForm, TYPE_META,
   underPayload, potentialPayload,
@@ -11,6 +12,7 @@ import { holdings as holdingsApi } from '../api/endpoints.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useData } from '../context/DataContext.jsx'
 import { useLang } from '../i18n/index.jsx'
+import { FLAT_USAGE_OPTIONS, asksFlatUsage } from '../data/reference.js'
 import { wardNo } from './Holdings.jsx'
 import { IconHome, IconPlus, IconEdit, IconTrash, IconArrow, IconCheck } from '../components/Icons.jsx'
 
@@ -161,8 +163,8 @@ export default function HoldingHouseholds() {
   const [inlineErrors, setInlineErrors] = useState({})
   const startInline = (row) => {
     setInline({
-      id: row.id, head: row.head || '', phone: row.phone || '', unit: row.unit || '',
-      members: row.members ?? '', occupancy: row.occupancy || 'rented',
+      id: row.id, head: row.head || '', phone: row.phone || '', floor: row.floor || '',
+      unit: row.unit || '', usage: row.usage || '', members: row.members ?? '', occupancy: row.occupancy || 'rented',
       charge: row.charge ? String(row.charge) : '',
     })
     setInlineErrors({})
@@ -182,7 +184,8 @@ export default function HoldingHouseholds() {
     if (Object.keys(errs).length) { setInlineErrors(errs); return }
     setBusy(true)
     const result = await update('households', inline.id, {
-      head: inline.head.trim(), phone: inline.phone.trim(), unit: inline.unit.trim(),
+      head: inline.head.trim(), phone: inline.phone.trim(), floor: inline.floor.trim(),
+      unit: inline.unit.trim(), usage: inline.usage.trim(),
       members: inline.members === '' ? 0 : Number(inline.members),
       occupancy: inline.occupancy, charge: inline.charge === '' ? 0 : Number(inline.charge),
     })
@@ -190,7 +193,8 @@ export default function HoldingHouseholds() {
     if (!result.ok) {
       const fieldOf = (key) => result.error?.fieldError?.(key)
       const server = {
-        head: fieldOf('head'), phone: fieldOf('phone'), unit: fieldOf('unit') || fieldOf('holding'),
+        head: fieldOf('head'), phone: fieldOf('phone'), floor: fieldOf('floor'),
+        unit: fieldOf('unit') || fieldOf('holding'), usage: fieldOf('usage'),
         members: fieldOf('members'), charge: fieldOf('charge'),
       }
       if (Object.values(server).some(Boolean)) setInlineErrors(server)
@@ -211,19 +215,13 @@ export default function HoldingHouseholds() {
     </>
   )
 
+  // The same columns, in the same order, as the add-customer grid in the
+  // Holding Master editor: name, mobile, floor, flat, use, members, charge,
+  // own or rented. Use and charge show under the same conditions as there.
+  const askUsage = asksFlatUsage(holding || {})
+  const askCharge = Boolean(holding) && holding.collectionPoint !== 'single'
+
   const columns = useMemo(() => [
-    {
-      accessorKey: 'unit',
-      header: t('holdings.flatTable.unit'),
-      cell: ({ row }) => (editingRow(row.original)
-        ? cellInput('unit', { placeholder: t('holdings.flatTable.unitPh'), 'aria-label': t('holdings.flatTable.unit'), width: 80 })
-        : (
-          <>
-            <div style={{ fontWeight: 600 }}>{row.original.unit || '—'}</div>
-            {row.original.floor && <div className="tiny muted-3">{row.original.floor}</div>}
-          </>
-        )),
-    },
     {
       accessorKey: 'head',
       header: <>{t('holdings.flatTable.name')}<span className="req-mark"> *</span></>,
@@ -241,12 +239,49 @@ export default function HoldingHouseholds() {
         : <span className="mono">{row.original.phone || '—'}</span>),
     },
     {
+      accessorKey: 'floor',
+      header: t('holdings.flatTable.floor'),
+      cell: ({ row }) => (editingRow(row.original)
+        ? cellInput('floor', { placeholder: t('holdings.flatTable.floorPh'), maxLength: 32, 'aria-label': t('holdings.flatTable.floor'), width: 70 })
+        : (row.original.floor || '—')),
+    },
+    {
+      accessorKey: 'unit',
+      header: t('holdings.flatTable.unit'),
+      cell: ({ row }) => (editingRow(row.original)
+        ? cellInput('unit', { placeholder: t('holdings.flatTable.unitPh'), 'aria-label': t('holdings.flatTable.unit'), width: 80 })
+        : <span style={{ fontWeight: 600 }}>{row.original.unit || '—'}</span>),
+    },
+    ...(askUsage ? [{
+      accessorKey: 'usage',
+      header: t('holdings.flatTable.usage'),
+      cell: ({ row }) => (editingRow(row.original)
+        ? (
+          <>
+            <SuggestInput value={inline.usage} disabled={busy} maxLength={60}
+              options={FLAT_USAGE_OPTIONS.map((k) => t(`holdings.usage.${k}`))}
+              placeholder={t('holdings.flatTable.usagePh')} aria-label={t('holdings.flatTable.usage')}
+              style={{ minWidth: 120 }}
+              onChange={(v) => setCell('usage')({ target: { value: v } })} />
+            {inlineErrors.usage && <div className="tiny" style={{ color: 'var(--danger)' }}>{inlineErrors.usage}</div>}
+          </>
+        )
+        : (row.original.usage || '—')),
+    }] : []),
+    {
       accessorKey: 'members',
       header: t('holdings.flatTable.members'),
       cell: ({ row }) => (editingRow(row.original)
         ? cellInput('members', { type: 'number', min: 0, 'aria-label': t('holdings.flatTable.members'), width: 70 })
         : (row.original.members ? n(row.original.members) : '—')),
     },
+    ...(askCharge ? [{
+      accessorKey: 'charge',
+      header: t('holdings.flatTable.charge'),
+      cell: ({ row }) => (editingRow(row.original)
+        ? cellInput('charge', { type: 'number', min: 0, placeholder: '0', 'aria-label': t('holdings.flatTable.charge'), width: 80 })
+        : (row.original.charge ? taka(row.original.charge) : '—')),
+    }] : []),
     {
       accessorKey: 'occupancy',
       header: t('holdings.flatTable.occupancy'),
@@ -254,18 +289,11 @@ export default function HoldingHouseholds() {
         ? (
           <select className="select" value={inline.occupancy} onChange={setCell('occupancy')} disabled={busy}
             aria-label={t('holdings.flatTable.occupancy')}>
-            <option value="rented">{t('holdings.occupancy.rented')}</option>
             <option value="own">{t('holdings.occupancy.own')}</option>
+            <option value="rented">{t('holdings.occupancy.rented')}</option>
           </select>
         )
         : (row.original.occupancy ? t(`holdings.occupancy.${row.original.occupancy}`) : '—')),
-    },
-    {
-      accessorKey: 'charge',
-      header: t('holdings.flatTable.charge'),
-      cell: ({ row }) => (editingRow(row.original)
-        ? cellInput('charge', { type: 'number', min: 0, placeholder: '0', 'aria-label': t('holdings.flatTable.charge'), width: 80 })
-        : (row.original.charge ? taka(row.original.charge) : '—')),
     },
     {
       accessorKey: '_type',
@@ -285,7 +313,7 @@ export default function HoldingHouseholds() {
       id: 'actions',
       header: '',
       enableSorting: false,
-      meta: { stopClick: true },
+      meta: { stopClick: true, stickyEnd: true },
       cell: ({ row }) => (editingRow(row.original) ? (
         <div className="row gap-8" style={{ justifyContent: 'flex-end' }}>
           <button type="button" className="act-btn" title={t('common.save')} disabled={busy}
@@ -324,17 +352,19 @@ export default function HoldingHouseholds() {
       )),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t, n, taka, canWrite, busy, id, inline, inlineErrors])
+  ], [t, n, taka, canWrite, busy, id, inline, inlineErrors, askUsage, askCharge])
 
   const exportColumns = [
     { key: 'id', label: t('households.col.id') },
-    { key: 'unit', label: t('holdings.unit') },
     { key: 'head', label: t('holdings.flatTable.name') },
-    { key: 'phone', label: t('households.field.phone') },
-    { key: '_type', label: t('households.col.type') },
+    { key: 'phone', label: t('holdings.flatTable.phone') },
+    { key: 'floor', label: t('holdings.flatTable.floor') },
+    { key: 'unit', label: t('holdings.flatTable.unit') },
+    ...(askUsage ? [{ key: 'usage', label: t('holdings.flatTable.usage') }] : []),
     { key: 'members', label: t('holdings.flatTable.members') },
+    ...(askCharge ? [{ key: 'charge', label: t('holdings.flatTable.charge') }] : []),
     { key: 'occupancy', label: t('holdings.flatTable.occupancy'), get: (r) => (r.occupancy ? t(`holdings.occupancy.${r.occupancy}`) : '') },
-    { key: 'charge', label: t('holdings.flatTable.charge') },
+    { key: '_type', label: t('households.col.type') },
     { key: 'status', label: t('households.field.status') },
   ]
 

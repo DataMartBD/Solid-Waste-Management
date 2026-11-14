@@ -97,7 +97,7 @@ export default {
     'common.typeToSearch': 'খুঁজতে লিখুন…',
     'common.noMatch': 'কিছু পাওয়া যায়নি',
     'common.close': 'বন্ধ',
-    'common.edit': 'সম্পাদনা',
+    'common.edit': 'পরিবর্তন',
     'common.delete': 'মুছুন',
     'common.view': 'দেখুন',
     'common.details': 'বিস্তারিত',

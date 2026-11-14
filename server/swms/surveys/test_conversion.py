@@ -18,7 +18,7 @@ from swms.common.roles import Role
 from swms.customers.models import Holding
 
 from .models import SurveyStatus
-from .services import convert_survey, record_survey, suggest_holding_type
+from .services import convert_survey, record_survey, suggest_holding_type, suggest_structure_type
 from .tests import FormFixture
 
 
@@ -169,8 +169,14 @@ class ConversionTests(ConversionFixture):
         self.assertEqual(caught.exception.code, "no_holding_type")
 
     def test_an_explicit_property_type_wins_over_the_guess(self):
+        holding, _ = convert_survey(self.reviewed(), holding_type="commercial")
+        self.assertEqual(holding.holding_type_id, "commercial")
+
+    def test_an_old_structure_sent_as_the_type_moves_to_the_structure(self):
+        """'Multi-storey' is a structure now: residential by use, multi-storey by structure."""
         holding, _ = convert_survey(self.reviewed(), holding_type="multi_storey")
-        self.assertEqual(holding.holding_type_id, "multi_storey")
+        self.assertEqual(holding.holding_type_id, "residential")
+        self.assertEqual(holding.structure_type_id, "multi_storey")
 
     def test_the_owner_is_preferred_over_whoever_answered_the_door(self):
         """A tenant answered; the register wants the landlord."""
@@ -226,9 +232,9 @@ class SuggestionTests(ConversionFixture):
         )
 
     def test_several_families_suggest_a_multi_storey_building(self):
-        self.assertEqual(
-            suggest_holding_type(self.reviewed(household_count=6)), "multi_storey"
-        )
+        survey = self.reviewed(household_count=6)
+        self.assertEqual(suggest_holding_type(survey), "residential")
+        self.assertEqual(suggest_structure_type(survey), "multi_storey")
 
     def test_one_family_suggests_a_single_storey_house(self):
         self.assertEqual(
@@ -310,7 +316,8 @@ class ConversionApiTests(ConversionFixture):
         self.assertEqual(response.status_code, 201, response.data)
         holding = Holding.objects.get(pk=response.data["holding"])
         self.assertEqual(holding.road_id, self.road.id)
-        self.assertEqual(holding.holding_type_id, "multi_storey")
+        self.assertEqual(holding.holding_type_id, "residential")
+        self.assertEqual(holding.structure_type_id, "multi_storey")
         self.assertEqual(holding.owner_name, "Corrected Name")
 
     def test_correcting_the_conversion_does_not_rewrite_the_survey(self):

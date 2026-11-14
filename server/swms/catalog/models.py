@@ -306,8 +306,18 @@ class CustomerType(OptionModel):
 
 
 class HoldingType(OptionModel):
+    """Building type by use (ব্যবহার অনুযায়ী): residential, commercial, mixed."""
+
     class Meta(OptionModel.Meta):
         db_table = "holding_type"
+        abstract = False
+
+
+class StructureType(OptionModel):
+    """Building type by structure (অবকাঠামো অনুযায়ী): kacha, semi-pucca, tin-shed, multi-storey."""
+
+    class Meta(OptionModel.Meta):
+        db_table = "structure_type"
         abstract = False
 
 

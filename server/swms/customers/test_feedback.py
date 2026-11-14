@@ -105,6 +105,25 @@ class FlatTableTests(FeedbackData):
         rows = dict(Household.objects.filter(holding_id=response.data["id"]).values_list("unit", "occupancy"))
         self.assertEqual(rows, {"1A": "own", "1B": "rented"})
 
+    def test_a_flat_saves_its_use_and_the_floor(self):
+        response = self.create(collectionPoint="floor", unitsTotal=2, households=[
+            {"head": "Rahim", "phone": "01811444555", "unit": "1A", "floor": "1", "usage": "অফিস"},
+            {"head": "Karim", "phone": "01812345678", "unit": "GF", "floor": "Ground",
+             "usage": "Pharmacy"},
+        ])
+        self.assertEqual(response.status_code, 201, response.data)
+        rows = {
+            unit: (floor, usage)
+            for unit, floor, usage in Household.objects.filter(
+                holding_id=response.data["id"]).values_list("unit", "floor", "usage")
+        }
+        self.assertEqual(rows, {"1A": ("1", "অফিস"), "GF": ("Ground", "Pharmacy")})
+        # The editor reads them back from the holding's household list.
+        listed = self.client.get(reverse("holding-households", args=[response.data["id"]]))
+        self.assertEqual(listed.status_code, 200)
+        data = listed.data["results"] if isinstance(listed.data, dict) else listed.data
+        self.assertEqual({row["unit"]: row["usage"] for row in data}, {"1A": "অফিস", "GF": "Pharmacy"})
+
     def test_an_unknown_occupancy_is_refused(self):
         response = self.create(collectionPoint="floor",
                                households=[{"head": "Rahim", "unit": "1A", "occupancy": "lease"}])
@@ -173,13 +192,39 @@ class CollectionPointChargeTests(FeedbackData):
 
 class KachaTests(FeedbackData):
     def test_a_kacha_house_is_always_a_single_point(self):
-        from swms.catalog.models import HoldingType
-
-        HoldingType.objects.get_or_create(id="kacha", defaults={"key": "opt.holdingType.kacha", "label": "Kacha"})
-        response = self.create(holdingType="kacha", collectionPoint="floor", charge=100)
+        response = self.create(structureType="kacha", collectionPoint="floor", charge=100)
         self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["structureType"], "kacha")
         self.assertEqual(response.data["collectionPoint"], "single")
         self.assertEqual(response.data["effectiveCharge"], 100)
+
+    def test_kacha_sent_as_the_building_type_moves_to_the_structure(self):
+        """An older client still sends 'kacha' as the building type (by use)."""
+        from swms.catalog.models import HoldingType
+
+        for pk in ("kacha", "residential"):
+            HoldingType.objects.get_or_create(id=pk, defaults={"key": f"opt.holdingType.{pk}", "label": pk})
+        response = self.create(holdingType="kacha", collectionPoint="floor", charge=100)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["holdingType"], "residential")
+        self.assertEqual(response.data["structureType"], "kacha")
+        self.assertEqual(response.data["collectionPoint"], "single")
+
+
+class StructureTypeTests(FeedbackData):
+    def test_the_structure_list_is_served_with_the_catalog(self):
+        from swms.catalog.models import HoldingType, StructureType
+
+        self.assertEqual(
+            list(StructureType.objects.filter(active=True).values_list("id", flat=True)),
+            ["kacha", "semi_pucca", "tin_shed", "multi_storey"],
+        )
+        self.assertFalse(HoldingType.objects.filter(pk__in=["kacha", "multi_storey"], active=True).exists())
+
+    def test_a_structure_type_is_saved_with_the_holding(self):
+        response = self.create(structureType="tin_shed", charge=100)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["structureType"], "tin_shed")
 
 
 class HoldingPhotoTests(FeedbackData):

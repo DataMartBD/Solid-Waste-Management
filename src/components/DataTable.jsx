@@ -122,7 +122,8 @@ export default function DataTable({
                   const sortable = header.column.getCanSort()
                   const direction = header.column.getIsSorted()
                   return (
-                    <th key={header.id} style={{ width: header.column.columnDef.meta?.width }}>
+                    <th key={header.id} style={{ width: header.column.columnDef.meta?.width }}
+                      className={header.column.columnDef.meta?.stickyEnd ? 'dt-sticky-end' : undefined}>
                       {header.isPlaceholder ? null : sortable ? (
                         <button
                           type="button"
@@ -163,6 +164,10 @@ export default function DataTable({
                 {row.getAllCells().map((cell) => (
                   <td
                     key={cell.id}
+                    // `meta.stickyEnd` pins a column (the row's buttons) to the
+                    // right edge, so a table wider than the screen never
+                    // scrolls them out of sight.
+                    className={cell.column.columnDef.meta?.stickyEnd ? 'dt-sticky-end' : undefined}
                     // A cell that holds its own buttons must not also fire the
                     // row's click, or opening a menu would navigate away.
                     onClick={cell.column.columnDef.meta?.stopClick

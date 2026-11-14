@@ -28,6 +28,10 @@ export default {
     'opt.holdingType.tin_shed': 'Tin-shed / semi-pucca',
     'opt.holdingType.shop': 'Shop / market stall',
     'opt.holdingType.office': 'Office / institution',
+    'opt.structureType.kacha': 'Kacha',
+    'opt.structureType.semi_pucca': 'Semi-pucca',
+    'opt.structureType.tin_shed': 'Tin-shed',
+    'opt.structureType.multi_storey': 'Multi-storey',
 
     'opt.storage.covered_bin': 'Covered bin',
     'opt.storage.open_bin': 'Open bin',
@@ -123,6 +127,10 @@ export default {
     'opt.holdingType.tin_shed': 'টিনশেড / আধাপাকা',
     'opt.holdingType.shop': 'দোকান / বাজারের স্টল',
     'opt.holdingType.office': 'অফিস / প্রতিষ্ঠান',
+    'opt.structureType.kacha': 'কাঁচা',
+    'opt.structureType.semi_pucca': 'সেমিপাকা',
+    'opt.structureType.tin_shed': 'টিনশেড',
+    'opt.structureType.multi_storey': 'বহুতল',
 
     'opt.storage.covered_bin': 'ঢাকনাযুক্ত বিন',
     'opt.storage.open_bin': 'খোলা বিন',

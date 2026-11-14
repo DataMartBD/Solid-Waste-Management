@@ -17,6 +17,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from swms.agencies.services import stamp_agency_for
+from swms.catalog.models import StructureType
 from swms.common.exceptions import DomainError
 
 from .models import (
@@ -362,12 +363,22 @@ def suggest_holding_type(survey) -> str | None:
         return "residential_mixed"
     if premises in ("", "other"):
         return None
-    # Residential. The number of families in the building is the only promoted
-    # signal for how big it is.
+    # Residential. How big it is is a structure, not a use — see
+    # `suggest_structure_type`.
+    if survey.household_count:
+        return "residential"
+    return None
+
+
+#: Building types that are really structures. A caller (or an older client)
+#: that still sends one as the holding type gets it moved across.
+STRUCTURE_HOLDING_TYPES = ("kacha", "multi_storey")
+
+
+def suggest_structure_type(survey) -> str | None:
+    """A `StructureType` id from the survey: several families means multi-storey."""
     if survey.household_count and survey.household_count > 1:
         return "multi_storey"
-    if survey.household_count == 1:
-        return "residential"
     return None
 
 
@@ -464,6 +475,12 @@ def convert_survey(
         )
 
     kind = holding_type or suggest_holding_type(survey)
+    structure = None
+    if kind in STRUCTURE_HOLDING_TYPES:
+        structure, kind = kind, "residential"
+    structure = structure or suggest_structure_type(survey)
+    if structure and not StructureType.objects.filter(pk=structure).exists():
+        structure = None
     if not kind:
         raise DomainError(
             "Choose what kind of property this is — the survey does not say.",
@@ -495,6 +512,7 @@ def convert_survey(
         road=road_row,
         holding_no=number,
         holding_type_id=kind,
+        structure_type_id=structure,
         owner_name=owner,
         owner_phone=(owner_phone or survey.respondent_phone or "").strip(),
         units_total=survey.household_count,

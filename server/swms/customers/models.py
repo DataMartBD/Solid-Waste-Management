@@ -110,9 +110,15 @@ class Holding(TextKeyModel):
     #: The lane or alley inside the road (গলি), typed by hand.
     lane = models.CharField(max_length=120, blank=True)
     holding_no = models.CharField(max_length=24, help_text="Holding number, e.g. 142/B")
-    #: No longer asked for; kept for buildings registered when it was.
+    #: Building type by use (ব্যবহার অনুযায়ী): residential, commercial, mixed.
     holding_type = models.ForeignKey(
         "catalog.HoldingType", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="holdings",
+    )
+    #: Building type by structure (অবকাঠামো অনুযায়ী). Kacha means one collection
+    #: point; multi-storey is the one whose floors and flats are asked for.
+    structure_type = models.ForeignKey(
+        "catalog.StructureType", null=True, blank=True, on_delete=models.PROTECT,
         related_name="holdings",
     )
 
@@ -428,6 +434,11 @@ class Household(ContactProfile, LocatableHolding):
 
     #: Own flat or rented — asked for each customer in a floor-by-floor building.
     occupancy = models.CharField(max_length=8, choices=Occupancy.choices, blank=True)
+
+    #: What the flat is used for (ব্যবহার) — office, shop, showroom, hotel … —
+    #: asked in a commercial or mixed multi-storey building collected floor by
+    #: floor. Free text: the form suggests common uses but any can be typed.
+    usage = models.CharField(max_length=60, blank=True)
 
     status = models.CharField(
         max_length=10, choices=HoldingStatus.choices, default=HoldingStatus.ACTIVE

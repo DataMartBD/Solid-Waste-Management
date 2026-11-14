@@ -5,7 +5,8 @@ spreadsheet with one row per holding —
 
     Holding No · Name · Mobile · City · Ward · Area · Address · Route · GPS Location
 
-— plus, optionally, Lane, Building Type, Holding Owner Type, Collection Point, Charge, Units
+— plus, optionally, Lane, Building Type, Structure Type, Holding Owner Type, Collection Point,
+Charge, Units
 and Agency. Every row is
 validated first and the whole file is reported row by row, so an operator can
 fix the sheet before anything is written. Importing then writes the valid rows
@@ -38,7 +39,7 @@ from django.db.models import Max, Q
 from django.utils import timezone
 
 from swms.agencies.models import Agency
-from swms.catalog.models import City, HoldingType, Road, Tier, Ward
+from swms.catalog.models import City, HoldingType, Road, StructureType, Tier, Ward
 from swms.fieldops.models import Route, RouteStop
 
 from .models import Holding
@@ -49,8 +50,8 @@ MAX_BYTES = 5 * 1024 * 1024
 #: Column headings in the template, in order. Required ones first.
 TEMPLATE_COLUMNS = [
     "Holding No", "Name", "Mobile", "City", "Ward", "Area", "Lane", "Address", "Route",
-    "GPS Location", "Building Type", "Holding Owner Type", "Collection Point", "Charge",
-    "Units", "Agency",
+    "GPS Location", "Building Type", "Structure Type", "Holding Owner Type", "Collection Point",
+    "Charge", "Units", "Agency",
 ]
 
 #: Accepted spellings for "Holding Owner Type" and "Collection Point".
@@ -83,6 +84,8 @@ ALIASES = {
     "gpslocation": "gps", "gps": "gps", "location": "gps", "latlng": "gps",
     "latitude": "lat", "lat": "lat", "longitude": "lng", "lng": "lng", "long": "lng",
     "holdingtype": "holding_type", "type": "holding_type", "buildingtype": "holding_type",
+    "structuretype": "structure_type", "structure": "structure_type",
+    "buildingstructure": "structure_type",
     "tier": "tier", "charge": "charge", "monthlycharge": "charge",
     "units": "units", "unitstotal": "units", "flats": "units",
     "agency": "agency",
@@ -202,6 +205,7 @@ class _Lookups:
         self.cities = list(City.objects.all())
         self.wards = list(Ward.objects.select_related("zone").all())
         self.holding_types = list(HoldingType.objects.filter(active=True))
+        self.structure_types = list(StructureType.objects.filter(active=True))
         self.tiers = list(Tier.objects.all())
         self.agencies = list(Agency.objects.all())
         self.visible = user.visible_ward_ids() if user else None
@@ -244,6 +248,23 @@ class _Lookups:
         if text.strip().lower() == "residential mixed":
             text = "residential_mixed"
         return self._match(self.holding_types, text, "id", "label")
+
+    #: Structure names as older sheets wrote them, when "Kacha house" and
+    #: "Multi-storey building" were still building types.
+    _STRUCTURE_ALIASES = {
+        "kacha house": "kacha", "kancha": "kacha", "কাঁচা": "kacha", "কাঁচা বাড়ি": "kacha",
+        "semi pucca": "semi_pucca", "semi-pucca": "semi_pucca", "সেমিপাকা": "semi_pucca",
+        "tin shed": "tin_shed", "tinshed": "tin_shed", "টিনশেড": "tin_shed",
+        "multi-storey building": "multi_storey", "multi storey": "multi_storey",
+        "multistorey": "multi_storey", "বহুতল": "multi_storey", "বহুতল ভবন": "multi_storey",
+    }
+
+    def structure_type(self, text):
+        # Optional: matched by code, English name or a common spelling.
+        if not text:
+            return None
+        text = self._STRUCTURE_ALIASES.get(text.strip().lower(), text)
+        return self._match(self.structure_types, text, "id", "label")
 
     def tier(self, text):
         return self._match(self.tiers, text, "id", "label")
@@ -317,8 +338,21 @@ def validate(rows: list[Row], user) -> list[Row]:
         if d.get("holding_type"):
             holding_type = look.holding_type(d["holding_type"])
             if holding_type is None:
-                row.errors.append(f"Unknown holding type '{d['holding_type']}'.")
+                # An older sheet: "Kacha house" / "Multi-storey building" were
+                # building types before they became structures.
+                structure = look.structure_type(d["holding_type"])
+                if structure is not None:
+                    row.resolved.setdefault("structure_type", structure)
+                    holding_type = look.holding_type("residential")
+                else:
+                    row.errors.append(f"Unknown holding type '{d['holding_type']}'.")
             row.resolved["holding_type"] = holding_type
+
+        if d.get("structure_type"):
+            structure = look.structure_type(d["structure_type"])
+            if structure is None:
+                row.errors.append(f"Unknown structure type '{d['structure_type']}'.")
+            row.resolved["structure_type"] = structure
 
         for key, choices, label, allowed in (
             ("owner_role", OWNER_ROLES, "Holding Owner Type", "Owner, President or Secretary"),
@@ -434,6 +468,11 @@ def write(rows: list[Row], user) -> dict:
             holding.owner_role = r["owner_role"]
         if r.get("collection_point"):
             holding.collection_point = r["collection_point"]
+        if r.get("structure_type"):
+            holding.structure_type = r["structure_type"]
+            # A kacha house is always collected at one place.
+            if holding.structure_type.pk == "kacha":
+                holding.collection_point = "single"
         if r.get("tier"):
             holding.tier = r["tier"]
         if "charge" in r:
@@ -516,7 +555,8 @@ def template_workbook() -> bytes:
         ["Address", "No", "Full address; built from holding, lane and road if blank"],
         ["Route", "No", "Route code or name in the same ward; needs GPS"],
         ["GPS Location", "No", "latitude, longitude — e.g. 22.8456, 89.5403"],
-        ["Building Type", "No", "Residential, Commercial, Kacha house, Multi-storey building or Mixed"],
+        ["Building Type", "No", "By use: Residential, Commercial or Mixed"],
+        ["Structure Type", "No", "By structure: Kacha, Semi-pucca, Tin-shed or Multi-storey"],
         ["Holding Owner Type", "No", "Owner (default), President or Secretary"],
         ["Collection Point", "No", "Single (default — flats not registered), Floor by floor or Both"],
         ["Charge", "No", "The building's monthly charge in BDT (typed); blank = none"],

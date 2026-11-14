@@ -3,11 +3,13 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { PageHeader, Section, EmptyState } from '../components/ui.jsx'
 import { Field, FormRow, FormSection } from '../components/Modal.jsx'
 import { SearchSelect } from '../components/SearchSelect.jsx'
+import { SuggestInput } from '../components/SuggestInput.jsx'
 import { captureFix, wardNo, sortWards } from './Holdings.jsx'
 import { holdings as api } from '../api/endpoints.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useData } from '../context/DataContext.jsx'
 import { useLang } from '../i18n/index.jsx'
+import { FLAT_USAGE_OPTIONS, asksFlatUsage } from '../data/reference.js'
 import { IconPlus, IconHome, IconTrash } from '../components/Icons.jsx'
 
 // Registering a building and the families in it, on one page.
@@ -28,9 +30,13 @@ import { IconPlus, IconHome, IconTrash } from '../components/Icons.jsx'
 // building is collected floor by floor. At a single collection point (everyone
 // brings their waste to one place) the flats are not registered at all.
 
+// Payment modes not offered for a holding. Bank transfer stays in the catalog
+// (agencies remit to KCC that way) — it just isn't a household option.
+const HIDDEN_PAYMENT_MODES = ['bank']
+
 const BLANK_HOLDING = {
   agency: '',
-  district: '', thana: '', city: '', ward: '', road: '', lane: '', holdingNo: '', holdingType: '',
+  district: '', thana: '', city: '', ward: '', road: '', lane: '', holdingNo: '', holdingType: '', structureType: '',
   ownerRole: 'owner', ownerName: '', ownerPhone: '',
   collectionPoint: 'single',
   floors: '', unitsTotal: '', notes: '',
@@ -40,12 +46,12 @@ const BLANK_HOLDING = {
 
 // A customer row as the form holds it — one flat. `id` is absent until it has
 // been saved, which is exactly what tells the server to create rather than
-// update. The table asks for the customer's name, mobile, flat number, members
-// and whether the flat is their own or rented.
+// update. The table asks for the customer's name, mobile, floor, flat number,
+// members and whether the flat is their own or rented.
 function blankFamily(prefill) {
   return {
     _key: `new-${Math.random().toString(36).slice(2, 9)}`,
-    head: prefill?.head || '', phone: prefill?.phone || '', unit: '', members: '',
+    head: prefill?.head || '', phone: prefill?.phone || '', floor: '', unit: '', usage: '', members: '',
     // Rented unless said otherwise.
     occupancy: prefill?.occupancy || 'rented', charge: '', status: 'active',
   }
@@ -53,7 +59,7 @@ function blankFamily(prefill) {
 
 // A new row nobody has typed into — the ones the flat count added and may take away.
 // The default "rented" on its own does not count as typing.
-const isUntouched = (r) => !r.id && !r.head && !r.phone && !r.unit && r.members === ''
+const isUntouched = (r) => !r.id && !r.head && !r.phone && !r.floor && !r.unit && !r.usage && r.members === ''
   && (!r.occupancy || r.occupancy === 'rented') && r.charge === ''
 
 // A saved household, in the shape the form edits.
@@ -61,7 +67,7 @@ function familyFromRecord(row) {
   return {
     _key: row.id,
     id: row.id,
-    head: row.head || '', phone: row.phone || '', unit: row.unit || '',
+    head: row.head || '', phone: row.phone || '', floor: row.floor || '', unit: row.unit || '', usage: row.usage || '',
     members: row.members ?? '', occupancy: row.occupancy || '',
     charge: row.charge ? String(row.charge) : '',
     // Read for the badge only. The editor does not send a status, so an
@@ -94,7 +100,7 @@ export default function HoldingEditor() {
   // Back to where the editor was opened from: the Holdings list, or a
   // holding's customer page.
   const backTo = useLocation().state?.from || '/app/holdings'
-  const { t, taka, lang, localName } = useLang()
+  const { t, lang, localName } = useLang()
   const { canWrite, user } = useAuth()
   // An agency of their own means the server will stamp it; there is nothing to ask.
   const myAgency = user?.agency || null
@@ -156,6 +162,7 @@ export default function HoldingEditor() {
         district: holding.district || '', thana: holding.thana || '',
         ward: holding.ward || '', road: holding.road || '', lane: holding.lane || '',
         holdingNo: holding.holdingNo || '', holdingType: holding.holdingType || '',
+        structureType: holding.structureType || '',
         ownerRole: holding.ownerRole || 'owner',
         ownerName: holding.ownerName || '', ownerPhone: holding.ownerPhone || '',
         collectionPoint: holding.collectionPoint || 'single',
@@ -182,7 +189,8 @@ export default function HoldingEditor() {
     if (!isNew || !catalog?.paymentModes) return
     setForm((f) => ({
       ...f,
-      paymentMode: f.paymentMode || catalog.paymentModes?.[0]?.id || '',
+      paymentMode: f.paymentMode
+        || catalog.paymentModes.find((m) => !HIDDEN_PAYMENT_MODES.includes(m.id))?.id || '',
     }))
   }, [isNew, catalog])
 
@@ -192,7 +200,7 @@ export default function HoldingEditor() {
       ...f,
       [k]: value,
       // A kacha house (কাঁচা বাড়ি) is always collected at one place.
-      ...(k === 'holdingType' && value === 'kacha' ? { collectionPoint: 'single' } : {}),
+      ...(k === 'structureType' && value === 'kacha' ? { collectionPoint: 'single' } : {}),
     }))
     setError('')
   }
@@ -262,10 +270,18 @@ export default function HoldingEditor() {
     setRowErrors({})
   }
 
-  const kacha = form.holdingType === 'kacha'
+  const kacha = form.structureType === 'kacha'
   const singlePoint = kacha || form.collectionPoint === 'single'
   // Floors and flats are asked for a multi-storey building (বহুতল ভবন) only.
-  const multiStorey = form.holdingType === 'multi_storey'
+  const multiStorey = form.structureType === 'multi_storey'
+  // What each flat is used for (ব্যবহার): asked in a commercial or mixed
+  // multi-storey building collected floor by floor. Saved values are kept when
+  // the column is hidden.
+  const usageOptions = FLAT_USAGE_OPTIONS.map((k) => t(`holdings.usage.${k}`))
+  const askUsage = asksFlatUsage({
+    holdingType: form.holdingType, structureType: form.structureType,
+    collectionPoint: singlePoint ? 'single' : form.collectionPoint,
+  })
 
   // The flat count starts the customer table: one row per flat. Raising it adds
   // empty rows; lowering it takes away only rows nobody has typed into, so a
@@ -320,6 +336,7 @@ export default function HoldingEditor() {
     // from the creator's own agency, and a null would talk it out of that.
     agency: form.agency || undefined,
     holdingType: form.holdingType || null,
+    structureType: form.structureType || null,
     // Hidden unless multi-storey: then they are not sent, so a building's
     // recorded counts are left as they were.
     floors: multiStorey ? (form.floors === '' ? null : Number(form.floors)) : undefined,
@@ -331,7 +348,9 @@ export default function HoldingEditor() {
     // A single collection point registers no flats, so none are sent.
     households: sent.map(({ r }, i) => ({
       ...(r.id ? { id: r.id } : {}),
-      head: r.head.trim(), phone: r.phone.trim(), unit: units[i], members: num(r.members),
+      head: r.head.trim(), phone: r.phone.trim(), floor: r.floor.trim(), unit: units[i],
+      usage: r.usage.trim(),
+      members: num(r.members),
       occupancy: r.occupancy, charge: num(r.charge) ?? 0,
     })),
   }), [form, sent, units])
@@ -406,16 +425,11 @@ export default function HoldingEditor() {
   }
 
   const opt = (list) => (catalog?.[list] || []).map((o) => ({ value: o.id, label: t(o.key) }))
-  // The monthly amount, worked out the way the server bills it: the collection
-  // point decides — one place → the building charge, floor by floor → the
-  // flats' charges, both → the two added together.
+  // Which charges apply, the way the server bills it: the collection point
+  // decides — one place → the building charge, floor by floor → the flats'
+  // charges, both → the two added together.
   const basis = singlePoint ? 'building'
     : { floor: 'flat', both: 'both' }[form.collectionPoint] || 'building'
-  const flatCharges = basis === 'building' ? 0 : sent
-    .filter(({ r }) => r.status !== 'inactive')
-    .reduce((sum, { r }) => sum + (num(r.charge) || 0), 0)
-  const buildingCharge = basis === 'flat' ? 0 : num(form.charge) || 0
-  const monthlyTotal = buildingCharge + flatCharges
   const activeCount = families.filter((r) => r.status === 'active').length
 
   if (loading) {
@@ -515,6 +529,12 @@ export default function HoldingEditor() {
                     ...(form.holdingType && !(catalog?.holdingTypes || []).some((h) => h.id === form.holdingType)
                       ? [{ value: form.holdingType, label: t(`opt.holdingType.${form.holdingType}`) }] : []),
                     ...opt('holdingTypes')]} />
+                <Field size="md" as="select" label={t('holdings.structureType')} value={form.structureType}
+                  onChange={set('structureType')} disabled={busy}
+                  options={[{ value: '', label: '—' },
+                    ...(form.structureType && !(catalog?.structureTypes || []).some((h) => h.id === form.structureType)
+                      ? [{ value: form.structureType, label: t(`opt.structureType.${form.structureType}`) }] : []),
+                    ...opt('structureTypes')]} />
                 {/* Floors and flats: a multi-storey building only. */}
                 {multiStorey && (
                   <>
@@ -543,13 +563,10 @@ export default function HoldingEditor() {
                     value={form.charge} onChange={set('charge')} disabled={busy}
                     hint={t('holdings.chargeTypedHint')} />
                 )}
-                <Field size="sm" label={t('holdings.monthlyTotal')} value={taka(monthlyTotal)} readOnly disabled
-                  hint={basis === 'both'
-                    ? t('holdings.monthlyBreakdown', { building: taka(buildingCharge), flats: taka(flatCharges) })
-                    : basis === 'flat' ? t('holdings.monthlyFromFlats') : undefined} />
                 <Field size="md" as="select" label={t('households.field.paymentMode')}
                   value={form.paymentMode} onChange={set('paymentMode')} disabled={busy}
-                  options={[{ value: '', label: '—' }, ...opt('paymentModes')]} />
+                  options={[{ value: '', label: '—' }, ...opt('paymentModes').filter((o) =>
+                    !HIDDEN_PAYMENT_MODES.includes(o.value) || o.value === form.paymentMode)]} />
                 <Field size="sm" type="date" label={t('households.field.paymentDate')}
                   min={`${thisMonth()}-01`} max={`${thisMonth()}-28`}
                   value={dayToDate(form.paymentDay)}
@@ -680,7 +697,9 @@ export default function HoldingEditor() {
                         <th style={{ width: 44 }}>#</th>
                         <th>{t('holdings.flatTable.name')}<span className="req-mark"> *</span></th>
                         <th>{t('holdings.flatTable.phone')}<span className="req-mark"> *</span></th>
+                        <th>{t('holdings.flatTable.floor')}</th>
                         <th>{t('holdings.flatTable.unit')}</th>
+                        {askUsage && <th>{t('holdings.flatTable.usage')}</th>}
                         <th>{t('holdings.flatTable.members')}</th>
                         {basis !== 'building' && <th>{t('holdings.flatTable.charge')}</th>}
                         <th>{t('holdings.flatTable.occupancy')}</th>
@@ -711,10 +730,23 @@ export default function HoldingEditor() {
                                 onChange={(e) => setFamily(index, 'phone', e.target.value)} />
                             </td>
                             <td>
+                              <input className="input" value={row.floor} placeholder={t('holdings.flatTable.floorPh')}
+                                maxLength={32} disabled={busy} aria-label={t('holdings.flatTable.floor')}
+                                onChange={(e) => setFamily(index, 'floor', e.target.value)} />
+                            </td>
+                            <td>
                               <input className="input" value={row.unit} placeholder={t('holdings.flatTable.unitPh')}
                                 disabled={busy} aria-label={t('holdings.flatTable.unit')}
                                 onChange={(e) => setFamily(index, 'unit', e.target.value)} />
                             </td>
+                            {askUsage && (
+                              <td>
+                                <SuggestInput value={row.usage} options={usageOptions}
+                                  placeholder={t('holdings.flatTable.usagePh')} maxLength={60}
+                                  disabled={busy} aria-label={t('holdings.flatTable.usage')}
+                                  onChange={(v) => setFamily(index, 'usage', v)} />
+                              </td>
+                            )}
                             <td>
                               <input className="input" type="number" min="0" value={row.members}
                                 disabled={busy} aria-label={t('holdings.flatTable.members')}

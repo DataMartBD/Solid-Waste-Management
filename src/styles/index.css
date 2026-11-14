@@ -181,6 +181,11 @@ input, select, textarea { color: var(--text); }
 
 /* ---------- Tables ---------- */
 .table-wrap { overflow-x: auto; }
+/* A pinned last column — the row's buttons — stays in view while the table scrolls sideways. */
+table.data .dt-sticky-end {
+  position: sticky; right: 0; z-index: 1;
+  background: var(--surface); box-shadow: -6px 0 6px -6px rgba(0, 0, 0, .18);
+}
 table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.data th {
   text-align: left; font-weight: 600; color: var(--text-3);
