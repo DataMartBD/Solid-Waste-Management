@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from swms.common.scoping import guard
 from swms.common.serializers import SwmsModelSerializer
 from swms.customers.models import Holding, Household
 from swms.fieldops.models import Collector
@@ -215,6 +216,12 @@ class AssignSerializer(_NotedActionSerializer):
     assigned = serializers.PrimaryKeyRelatedField(
         queryset=Collector.objects.all(), allow_null=True
     )
+
+    def validate_assigned(self, collector):
+        """Only a collector of the caller's own wards (and agency) takes it."""
+        if collector is not None:
+            guard(self, ward_id=collector.ward_id, agency_id=collector.agency_id)
+        return collector
 
 
 class PrioritySerializer(_NotedActionSerializer):

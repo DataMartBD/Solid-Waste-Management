@@ -6,9 +6,10 @@ import { useData } from '../context/DataContext.jsx'
 import { canAccess } from '../access.js'
 import { useLang } from '../i18n/index.jsx'
 import FloatingAI from './FloatingAI.jsx'
+import GlobalSearch from './GlobalSearch.jsx'
 import {
   IconDashboard, IconHome, IconMap, IconRoute, IconAlert, IconBill,
-  IconTruck, IconUsers, IconChart, IconLogout, IconBell, IconSearch,
+  IconTruck, IconUsers, IconChart, IconLogout, IconBell,
   IconSun, IconMoon, IconUser, IconQr, IconClipboard,
 } from './Icons.jsx'
 
@@ -19,7 +20,7 @@ const NAV_GROUPS = [
     label: 'nav.group.overview',
     items: [
       { to: '/app/dashboard', label: 'nav.dashboard', icon: IconDashboard },
-      { to: '/app/city', label: 'nav.city', icon: IconChart },
+      { to: '/app/city-dashboard', label: 'nav.oversight', icon: IconChart },
       { to: '/app/live', label: 'nav.live', icon: IconMap },
     ],
   },
@@ -52,8 +53,8 @@ const NAV_GROUPS = [
   {
     label: 'nav.group.insight',
     items: [
-      { to: '/app/reports', label: 'nav.reports', icon: IconChart },
-      { to: '/app/reports-customer', label: 'nav.reportsCustomer', icon: IconBill },
+      { to: '/app/operations-reports', label: 'nav.operationsReports', icon: IconChart },
+      { to: '/app/finance-reports', label: 'nav.financeReports', icon: IconBill },
     ],
   },
   {
@@ -156,10 +157,7 @@ export default function Layout() {
             title={hidden ? t('nav.showSidebar') : t('nav.hideSidebar')} aria-pressed={!hidden}>
             <span /><span /><span />
           </button>
-          <div className="topbar-search">
-            <IconSearch size={17} />
-            <input placeholder={t('nav.searchPlaceholder')} />
-          </div>
+          <GlobalSearch />
           <div className="grow" />
           <button
             className="lang-toggle"

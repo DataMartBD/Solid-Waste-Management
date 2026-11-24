@@ -65,8 +65,15 @@ export function DataProvider({ children }) {
   const sessionRef = useRef(0)
 
   const fetchCollection = useCallback(async (name) => {
-    const rows = await api[name].list()
-    return [name, rows]
+    try {
+      const rows = await api[name].list()
+      return [name, rows]
+    } catch (error) {
+      // A list this role may not read at all (billing, for the City Viewer)
+      // is simply empty for them, not a reason to fail every other list.
+      if (error?.status === 403) return [name, []]
+      throw error
+    }
   }, [])
 
   const loadAll = useCallback(async () => {

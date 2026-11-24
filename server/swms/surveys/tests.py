@@ -24,7 +24,7 @@ from rest_framework.test import APIClient
 
 from swms.accounts.models import ScopeKind, User
 from swms.agencies.models import Agency
-from swms.catalog.models import Block, GeoLocation, Ward, Zone
+from swms.catalog.models import Block, City, GeoLocation, Ward, Zone
 from swms.common.exceptions import DomainError
 from swms.common.roles import Role
 from swms.fieldops.models import Collector
@@ -544,21 +544,20 @@ class SeededFormTests(TestCase):
         for code, source in [("ward", OptionSource.WARD), ("block", OptionSource.BLOCK),
                              ("surveyor", OptionSource.COLLECTOR),
                              ("district", OptionSource.DISTRICT),
-                             ("thana", OptionSource.THANA)]:
+                             ("thana", OptionSource.THANA),
+                             ("survey_area", OptionSource.CITY)]:
             question = self.form.questions.get(code=code)
             self.assertEqual(question.options_source, source)
             self.assertEqual(question.options.count(), 0)
 
-    def test_the_survey_area_offers_khulna_first_and_still_offers_sylhet(self):
-        """The corporation running this system leads the list.
-
-        Sylhet stays behind it: v1 and v2 answers carry the `scc` code, and an
-        option dropped from the form leaves those reading as a bare code.
-        """
-        options = self.form.questions.get(code="survey_area").options.all()
-        self.assertEqual([o.code for o in options], ["kcc", "scc"])
-        self.assertEqual(options[0].label, "Khulna City Corporation")
-        self.assertEqual(options[0].label_bn, "খুলনা সিটি কর্পোরেশন")
+    def test_the_address_is_asked_district_first_like_the_holding_register(self):
+        """District -> survey area (city) -> thana -> ward, from v4."""
+        order = list(
+            self.form.questions.filter(
+                code__in=["district", "survey_area", "thana", "ward"]
+            ).order_by("sort_order").values_list("code", flat=True)
+        )
+        self.assertEqual(order, ["district", "survey_area", "thana", "ward"])
 
     def test_the_survey_section_is_prefilled_for_khulna(self):
         """The five answers that are the same at every door in the city.
@@ -570,7 +569,7 @@ class SeededFormTests(TestCase):
             for q in self.form.questions.exclude(default_value="")
         }
         self.assertEqual(defaults, {
-            "survey_area": "kcc",
+            "survey_area": "KCC",
             "district": "Khulna",
             "thana": "Khulna Sadar",
             "surveyed_on": "today",
@@ -633,7 +632,8 @@ class SeededFormTests(TestCase):
 
     def real_answers(self):
         """The questions the printed form marks mandatory."""
-        zone = Zone.objects.create(id="Z-01", name="Kotwali")
+        city = City.objects.create(id="SCC", name="Sylhet City Corporation", district="Sylhet")
+        zone = Zone.objects.create(id="Z-01", name="Kotwali", city=city)
         ward = Ward.objects.create(id="W-22", name="Ward 22", zone=zone)
         collector = Collector.objects.create(name="Salma Begum", ward=ward)
         # From v2 the district is a real one out of the national table rather
@@ -645,7 +645,7 @@ class SeededFormTests(TestCase):
             union_name="Tuker Bazar", union_bn="টুকের বাজার",
         )
         return {
-            "survey_area": "scc",
+            "survey_area": "SCC",
             "district": "Sylhet",
             "thana": "Kotwali",
             "surveyor": collector.id,
@@ -684,6 +684,71 @@ class SeededFormTests(TestCase):
         survey = record_survey(self.form, answers)
         self.assertEqual(survey.agency_id, agency.id)
 
+
+    # ---- the survey area chain, checked where a survey comes in -------- #
+
+    def post(self, **changes):
+        client = APIClient()
+        client.force_authenticate(User.objects.create_user(
+            phone=f"0170000{User.objects.count():04d}", name="Admin",
+            role=Role.AGENCY_ADMIN.value, password="x", scope_kind=ScopeKind.CITY,
+        ))
+        answers = {**self.real_answers(), **changes}
+        answers["surveyed_on"] = str(answers["surveyed_on"])
+        return client.post(reverse("survey-list"), {"form": self.form.id, "answers": answers},
+                           format="json")
+
+    def test_the_survey_area_is_a_city_and_reads_back_by_name(self):
+        response = self.post()
+        self.assertEqual(response.status_code, 201, response.content)
+        detail = APIClient()
+        detail.force_authenticate(User.objects.get(phone__startswith="0170000"))
+        survey = detail.get(reverse("survey-detail", args=[response.data["id"]])).data
+        area = next(a for a in survey["answers"] if a["question"] == "survey_area")
+        self.assertEqual(area["text"], "SCC")
+        self.assertEqual(area["label"], "Sylhet City Corporation")
+
+    def test_a_survey_area_outside_the_district_is_refused(self):
+        City.objects.create(id="KCC", name="Khulna City Corporation", district="Khulna")
+        response = self.post(survey_area="KCC")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("not in Sylhet district", str(response.content))
+
+    def test_a_ward_outside_the_survey_area_is_refused(self):
+        other = City.objects.create(id="SPS", name="Sylhet Pourashova", district="Sylhet")
+        zone = Zone.objects.create(id="Z-02", name="Other", city=other)
+        Ward.objects.create(id="W-90", name="90", zone=zone)
+        response = self.post(ward="W-90")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("is not in Sylhet City Corporation", str(response.content))
+
+    def test_an_unknown_survey_area_is_refused(self):
+        response = self.post(survey_area="NOPE")
+        self.assertEqual(response.status_code, 400)
+
+    def test_the_surveyor_is_the_signed_in_user_not_the_answer(self):
+        """An admin entering a form is recorded by name, whatever was picked."""
+        response = self.post()
+        self.assertEqual(response.status_code, 201, response.content)
+        survey = Survey.objects.get(pk=response.data["id"])
+        self.assertIsNone(survey.surveyor_id)
+        self.assertEqual(survey.surveyor_name, "Admin")
+
+    def test_a_collector_login_files_as_that_collector(self):
+        answers = self.real_answers()
+        me = Collector.objects.create(name="Me Myself", ward_id=answers["ward"])
+        user = User.objects.create_user(
+            phone="01799999999", name="Me Myself", role=Role.AGENCY_ADMIN.value,
+            password="x", scope_kind=ScopeKind.CITY, collector=me,
+        )
+        answers.pop("surveyor")
+        answers["surveyed_on"] = str(answers["surveyed_on"])
+        client = APIClient()
+        client.force_authenticate(user)
+        response = client.post(reverse("survey-list"), {"form": self.form.id, "answers": answers},
+                               format="json")
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(Survey.objects.get(pk=response.data["id"]).surveyor_id, me.id)
 
     def test_a_version_with_answers_is_never_rewritten(self):
         """Editing questions under collected answers would falsify them."""

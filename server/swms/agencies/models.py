@@ -73,12 +73,21 @@ class Agency(TextKeyModel):
     contract_no = models.CharField(max_length=40, blank=True)
     contract_start = models.DateField(null=True, blank=True)
     contract_end = models.DateField(null=True, blank=True)
+    #: Holdings the agency is contracted to serve each month. The City
+    #: Corporation's target-vs-actual report reads it; blank means no target.
+    target_holdings = models.PositiveIntegerField(null=True, blank=True)
 
     #: The city corporation or pourashova this contractor works for. The client
     #: calls an agency the "customer"; one city may have several. Nullable for
     #: the same reason as `Zone.city`.
     city = models.ForeignKey(
         "catalog.City", null=True, blank=True, on_delete=models.PROTECT, related_name="agencies"
+    )
+    #: Every city corporation / pourashova this agency works for, all in one
+    #: district. `city` above is the main one — always one of these — kept
+    #: because the importer, the filters and the admin read a single city.
+    cities = models.ManyToManyField(
+        "catalog.City", blank=True, related_name="served_by_agencies"
     )
 
     #: Wards this agency works in. Reporting and the agency page read this;

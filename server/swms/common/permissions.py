@@ -85,3 +85,68 @@ class IsFieldCollector(BasePermission):
         if user.role != Role.COLLECTOR.value:
             return user.is_superuser or user.role in {r.value for r in OPERATIONAL_WRITERS}
         return user.collector_id is not None
+
+
+def sees_money(user) -> bool:
+    """Whether this account is shown money: bills, payments, revenue.
+
+    The City Viewer is the corporation's oversight login for service and
+    complaints; billing is between a contractor and its customers, so none of
+    it is shown to that role.
+    """
+    if not (user and user.is_authenticated):
+        return False
+    return user.is_superuser or user.role != Role.KCC_VIEWER.value
+
+
+class SeesMoney(BasePermission):
+    """Refuses the financial endpoints to the City Viewer."""
+
+    message = "Financial reports are not available to the City Viewer."
+
+    def has_permission(self, request, view):
+        return sees_money(request.user)
+
+
+class IsCityViewerOrSuperAdmin(BasePermission):
+    """The City Dashboard: the City Viewer's own screen, and the super admin's."""
+
+    message = "The City Dashboard is for the City Viewer and the super admin."
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(
+            user and user.is_authenticated
+            and (user.is_superuser or user.role in {Role.KCC_VIEWER.value, Role.SUPER_ADMIN.value})
+        )
+
+
+class IsAgencyReporter(BasePermission):
+    """Agency Reports: the agency admin, the supervisor and the super admin.
+
+    What each sees is narrowed by the report itself (own agency, own wards).
+    """
+
+    message = "Agency reports are for agency admins, supervisors and the super admin."
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(
+            user and user.is_authenticated
+            and (user.is_superuser or user.role in {
+                Role.AGENCY_ADMIN.value, Role.SUPERVISOR.value, Role.SUPER_ADMIN.value})
+        )
+
+
+class IsNotCityViewer(BasePermission):
+    """The Daily Dashboard: every signed-in role except the City Viewer.
+
+    The City Viewer has the City Dashboard instead; this keeps the daily one's
+    figures from being read by calling its endpoint directly.
+    """
+
+    message = "The Daily Dashboard is not available to the City Viewer; use the City Dashboard."
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(user and user.is_authenticated and getattr(user, "role", None) != Role.KCC_VIEWER.value)

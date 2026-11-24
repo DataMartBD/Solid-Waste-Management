@@ -166,6 +166,8 @@ export const collectors = {
   remove: (id) => del(`/collectors/${id}/`),
   attendance: (id, attendance) => post(`/collectors/${id}/attendance/`, { attendance }),
   refreshMetrics: (days) => post('/collectors/refresh-metrics/', { days }),
+  // Moves a collector to another agency and records it in their history.
+  transfer: (id, body) => post(`/collectors/${id}/transfer/`, body),
 }
 
 export const routes = {
@@ -298,12 +300,39 @@ export const reports = {
   customerCollection: report('customer-collection'),
   customerBillStatus: report('customer-bill-status'),
   reconciliation: report('reconciliation'),
-  kpis: () => get('/reports/kpis/'),
+  kpis: (params) => get('/reports/kpis/', params),
   wasteByZone: (params) => get('/reports/waste-by-zone/', params),
   complaintSummary: (params) => get('/reports/complaint-summary/', params),
   customerFunnel: () => get('/reports/customer-funnel/'),
   dashboard: (params) => get('/reports/dashboard/', params),
   cityCollection: report('city-collection'),
+  // City Oversight (no money): growth, complaints, registers, targets.
+  serviceTrend: report('service-trend'),
+  complaintPerformance: report('complaint-performance'),
+  complaintsOverdue: report('complaints-overdue'),
+  register: (kind) => report(`register/${kind}`),
+  agencyTargets: report('agency-targets'),
+  oversight: (params) => get('/reports/oversight/', params),
+  // Agency Reports: the same reports narrowed to one agency, plus the scorecard.
+  agency: {
+    scorecard: report('agency/scorecard'),
+    complaintPerformance: report('agency/complaint-performance'),
+    complaintsOverdue: report('agency/complaints-overdue'),
+    register: (kind) => report(`agency/register/${kind}`),
+    contract: (params) => get('/reports/agency/contract/', params),
+    cashInHand: report('agency/cash-in-hand'),
+    duesAgeing: report('agency/dues-ageing'),
+    collectionSheet: report('agency/collection-sheet'),
+    missedHoldings: report('agency/missed-holdings'),
+    fuel: report('agency/fuel'),
+    maintenance: report('agency/maintenance'),
+    surveyProgress: report('agency/survey-progress'),
+    repeatComplaints: report('agency/repeat-complaints'),
+    routeCompletion: report('agency/route-completion'),
+    billingRuns: report('agency/billing-runs'),
+    attendance: report('agency/attendance'),
+    monthlyPack: report('agency/monthly-pack'),
+  },
 }
 
 export const ai = {

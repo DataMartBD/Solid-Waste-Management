@@ -1,4 +1,6 @@
 // Customer-wise reporting — the two lists a ward office actually acts on.
+// Now two tabs of Finance Reports (Household collection, Household dues);
+// each takes `extra` — the super admin's agency pick — for every request.
 //
 //   1. Bill collection per household, at daily / weekly / monthly / yearly
 //      granularity: who was billed what, and what came back.
@@ -22,11 +24,8 @@
 // counts, rates and dates are localised.
 
 import { useEffect, useMemo, useState } from 'react'
-import { PageHeader, Section, StatCard, Status, EmptyState } from '../components/ui.jsx'
-import {
-  IconBill, IconUsers, IconCheck, IconClock, IconChart, IconAlert, IconSearch,
-  IconDownload, IconEye, IconRefresh,
-} from '../components/Icons.jsx'
+import { Section, StatCard, Status, EmptyState } from '../components/ui.jsx'
+import { IconBill, IconUsers, IconCheck, IconClock, IconChart, IconAlert, IconSearch, IconDownload, IconEye, IconRefresh } from '../components/Icons.jsx'
 import { useData } from '../context/DataContext.jsx'
 import { useLang, toLatinDigits } from '../i18n/index.jsx'
 import { downloadCSV, downloadExcel, printReport, viewReport, tableToHTML } from '../utils/export.js'
@@ -127,31 +126,7 @@ function ExportBar({ title, subtitle, columns, rows, filename, exporter }) {
   )
 }
 
-export default function ReportsCustomer() {
-  const { t } = useLang()
-  const [tab, setTab] = useState('collection') // 'collection' | 'status'
-
-  return (
-    <div className="fade-in">
-      <PageHeader title={t('reportsCustomer.title')} subtitle={t('reportsCustomer.subtitle')} />
-      <div className="filter-bar">
-        <div className="seg">
-          <button className={tab === 'collection' ? 'on' : ''} onClick={() => setTab('collection')}>
-            {t('reportsCustomer.tab.collection')}
-          </button>
-          <button className={tab === 'status' ? 'on' : ''} onClick={() => setTab('status')}>
-            {t('reportsCustomer.tab.status')}
-          </button>
-        </div>
-      </div>
-      {tab === 'collection' ? <CustomerCollection /> : <CustomerBillStatus />}
-    </div>
-  )
-}
-
-/* ============ 1. Bill collection, customer-wise ============ */
-
-function CustomerCollection() {
+export function CustomerCollection({ extra = {} }) {
   const { api, wards } = useData()
   const { t, n, taka, percent, date, period: fmtPeriod, digits, wardName } = useLang()
   const [mode, setMode] = useState('monthly')
@@ -159,7 +134,7 @@ function CustomerCollection() {
   const [ward, setWard] = useState('all')
   const [q, setQ] = useState('')
 
-  const report = useReport(() => api.reports.customerCollection.load({ mode }), [api, mode])
+  const report = useReport(() => api.reports.customerCollection.load({ ...extra, mode }), [api, mode, extra.agency])
   const all = useMemo(() => report.data?.rows || [], [report.data])
 
   // The picker only offers buckets that exist in the data, newest first, so an
@@ -259,7 +234,7 @@ function CustomerCollection() {
           filename={filename}
           exporter={filtered
             ? null
-            : (format) => api.reports.customerCollection.export({ mode, format, filename: `${filename}.${format}` })}
+            : (format) => api.reports.customerCollection.export({ ...extra, mode, format, filename: `${filename}.${format}` })}
         />
       </div>
 
@@ -330,7 +305,7 @@ function CustomerCollection() {
 const STATE_TONE = { paid: 'ok', partial: 'info', unpaid: 'warn', overdue: 'danger' }
 const STATE_ICON = { paid: IconCheck, partial: IconBill, unpaid: IconClock, overdue: IconAlert }
 
-function CustomerBillStatus() {
+export function CustomerBillStatus({ extra = {} }) {
   const { api, bills, paymentModes, collectorName } = useData()
   const { t, n, taka, percent, period: fmtPeriod, wardName, optLabel } = useLang()
 
@@ -344,8 +319,8 @@ function CustomerBillStatus() {
   const [state, setState] = useState('all')
 
   const report = useReport(
-    () => api.reports.customerBillStatus.load({ period }),
-    [api, period],
+    () => api.reports.customerBillStatus.load({ ...extra, period }),
+    [api, period, extra.agency],
     { skip: !period },
   )
 
@@ -404,7 +379,7 @@ function CustomerBillStatus() {
           rows={rows}
           filename={filename}
           exporter={state === 'all' && period
-            ? (format) => api.reports.customerBillStatus.export({ period, format, filename: `${filename}.${format}` })
+            ? (format) => api.reports.customerBillStatus.export({ ...extra, period, format, filename: `${filename}.${format}` })
             : null}
         />
       </div>

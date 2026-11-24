@@ -245,6 +245,12 @@ textarea.input { height: auto; padding: 10px 12px; line-height: 1.5; }
    several of its options are full sentences in Bangla — so the grid wraps on
    content width instead of forcing equal columns. */
 .check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px 16px; }
+.check-grid.ward-list { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); max-height: 260px; overflow-y: auto; padding: 4px 2px; }
+.agency-ward-group + .agency-ward-group { margin-top: 10px; }
+.ward-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; }
+.ward-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border-radius: 999px; font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); }
+.ward-chip button { border: none; background: none; cursor: pointer; color: var(--text-3); font-size: 14px; line-height: 1; padding: 0 4px; }
+.ward-chip button:hover { color: var(--danger-fg); }
 .check { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.45; cursor: pointer; }
 .check input { margin-top: 2px; flex: none; accent-color: var(--brand); }
 .required-mark { color: var(--danger, #dc2626); }

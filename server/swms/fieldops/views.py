@@ -98,12 +98,22 @@ class CollectorViewSet(CollectorTransferMixin, SwmsModelViewSet):
     ward_scope_field = "ward_id"
     write_roles = OPERATIONAL_WRITERS
 
+    def perform_create(self, serializer):
+        """An agency's own staff add collectors to their agency, unasked."""
+        mine = self.request.user.visible_agency_id()
+        if mine is not None and not serializer.validated_data.get("agency"):
+            from swms.agencies.models import Agency
+
+            serializer.save(agency=Agency.objects.get(pk=mine))
+            return
+        serializer.save()
+
     def get_queryset(self):
         queryset = (
             Collector.objects.select_related("ward", "agency")
             # `vanId` and `assignmentId` are read off these; without the prefetch
             # a 60-row staff list costs 120 extra queries.
-            .prefetch_related("vans", "assignments")
+            .prefetch_related("vans", "assignments", "wards")
             .annotate(
                 open_complaints=Count(
                     "assigned_complaints",

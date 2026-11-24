@@ -25,6 +25,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from swms.common.exceptions import DomainError
+from django.db.models import Q
+from rest_framework.permissions import BasePermission
+
 from swms.common.permissions import IsAgencyAdmin
 from swms.common.roles import Role
 from swms.common.views import WardScopedQuerysetMixin
@@ -84,6 +87,23 @@ def _operator_for(phone: str):
         raise DomainError("auth.unknownAccount", code="account_unknown")
     return user
 
+
+
+class IsAdminOrSupervisor(BasePermission):
+    """User management: administrators, and supervisors for their collectors.
+
+    What each may touch is narrowed by the queryset (a supervisor sees only
+    collectors of their area) and by the serializer (the roles and area they
+    may hand out).
+    """
+
+    message = "Administrator or supervisor access required."
+
+    def has_permission(self, request, view):
+        if IsAgencyAdmin().has_permission(request, view):
+            return True
+        user = request.user
+        return bool(user and user.is_authenticated and user.role == Role.SUPERVISOR.value)
 
 class PasswordLoginView(APIView):
     """Sign in with phone + password.
@@ -410,7 +430,7 @@ class UserViewSet(WardScopedQuerysetMixin, viewsets.ModelViewSet):
     """
 
     serializer_class = UserAdminSerializer
-    permission_classes = [IsAgencyAdmin]
+    permission_classes = [IsAdminOrSupervisor]
     # No `destroy`: see above. Django REST maps the rest of the verbs as usual.
     http_method_names = ["get", "post", "patch", "head", "options"]
     filterset_fields = ["role", "is_active", "agency"]
@@ -424,9 +444,22 @@ class UserViewSet(WardScopedQuerysetMixin, viewsets.ModelViewSet):
     agency_scope_field = "agency_id"
 
     def get_queryset(self):
-        return self.scope_queryset(
+        queryset = self.scope_queryset(
             User.objects.prefetch_related("scope_wards").select_related("agency", "collector")
         )
+        me = self.request.user
+        if not (me.is_superuser or me.role == Role.SUPER_ADMIN.value):
+            # City Viewer accounts are the super admin's to see and manage.
+            queryset = queryset.exclude(role=Role.KCC_VIEWER.value)
+        if not me.is_superuser and me.role == Role.SUPERVISOR.value:
+            # A supervisor manages the collectors of their own area, and sees
+            # nobody else's phone number, NID or next of kin.
+            mine = Q(role=Role.COLLECTOR.value)
+            wards = me.visible_ward_ids()
+            if wards is not None:
+                mine &= Q(scope_wards__in=wards)
+            queryset = queryset.filter(mine | Q(pk=me.pk)).distinct()
+        return queryset
 
     def get_serializer_context(self):
         context = super().get_serializer_context()

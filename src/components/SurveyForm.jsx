@@ -2,8 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { PageHeader, Section } from './ui.jsx'
 import { surveys as api, holdings as holdingsApi } from '../api/endpoints.js'
 import { useData } from '../context/DataContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 import { useLang } from '../i18n/index.jsx'
 import { today } from '../utils/collection.js'
+import { sortWards } from '../pages/Holdings.jsx'
+import { SearchSelect } from './SearchSelect.jsx'
 
 // Renders whatever questionnaire the server sends.
 //
@@ -52,6 +55,13 @@ export default function SurveyForm({
 }) {
   const { t, lang } = useLang()
   const { catalog, collectors } = useData()
+  const { user } = useAuth() || {}
+  // The surveyor is the signed-in user: their collector record when they have
+  // one, else their own name. The server records it the same way, so the
+  // question is shown, not asked.
+  const surveyorName = (user?.collector && (collectors || []).find((c) => c.id === user.collector)?.name)
+    || user?.name || user?.phone || ''
+  const isSurveyorQuestion = (q) => q.optionsSource === 'collector' && q.mapsTo === 'surveyor_id'
 
   const [form, setForm] = useState(null)
   const [loadError, setLoadError] = useState('')
@@ -119,6 +129,8 @@ export default function SurveyForm({
   // asking for the road simply has nothing to fill.
   useEffect(() => {
     if (!form || !holding) return
+    // The survey area has no column of its own; a holding's is its ward's city.
+    const holdingCity = (catalog?.wards || []).find((w) => w.id === holding.ward)?.city
     const known = {
       district: holding.district,
       thana: holding.thana,
@@ -130,7 +142,7 @@ export default function SurveyForm({
     setAnswers((prev) => {
       const next = { ...prev }
       for (const question of form.questions) {
-        const value = known[question.mapsTo]
+        const value = question.optionsSource === 'city' ? holdingCity : known[question.mapsTo]
         // Never over-write the surveyor: they are standing at the door and the
         // register is what they are there to check. A value this form put there
         // as a default is not the surveyor's, and the register's own district
@@ -144,7 +156,7 @@ export default function SurveyForm({
       }
       return next
     })
-  }, [form, holding])
+  }, [form, holding, catalog])
 
   // Questions the surveyor should be looking at right now.
   const shown = useMemo(() => {
@@ -167,6 +179,14 @@ export default function SurveyForm({
   )
   const chosenDistrict = districtQuestion ? answers[districtQuestion.code] : null
 
+  // The survey area — a city corporation or pourashova of that district —
+  // narrows the ward list, as the city does on the holding register.
+  const cityQuestion = useMemo(
+    () => form?.questions.find((q) => q.optionsSource === 'city'),
+    [form],
+  )
+  const chosenCity = cityQuestion ? answers[cityQuestion.code] : null
+
   useEffect(() => {
     if (!chosenWard) { setBlocks([]); return }
     let live = true
@@ -177,19 +197,28 @@ export default function SurveyForm({
   }, [chosenWard])
 
   // A question whose options come from another question's answer. Changing the
-  // parent invalidates the child: a block belongs to one ward and a thana to one
-  // district, so the old answer is not merely stale, it is wrong. The display
-  // rules cannot express this — neither child is hidden — so it is done here.
-  const NARROWED_BY = { ward: 'block', district: 'thana' }
+  // parent invalidates the child: a block belongs to one ward, a ward to one
+  // survey area, and a survey area and a thana to one district, so the old
+  // answer is not merely stale, it is wrong. The chain is the holding
+  // register's: District -> City Corporation / Pourashova -> Ward. The display
+  // rules cannot express this — no child is hidden — so it is done here.
+  const NARROWED_BY = { district: ['thana', 'city'], city: ['ward'], ward: ['block'] }
 
   function setAnswer(question, value) {
     setAnswers((prev) => {
       const next = { ...prev, [question.code]: value }
 
-      const childSource = NARROWED_BY[question.optionsSource]
-      if (childSource && prev[question.code] !== value) {
-        for (const q of form.questions) {
-          if (q.optionsSource === childSource) delete next[q.code]
+      if (prev[question.code] !== value) {
+        // Down the whole chain: a new district clears the survey area, and
+        // with it the ward and the block.
+        const clear = [...(NARROWED_BY[question.optionsSource] || [])]
+        while (clear.length) {
+          const source = clear.shift()
+          const asked = form.questions.filter((q) => q.optionsSource === source)
+          for (const q of asked) delete next[q.code]
+          // Only through a link the form actually asks: without a survey-area
+          // question the district says nothing about the ward.
+          if (asked.length) clear.push(...(NARROWED_BY[source] || []))
         }
       }
 
@@ -221,7 +250,7 @@ export default function SurveyForm({
 
   // Required questions the surveyor still has to answer, in form order.
   const missing = useMemo(
-    () => shown.filter((q) => q.required && isBlank(answers[q.code])),
+    () => shown.filter((q) => q.required && !isSurveyorQuestion(q) && isBlank(answers[q.code])),
     [shown, answers],
   )
 
@@ -238,7 +267,10 @@ export default function SurveyForm({
       // Only what is on screen is sent. A hidden answer would be dropped
       // server-side anyway; not sending it keeps the two in step.
       const payload = {}
-      for (const q of shown) if (!isBlank(answers[q.code])) payload[q.code] = answers[q.code]
+      for (const q of shown) {
+        if (isSurveyorQuestion(q)) continue // filled in by the server from the login
+        if (!isBlank(answers[q.code])) payload[q.code] = answers[q.code]
+      }
       const saved = await api.record({
         form: form.id,
         answers: payload,
@@ -258,7 +290,18 @@ export default function SurveyForm({
   // Options for a question that draws on the catalog rather than on the form.
   function sourcedOptions(question) {
     if (question.optionsSource === 'ward') {
-      return (catalog?.wards || []).map((w) => ({ code: w.id, label: w.name }))
+      // Only the chosen survey area's wards, by name in number order, when the
+      // form asks for one; a form without it lists every ward.
+      const wards = (catalog?.wards || [])
+        .filter((w) => !cityQuestion || (chosenCity && w.city === chosenCity))
+      return sortWards(wards, () => '').map((w) => ({ code: w.id, label: geoLabel(w) }))
+    }
+    if (question.optionsSource === 'city') {
+      // The district's city corporations / pourashovas, as on the holding register.
+      return (catalog?.cities || [])
+        .filter((c) => chosenDistrict && c.district === chosenDistrict)
+        .map((c) => ({ code: c.id, label: geoLabel(c) }))
+        .sort((a, b) => String(a.label).localeCompare(String(b.label)))
     }
     if (question.optionsSource === 'block') {
       return blocks.map((b) => ({ code: b.id, label: b.name }))
@@ -276,6 +319,14 @@ export default function SurveyForm({
         .map((row) => ({ code: row.name, label: geoLabel(row) }))
     }
     return []
+  }
+
+  // Said in place of the question's hint while the one above it is unanswered.
+  function waitingHint(question) {
+    if (question.optionsSource === 'city' && !chosenDistrict) return t('surveys.pickDistrictFirst')
+    if (question.optionsSource === 'thana' && districtQuestion && !chosenDistrict) return t('surveys.pickDistrictFirst')
+    if (question.optionsSource === 'ward' && cityQuestion && !chosenCity) return t('surveys.pickAreaFirst')
+    return null
   }
 
   function geoLabel(row) {
@@ -375,8 +426,9 @@ export default function SurveyForm({
                   ? (question.options || []).map((o) => ({ code: o.code, label: label(o) }))
                   : sourcedOptions(question)}
                 text={questionText(question)}
-                hint={questionHint(question)}
-                invalid={touched && question.required && isBlank(answers[question.code])}
+                hint={waitingHint(question) || questionHint(question)}
+                invalid={touched && question.required && !isSurveyorQuestion(question) && isBlank(answers[question.code])}
+                fixedText={isSurveyorQuestion(question) ? surveyorName : null}
                 onChange={(value) => setAnswer(question, value)}
                 onToggle={(code) => toggleMulti(question, code)}
                 t={t}
@@ -427,7 +479,10 @@ function spanOf(question, options) {
   return 'span-1'
 }
 
-function QuestionField({ question, value, options, text, hint, invalid, onChange, onToggle, t }) {
+// The catalog-drawn address questions that get a search box.
+const SEARCHABLE = new Set(['district', 'city', 'thana', 'ward'])
+
+function QuestionField({ question, value, options, text, hint, invalid, onChange, onToggle, t, fixedText = null }) {
   const id = `q-${question.code}`
   const heading = (
     <label htmlFor={id}>
@@ -437,7 +492,10 @@ function QuestionField({ question, value, options, text, hint, invalid, onChange
   )
 
   let control = null
-  if (question.kind === 'note') {
+  if (fixedText !== null) {
+    // Shown, not asked: the surveyor is the signed-in user.
+    control = <input id={id} className="input" value={fixedText} readOnly disabled />
+  } else if (question.kind === 'note') {
     control = null
   } else if (question.kind === 'multi') {
     control = (
@@ -454,6 +512,20 @@ function QuestionField({ question, value, options, text, hint, invalid, onChange
         ))}
         {options.length === 0 && <span className="tiny muted">{t('surveys.noOptions')}</span>}
       </div>
+    )
+  } else if (question.kind === 'single' && SEARCHABLE.has(question.optionsSource)) {
+    // The address lists are long — sixty-four districts, a city's worth of
+    // wards — so they take typing, as on the holding register.
+    control = (
+      <SearchSelect
+        id={id}
+        value={value ?? ''}
+        onChange={(v) => onChange(v)}
+        invalid={invalid}
+        placeholder={t('common.typeToSearch')}
+        emptyText={t('common.noMatch')}
+        options={options.map((o) => ({ value: o.code, label: o.label, keywords: [o.code] }))}
+      />
     )
   } else if (question.kind === 'single') {
     control = (

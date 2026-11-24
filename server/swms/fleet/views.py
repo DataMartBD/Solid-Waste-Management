@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 from swms.common.exceptions import DomainError
 from swms.common.permissions import RoleWritePermission
 from swms.common.roles import ADMIN_WRITERS, OPERATIONAL_WRITERS, Role
-from swms.common.views import SwmsModelViewSet
+from swms.common.views import StampsCreatorAgencyMixin, SwmsModelViewSet
 
 from .models import FuelLog, Maintenance, Van
 from .serializers import (
@@ -74,7 +74,7 @@ class VanFilter(filters.FilterSet):
         fields = ["status", "type", "fuel", "ownership", "driver"]
 
 
-class VanViewSet(SwmsModelViewSet):
+class VanViewSet(StampsCreatorAgencyMixin, SwmsModelViewSet):
     """The vehicle registry, plus driver assignment, telemetry, alerts and KPIs."""
 
     serializer_class = VanSerializer
@@ -105,7 +105,7 @@ class VanViewSet(SwmsModelViewSet):
     def assign_driver(self, request, pk=None):
         """Set (or clear) this van's driver, releasing them from any other van."""
         van = self.get_object()
-        serializer = AssignDriverSerializer(data=request.data)
+        serializer = AssignDriverSerializer(data=request.data, context=self.get_serializer_context())
         serializer.is_valid(raise_exception=True)
         assign_driver(van, serializer.validated_data["driver"])
         return Response(self.get_serializer(self.get_queryset().get(pk=van.pk)).data)

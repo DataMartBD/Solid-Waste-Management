@@ -178,7 +178,8 @@ class ComplaintViewSet(SwmsModelViewSet):
     # --- helpers ----------------------------------------------------------- #
 
     def _payload(self, data, serializer_class):
-        serializer = serializer_class(data=data)
+        # With context, so the payload's scope guards know who is asking.
+        serializer = serializer_class(data=data, context=self.get_serializer_context())
         serializer.is_valid(raise_exception=True)
         return serializer.validated_data
 

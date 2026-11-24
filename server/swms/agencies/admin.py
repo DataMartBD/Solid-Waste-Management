@@ -32,7 +32,7 @@ class AgencyAdmin(admin.ModelAdmin):
     ]
     list_filter = ["city", "status", "agency_type", "active"]
     search_fields = ["id", "name", "name_bn", "short_code", "contact_person", "phone", "contract_no"]
-    filter_horizontal = ["service_wards"]
+    filter_horizontal = ["service_wards", "cities"]
     readonly_fields = ["id", "created_at", "updated_at"]
     inlines = [CollectorEmploymentInline]
     fieldsets = (

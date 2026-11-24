@@ -27,9 +27,14 @@ const ADMINS = ['agency_admin', 'super_admin']
 
 //: path -> roles allowed. A path absent from this map is open to any signed-in user.
 export const ROUTE_ACCESS = {
-  '/app/dashboard': ALL,
-  // One city's collection, for the City Viewer and the office alike.
-  '/app/city': ['kcc_viewer', ...OFFICE],
+  // The Daily Dashboard: today's work in the user's own area. Not the City
+  // Viewer's — the City Dashboard is theirs.
+  '/app/dashboard': ['collector', ...OFFICE],
+  // City Dashboard: summary, daily pickup, growth, complaint performance,
+  // registers, targets and KPIs — the City Corporation's reports, no money.
+  // The City Viewer's own screen, and the super admin's — no one else's. (The
+  // old /app/city and /app/oversight addresses are plain redirects to it.)
+  '/app/city-dashboard': ['kcc_viewer', 'super_admin'],
   '/app/live': ALL,
   // The property register sits alongside Households and answers to the same
   // roles. It was reachable by every signed-in user until this entry existed —
@@ -68,13 +73,18 @@ export const ROUTE_ACCESS = {
   // Operator accounts. Agency-admin only on *both* verbs — unlike every other
   // page, the server restricts reading too, because the list is every
   // operator's phone number, national ID and next of kin.
-  '/app/users': ADMINS,
+  // Supervisors too: they add and manage the collectors of their own area.
+  '/app/users': [...ADMINS, 'supervisor'],
   // Cities and the type lists are the corporation's own master data: only a
   // super admin writes them, so only a super admin is shown the page.
   '/app/setup': ['super_admin'],
-  // City oversight is exactly what the City Viewer exists for.
-  '/app/reports': ['kcc_viewer', ...OFFICE],
-  '/app/reports-customer': ['kcc_viewer', ...OFFICE],
+  // Operations Reports (collection, staff, complaints, fleet, records, contract)
+  // and Finance Reports (billing, dues, cash): the agency's own people (own
+  // agency, own wards) and the super admin. The City Viewer has the City
+  // Dashboard instead. The old /app/reports, /app/reports-customer and
+  // /app/agency-reports addresses redirect here.
+  '/app/operations-reports': OFFICE,
+  '/app/finance-reports': OFFICE,
   '/app/profile': ALL,
 }
 

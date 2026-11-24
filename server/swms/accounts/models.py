@@ -204,13 +204,31 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
                 Ward.objects.filter(zone__city_id=self.city_id).values_list("id", flat=True)
             )
         if self.scope_kind in {ScopeKind.AGENCY, ScopeKind.CITY}:
-            return None
+            # Agency-wide (or city-wide with no city named): an agency's staff
+            # still work only where their agency works — its city corporations
+            # / pourashovas — so collector, supervisor and agency admin are all
+            # held to an area the same way. KCC's own staff stay unrestricted.
+            return self._agency_ward_ids()
         if self.scope_kind == ScopeKind.ZONE and self.scope_zone:
             return list(
                 Ward.objects.filter(zone=self.scope_zone).values_list("id", flat=True)
             )
         ids = list(self.scope_wards.values_list("id", flat=True))
         return ids
+
+    def _agency_ward_ids(self) -> list[str] | None:
+        """Wards of the agency's cities; None with no agency or none on record."""
+        from swms.catalog.models import Ward
+
+        agency = self.agency if self.agency_id else None
+        if agency is None:
+            return None
+        cities = list(agency.cities.values_list("id", flat=True)) or (
+            [agency.city_id] if agency.city_id else []
+        )
+        if not cities:
+            return None
+        return list(Ward.objects.filter(zone__city_id__in=cities).values_list("id", flat=True))
 
     # --- PIN -------------------------------------------------------------- #
 

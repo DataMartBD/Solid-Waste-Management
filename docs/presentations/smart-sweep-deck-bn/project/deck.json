@@ -1,0 +1,19 @@
+{
+  "v": 5,
+  "createdOnFiles": { "v": 1, "at": "2026-11-24T11:00:00Z" },
+  "lists": "css",
+  "format": { "v": 1, "shared": ["project/deck.css"] },
+  "title": "স্মার্ট সুইপ — ক্লায়েন্ট প্রেজেন্টেশন",
+  "order": ["cover", "problem", "solution", "flow", "users", "city", "agency", "supervisor", "collector", "owner", "reports", "trust", "rollout", "close"],
+  "sections": {
+    "s1": { "description": "বর্জ্য সংগ্রহে কেন একটি সিস্টেম দরকার, এবং স্মার্ট সুইপ কী।", "start": "cover" },
+    "s2": { "description": "হোল্ডিং থেকে রিপোর্ট পর্যন্ত সেবা কীভাবে চলে।", "start": "flow" },
+    "s3": { "description": "প্রতিটি ধরনের ব্যবহারকারী কী সুবিধা পান।", "start": "users" },
+    "s4": { "description": "রিপোর্ট, নিয়ন্ত্রণ, চালুর পরিকল্পনা ও পরবর্তী ধাপ।", "start": "reports" }
+  },
+  "faces": {
+    "baloo-da-2": { "family": "Baloo Da 2", "href": "https://fonts.googleapis.com/css2?family=Baloo+Da+2:wght@400..800&family=Hind+Siliguri:wght@400;600;700&display=swap" },
+    "hind-siliguri": { "family": "Hind Siliguri", "href": "https://fonts.googleapis.com/css2?family=Baloo+Da+2:wght@400..800&family=Hind+Siliguri:wght@400;600;700&display=swap" }
+  },
+  "designSystems": []
+}

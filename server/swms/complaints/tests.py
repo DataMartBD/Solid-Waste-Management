@@ -304,3 +304,45 @@ class ComplaintTestCase(TestCase):
         upload = SimpleUploadedFile("pixel.png", png, content_type="image/png")
         self.assertEqual(validate_image_upload(upload), "image/png")
         self.assertEqual(upload.tell(), 0)
+
+
+class SupervisorWardTests(ComplaintTestCase):
+    """A supervisor responds only to complaints of their own wards, and hands
+    them only to collectors of those wards."""
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+
+        from swms.accounts.models import ScopeKind, User
+        from swms.common.roles import Role
+
+        self.far_ward = Ward.objects.create(id="W-21", name="Ward 21", zone=self.ward.zone)
+        far_road = Road.objects.create(ward=self.far_ward, name="Far Road")
+        far_holding = Holding.objects.create(
+            ward=self.far_ward, road=far_road, holding_no="9", owner_name="Far",
+            holding_type=self.household.holding_type, verified=True,
+        )
+        self.far_complaint = services.open_complaint(holding=far_holding, type="missed_collection")
+        self.far_collector = Collector.objects.create(name="Far Away", ward=self.far_ward)
+        self.mine = self.make()
+        sup = User.objects.create_user(
+            phone="01711000077", name="Ward Sup", role=Role.SUPERVISOR,
+            scope_kind=ScopeKind.WARD,
+        )
+        sup.scope_wards.set([self.ward])
+        self.client = APIClient()
+        self.client.force_authenticate(sup)
+
+    def post(self, complaint, action, body):
+        return self.client.post(f"/api/complaints/{complaint.id}/{action}/", body, format="json")
+
+    def test_a_complaint_of_another_ward_cannot_be_touched(self):
+        self.assertEqual(self.post(self.far_complaint, "note", {"note": "hi"}).status_code, 404)
+        self.assertEqual(self.post(self.far_complaint, "resolve", {"note": "done"}).status_code, 404)
+
+    def test_their_own_wards_complaint_can_be_answered(self):
+        self.assertEqual(self.post(self.mine, "note", {"note": "on it"}).status_code, 200)
+
+    def test_it_goes_only_to_a_collector_of_their_wards(self):
+        self.assertEqual(self.post(self.mine, "assign", {"assigned": self.far_collector.id}).status_code, 400)
+        self.assertEqual(self.post(self.mine, "assign", {"assigned": self.collector.id}).status_code, 200)

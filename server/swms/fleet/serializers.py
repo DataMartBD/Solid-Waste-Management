@@ -24,6 +24,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from swms.catalog.models import DumpingPoint, Ward
+from swms.common.scoping import guard_agency
 from swms.common.serializers import NullableDecimal, SwmsModelSerializer
 from swms.fieldops.models import Collector
 
@@ -36,6 +37,10 @@ class VanSerializer(SwmsModelSerializer):
     driver = serializers.PrimaryKeyRelatedField(
         queryset=Collector.objects.all(), allow_null=True, required=False
     )
+    #: The van follows its collector: whose collector drives it, that agency
+    #: holds it (and its admin can see and edit it). Set on save, never typed.
+    agency = serializers.CharField(source="agency_id", read_only=True, default=None)
+    agencyName = serializers.CharField(source="agency.name", read_only=True, default=None)
     ward = serializers.PrimaryKeyRelatedField(
         queryset=Ward.objects.all(), allow_null=True, required=False
     )
@@ -70,6 +75,8 @@ class VanSerializer(SwmsModelSerializer):
             "odometer",
             "status",
             "driver",
+            "agency",
+            "agencyName",
             "ward",
             "dumpingPoint",
             "fitnessExp",
@@ -95,6 +102,24 @@ class VanSerializer(SwmsModelSerializer):
             }
             for row in obj.expiring_documents(within_days=within, today=self.context.get("as_of"))
         ]
+
+    def validate_driver(self, collector):
+        """An agency's admin may only seat their own collectors."""
+        if collector is not None:
+            guard_agency(self, collector.agency_id)
+        return collector
+
+    def create(self, validated_data):
+        driver = validated_data.get("driver")
+        if driver is not None and driver.agency_id:
+            validated_data["agency_id"] = driver.agency_id
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        driver = validated_data.get("driver")
+        if driver is not None and driver.agency_id:
+            validated_data["agency_id"] = driver.agency_id
+        return super().update(instance, validated_data)
 
     def validate_odometer(self, value):
         """A meter reading cannot decrease.
@@ -243,6 +268,11 @@ class AssignDriverSerializer(serializers.Serializer):
     driver = serializers.PrimaryKeyRelatedField(
         queryset=Collector.objects.all(), allow_null=True
     )
+
+    def validate_driver(self, collector):
+        if collector is not None:
+            guard_agency(self, collector.agency_id)
+        return collector
 
 
 class CloseMaintenanceSerializer(serializers.Serializer):

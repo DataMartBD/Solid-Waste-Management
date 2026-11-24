@@ -161,6 +161,8 @@ class AgencyApiTests(AgencyData):
         )
         self.client = APIClient()
         self.client.force_authenticate(self.admin)
+        self.kcc = City.objects.create(id="KCC", name="Khulna City Corporation", district="Khulna")
+        Zone.objects.filter(pk="Z-03").update(city=self.kcc)
 
     def test_list_reports_derived_counts(self):
         self.make_collector("A", agency=self.first)
@@ -178,9 +180,28 @@ class AgencyApiTests(AgencyData):
             reverse("agency-list"),
             {
                 "name": "New Provider", "shortCode": "NEW", "agencyType": "ngo",
-                "serviceWards": [self.ward.id, self.other_ward.id],
+                "cities": ["KCC"], "serviceWards": [self.ward.id],
                 "status": AgencyStatus.ACTIVE,
             },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(response.json()["serviceWards"], [self.ward.id])
+
+    def test_a_new_agency_must_name_its_city(self):
+        response = self.client.post(
+            reverse("agency-list"),
+            {"name": "New Provider", "shortCode": "NEW", "agencyType": "ngo"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("cities", response.json()["fields"])
+
+    def test_no_ward_ticked_means_every_ward_of_the_city(self):
+        response = self.client.post(
+            reverse("agency-list"),
+            {"name": "New Provider", "shortCode": "NEW", "agencyType": "ngo",
+             "cities": ["KCC"], "serviceWards": []},
             format="json",
         )
         self.assertEqual(response.status_code, 201, response.json())
@@ -188,9 +209,24 @@ class AgencyApiTests(AgencyData):
             response.json()["serviceWards"], [self.ward.id, self.other_ward.id]
         )
 
+    def test_clearing_the_wards_on_edit_gives_every_ward_too(self):
+        self.first.cities.set([self.kcc])
+        self.first.service_wards.set([self.ward])
+        response = self.client.patch(
+            reverse("agency-detail", args=[self.first.id]), {"serviceWards": []}, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.json())
+        self.assertCountEqual(
+            response.json()["serviceWards"], [self.ward.id, self.other_ward.id]
+        )
+
+    def test_an_edit_cannot_take_the_city_away(self):
+        response = self.client.patch(
+            reverse("agency-detail", args=[self.first.id]), {"cities": []}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_an_agency_belongs_to_a_city(self):
-        kcc = City.objects.create(id="KCC", name="Khulna City Corporation")
-        Zone.objects.filter(pk="Z-03").update(city=kcc)
         response = self.client.post(
             reverse("agency-list"),
             {"name": "New Provider", "shortCode": "NEW", "agencyType": "ngo",
@@ -201,7 +237,6 @@ class AgencyApiTests(AgencyData):
         self.assertEqual(Agency.objects.get(short_code="NEW").city_id, "KCC")
 
     def test_wards_of_another_city_are_refused(self):
-        City.objects.create(id="KCC", name="Khulna City Corporation")
         scc = City.objects.create(id="SCC", name="Sylhet City Corporation")
         Zone.objects.filter(pk="Z-03").update(city=scc)
         response = self.client.post(
@@ -214,7 +249,6 @@ class AgencyApiTests(AgencyData):
         self.assertIn("W-14", str(response.json()))
 
     def test_moving_an_agency_to_another_city_checks_its_wards(self):
-        City.objects.create(id="KCC", name="Khulna City Corporation")
         City.objects.create(id="SCC", name="Sylhet City Corporation")
         Zone.objects.filter(pk="Z-03").update(city_id="KCC")
         self.first.service_wards.set([self.ward])
@@ -226,7 +260,8 @@ class AgencyApiTests(AgencyData):
     def test_an_agency_can_be_the_citys_own_service(self):
         response = self.client.post(
             reverse("agency-list"),
-            {"name": "KCC Conservancy", "shortCode": "KCCC", "agencyType": "city_corporation"},
+            {"name": "KCC Conservancy", "shortCode": "KCCC", "agencyType": "city_corporation",
+             "cities": ["KCC"]},
             format="json",
         )
         self.assertEqual(response.status_code, 201, response.json())
@@ -236,7 +271,7 @@ class AgencyApiTests(AgencyData):
         response = self.client.post(
             reverse("agency-list"),
             {"name": "Green Equipment Limited", "nameBn": "গ্রিন ইকুইপমেন্ট লিমিটেড",
-             "shortCode": "GEL", "agencyType": "private"},
+             "shortCode": "GEL", "agencyType": "private", "cities": ["KCC"]},
             format="json",
         )
         self.assertEqual(response.status_code, 201, response.json())
@@ -263,7 +298,7 @@ class AgencyApiTests(AgencyData):
     def test_an_agency_type_must_exist_in_setup(self):
         response = self.client.post(
             reverse("agency-list"),
-            {"name": "X", "shortCode": "XX", "agencyType": "made_up"},
+            {"name": "X", "shortCode": "XX", "agencyType": "made_up", "cities": ["KCC"]},
             format="json",
         )
         self.assertEqual(response.status_code, 400)
@@ -832,3 +867,127 @@ class NothingChangedTests(AgencyData):
         collector = self.make_collector()
         self.assertIsNone(collector.agency_id)
         collector.full_clean(exclude=["dsp_id", "id"])
+
+
+class AgencyCitiesApiTests(AgencyData):
+    """An agency works for several cities of one district; `city` is the main one."""
+
+    def setUp(self):
+        self.kcc = City.objects.create(id="KCC", name="Khulna City Corporation", district="Khulna")
+        self.phl = City.objects.create(id="PHL", name="Phultala Pourashova", district="Khulna")
+        self.jps = City.objects.create(id="JPS", name="Jashore Pourashova", district="Jashore")
+        Zone.objects.filter(pk="Z-03").update(city=self.kcc)
+        admin = User.objects.create_user(
+            phone="01900445577", name="Admin", role=Role.SUPER_ADMIN, scope_kind=ScopeKind.CITY,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(admin)
+
+    def post(self, **extra):
+        body = {"name": "Multi", "shortCode": "MUL", **extra}
+        return self.client.post(reverse("agency-list"), body, format="json")
+
+    def test_several_cities_of_one_district_are_saved_and_the_first_is_main(self):
+        response = self.post(cities=["PHL", "KCC"], serviceWards=[self.ward.id])
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(response.json()["city"], "PHL")
+        self.assertEqual(sorted(response.json()["cities"]), ["KCC", "PHL"])
+
+    def test_cities_of_two_districts_are_refused(self):
+        response = self.post(cities=["KCC", "JPS"])
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("cities", response.json()["fields"])
+
+    def test_a_ward_outside_every_chosen_city_is_refused(self):
+        response = self.post(cities=["PHL"], serviceWards=[self.ward.id])
+        self.assertEqual(response.status_code, 400)
+
+    def test_sending_only_city_still_works(self):
+        response = self.post(city="KCC")
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(response.json()["cities"], ["KCC"])
+
+
+class CollectorAgencyApiTests(AgencyData):
+    """A new collector's agency: chosen by corporation staff, filled in for an
+    agency's own staff; later moves only by transfer, and only by the corporation."""
+
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            phone="01900445588", name="Admin", role=Role.SUPER_ADMIN, scope_kind=ScopeKind.CITY,
+        )
+        self.tenant = User.objects.create_user(
+            phone="01711000091", name="Tenant Admin", role=Role.AGENCY_ADMIN,
+            scope_kind=ScopeKind.AGENCY, agency=self.first,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.admin)
+
+    def add(self, **extra):
+        body = {"name": "Rafiq", "wards": [self.ward.id], **extra}
+        return self.client.post(reverse("collector-list"), body, format="json")
+
+    def test_corporation_staff_choose_the_agency_and_it_opens_the_history(self):
+        response = self.add(agency=self.second.id)
+        self.assertEqual(response.status_code, 201, response.json())
+        collector = Collector.objects.get(pk=response.json()["id"])
+        self.assertEqual(collector.agency_id, self.second.id)
+        self.assertEqual(collector.employments.get().agency_id, self.second.id)
+
+    def test_an_agency_admin_gets_their_own_agency_without_choosing(self):
+        self.client.force_authenticate(self.tenant)
+        response = self.add()
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(response.json()["agency"], self.first.id)
+        self.assertEqual(
+            Collector.objects.get(pk=response.json()["id"]).employments.count(), 1
+        )
+
+    def test_an_agency_admin_cannot_add_to_another_agency(self):
+        self.client.force_authenticate(self.tenant)
+        self.assertEqual(self.add(agency=self.second.id).status_code, 400)
+
+    def test_an_inactive_agency_is_refused(self):
+        self.second.status = AgencyStatus.SUSPENDED
+        self.second.save()
+        self.assertEqual(self.add(agency=self.second.id).status_code, 400)
+
+    def test_an_edit_cannot_move_the_agency(self):
+        collector = self.make_collector(agency=self.first)
+        response = self.client.patch(
+            reverse("collector-detail", args=[collector.id]), {"agency": self.second.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_an_agency_admin_cannot_transfer(self):
+        collector = self.make_collector(agency=self.first)
+        self.client.force_authenticate(self.tenant)
+        response = self.client.post(
+            reverse("collector-transfer", args=[collector.id]), {"agency": self.second.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_a_transfer_to_an_inactive_agency_is_refused(self):
+        collector = self.make_collector(agency=self.first)
+        self.second.status = AgencyStatus.EXPIRED
+        self.second.save()
+        response = self.client.post(
+            reverse("collector-transfer", args=[collector.id]), {"agency": self.second.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_an_agency_user_cannot_add_a_collector_in_another_city(self):
+        kcc = City.objects.create(id="KCC", name="Khulna City Corporation", district="Khulna")
+        jps = City.objects.create(id="JPS", name="Jashore Pourashova", district="Jashore")
+        Zone.objects.filter(pk="Z-03").update(city=kcc)
+        far = Ward.objects.create(id="J-01", name="1", zone=Zone.objects.create(id="Z-J", name="J", city=jps))
+        self.first.cities.set([kcc])
+        self.client.force_authenticate(self.tenant)
+        # Refused: the ward is outside the agency's area (an agency-wide
+        # account is now held to its agency's cities as well).
+        response = self.add(wards=[far.id])
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.add().status_code, 201)

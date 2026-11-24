@@ -10,7 +10,11 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useData } from '../context/DataContext.jsx'
 import { useLang } from '../i18n/index.jsx'
 import { FLAT_USAGE_OPTIONS, asksFlatUsage } from '../data/reference.js'
-import { IconPlus, IconHome, IconTrash } from '../components/Icons.jsx'
+import { IconPlus, IconHome, IconTrash, IconRoute } from '../components/Icons.jsx'
+import { AddToRouteModal } from '../components/RouteAssign.jsx'
+import { canAccess } from '../access.js'
+import { collectorForRoute } from '../utils/collection.js'
+import { pickableAgencies } from '../utils/agencies.js'
 
 // Registering a building and the families in it, on one page.
 //
@@ -104,16 +108,40 @@ export default function HoldingEditor() {
   const { canWrite, user } = useAuth()
   // An agency of their own means the server will stamp it; there is nothing to ask.
   const myAgency = user?.agency || null
-  const { catalog, agencies } = useData()
+  const { catalog, agencies, routes = [], assignments = [], collectors = [], act, api: dataApi } = useData()
+  // The building's place on a round: which route, walked by whom (office roles).
+  const [routeMeta, setRouteMeta] = useState(null) // { routeId, verified }
+  const [routing, setRouting] = useState(false)
+  const [routeBusy, setRouteBusy] = useState(false)
   const isNew = !id
-  // A ward-bound account (a collector) may only register buildings in its own
-  // wards — the server refuses the rest — so the list offers only those.
-  const myWards = user?.scopeKind === 'ward' && user?.scopeWards?.length ? user.scopeWards : null
+  // A narrowed account (a collector, a supervisor, an agency's staff) may only
+  // register buildings in its own wards — the server refuses the rest — so the
+  // lists offer only those: its wards, its zone's, its city's, or its agency's.
+  const myWards = useMemo(() => {
+    if (!user || user.roleKey === 'super_admin') return null
+    if (user.scopeKind === 'ward') return user.scopeWards?.length ? user.scopeWards : null
+    if (user.scopeKind === 'zone') return user.zoneWards?.length ? user.zoneWards : null
+    const all = catalog?.wards || []
+    if (user.scopeKind === 'city' && user.city) return all.filter((w) => w.city === user.city).map((w) => w.id)
+    const own = user.agency && (agencies || []).find((a) => a.id === user.agency)
+    const ids = own ? (own.cities?.length ? own.cities : own.city ? [own.city] : []) : []
+    return ids.length ? all.filter((w) => ids.includes(w.city)).map((w) => w.id) : null
+  }, [user, catalog, agencies])
+  const myCities = useMemo(() => (myWards
+    ? new Set((catalog?.wards || []).filter((w) => myWards.includes(w.id)).map((w) => w.city))
+    : null), [myWards, catalog])
 
-  // A collector with one ward starts with it chosen.
+  // An account with one ward starts with it chosen.
   const [form, setForm] = useState(() => (
     isNew && myWards?.length === 1 ? { ...BLANK_HOLDING, ward: myWards[0] } : BLANK_HOLDING
   ))
+  // ...and one whose wards are all in one city starts with that city and district.
+  useEffect(() => {
+    if (!isNew || !myCities || myCities.size !== 1) return
+    const only = [...myCities][0]
+    const district = (catalog?.cities || []).find((c) => c.id === only)?.district || ''
+    setForm((f) => (f.city || f.ward ? f : { ...f, city: only, district }))
+  }, [isNew, myCities, catalog])
   // A new building's location is read from this device as the form opens and
   // saved with it — the person registering it is normally standing at it.
   const [gps, setGps] = useState({ status: isNew ? 'reading' : 'off' })
@@ -151,12 +179,17 @@ export default function HoldingEditor() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [rowErrors, setRowErrors] = useState({})
+  // The agency the holding was saved with, kept in the picker even if no
+  // longer active (the picker otherwise offers active agencies only).
+  const [savedAgency, setSavedAgency] = useState('')
 
   const load = useCallback(async () => {
     if (isNew) return
     setLoading(true)
     try {
       const [holding, members] = await Promise.all([api.get(id), api.households(id)])
+      setSavedAgency(holding.agency || '')
+      setRouteMeta({ routeId: holding.routeId || null, verified: Boolean(holding.verified) })
       setForm({
         agency: holding.agency || '',
         district: holding.district || '', thana: holding.thana || '',
@@ -213,7 +246,10 @@ export default function HoldingEditor() {
   // from the ward.
   const wardCity = (wardId) => (catalog?.wards || []).find((w) => w.id === wardId)?.city || ''
   const city = form.city || wardCity(form.ward)
-  const cityChoices = (catalog?.cities || []).filter((c) => !form.district || c.district === form.district)
+  const cityChoices = (catalog?.cities || []).filter((c) => (!form.district || c.district === form.district)
+    && (!myCities || myCities.has(c.id)))
+  const districtChoices = (catalog?.districts || []).filter((d) => !myCities
+    || (catalog?.cities || []).some((c) => c.district === d.name && myCities.has(c.id)))
   // No wards are listed until a city or pourashava is chosen.
   const wardChoices = city
     ? (catalog?.wards || []).filter((w) => (!myWards || myWards.includes(w.id)) && w.city === city)
@@ -488,7 +524,7 @@ export default function HoldingEditor() {
                 <SearchSelect size="md" label={t('holdings.district')} value={form.district}
                   onChange={(value) => setDistrict({ target: { value } })} disabled={busy}
                   placeholder={t('common.typeToSearch')} emptyText={t('common.noMatch')}
-                  options={(catalog?.districts || []).map((d) => ({
+                  options={districtChoices.map((d) => ({
                     value: d.name, label: geoLabel(d), keywords: [d.name, d.nameBn],
                   }))} />
                 <SearchSelect size="md" label={t('holdings.city')} value={city}
@@ -629,7 +665,7 @@ export default function HoldingEditor() {
                     <select id="holding-agency" className="select bottom-pair-box" value={form.agency}
                       onChange={set('agency')} disabled={busy} title={t('holdings.agencyHint')}>
                       <option value="">{t('holdings.agencyNone')}</option>
-                      {(agencies || []).map((a) => <option key={a.id} value={a.id}>{localName(a)}</option>)}
+                      {pickableAgencies(agencies, savedAgency).map((a) => <option key={a.id} value={a.id}>{localName(a)}</option>)}
                     </select>
                   </div>
                 )}
@@ -656,6 +692,58 @@ export default function HoldingEditor() {
               </div>
             )}
           </Section>
+
+          {/* ---------------------------------------------- the route ------- */}
+          {!isNew && routeMeta && canAccess('/app/route-plan', user) && (() => {
+            const onRoute = routes.find((r) => r.id === routeMeta.routeId)
+            const walker = onRoute && collectors.find((c) => c.id === collectorForRoute(onRoute.id, assignments))
+            const takeOff = async () => {
+              if (!window.confirm(t('routeAssign.removeConfirm', { route: onRoute.name }))) return
+              setRouteBusy(true)
+              const res = await act(dataApi.routes.removeStop(onRoute.id, id), { refresh: ['routes'] })
+              setRouteBusy(false)
+              if (res.ok) setRouteMeta((m) => ({ ...m, routeId: null }))
+              else setError(res.error?.detail || t('common.requestFailed'))
+            }
+            return (
+              <Section title={<><IconRoute size={16} /> {t('routeAssign.panel')}</>}>
+                {!routeMeta.verified ? (
+                  <div className="form-note bad"><span className="grow">{t('routeAssign.needVerify')}</span></div>
+                ) : (
+                  <div className="row gap-12 wrap" style={{ alignItems: 'center' }}>
+                    <div className="grow">
+                      {onRoute ? (
+                        <>
+                          <div style={{ fontWeight: 600 }}>{onRoute.name}</div>
+                          <div className="tiny muted-3 mt-4">
+                            {onRoute.window} · {walker ? t('routeAssign.walkedBy', { name: walker.name }) : t('routePlan.routes.unassigned')}
+                          </div>
+                        </>
+                      ) : <span className="muted">{t('routeAssign.notOnRoute')}</span>}
+                    </div>
+                    <button type="button" className="btn btn-ghost btn-sm" disabled={routeBusy} onClick={() => setRouting(true)}>
+                      <IconRoute size={14} /> {onRoute ? t('routeAssign.change') : t('routeAssign.addToRoute')}
+                    </button>
+                    {onRoute && (
+                      <button type="button" className="btn btn-ghost btn-sm" disabled={routeBusy} onClick={takeOff}>
+                        <IconTrash size={14} /> {t('routeAssign.remove')}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </Section>
+            )
+          })()}
+          {routing && (
+            <AddToRouteModal
+              holdings={[{ id, holdingNo: form.holdingNo, ward: form.ward, verified: routeMeta?.verified, routeId: routeMeta?.routeId }]}
+              onClose={() => setRouting(false)}
+              onDone={(r) => {
+                setRouting(false)
+                if (r.added) setRouteMeta((m) => ({ ...m, routeId: r.route.id }))
+              }}
+            />
+          )}
 
           {/* ---------------------------------------------- the customers --- */}
           {singlePoint ? (

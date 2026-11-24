@@ -59,7 +59,7 @@ ROLE_HOME = {
     Role.SUPERVISOR: "/app/dashboard",
     Role.AGENCY_ADMIN: "/app/dashboard",
     Role.SUPER_ADMIN: "/app/dashboard",
-    Role.KCC_VIEWER: "/app/city",
+    Role.KCC_VIEWER: "/app/city-dashboard",
 }
 
 

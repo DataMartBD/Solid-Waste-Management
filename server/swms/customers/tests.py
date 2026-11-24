@@ -267,6 +267,46 @@ class HoldingApiTests(HoldingData):
         self.assertEqual(response.status_code, 400)
         self.assertIn("holding", response.json()["fields"])
 
+    def test_a_supervisor_files_households_only_in_their_own_wards(self):
+        """Ward-bound: another ward's building is refused, their own accepted.
+        Agency-wide: another agency's building is refused."""
+        from swms.agencies.models import Agency
+
+        mine = Agency.objects.create(name="Green Co", short_code="GRN")
+        rival = Agency.objects.create(name="Rival Co", short_code="RVL")
+        home = self.make_holding("1", ward=self.ward)
+        away = self.make_holding("2", ward=self.other_ward, road=self.other_road)
+        Holding.objects.filter(pk=home.pk).update(agency=mine)
+        Holding.objects.filter(pk=away.pk).update(agency=mine)
+        theirs = self.make_holding("3", ward=self.ward)
+        Holding.objects.filter(pk=theirs.pk).update(agency=rival)
+
+        def body(holding):
+            return {
+                "holding": holding.id, "head": "Family", "tier": self.tier.id,
+                "customerType": self.customer_type.id, "storage": self.storage.id,
+                "holdingType": self.holding_type.id, "suitableTime": self.suitable_time.id,
+                "paymentMode": self.payment_mode.id,
+            }
+
+        sup = User.objects.create_user(
+            phone="01711000043", name="Ward Sup", role=Role.SUPERVISOR,
+            scope_kind=ScopeKind.WARD, agency=mine,
+        )
+        sup.scope_wards.set([self.ward])
+        client = APIClient()
+        client.force_authenticate(sup)
+        url = reverse("household-list")
+        self.assertEqual(client.post(url, body(away), format="json").status_code, 400)
+        self.assertEqual(client.post(url, body(home), format="json").status_code, 201)
+
+        wide = User.objects.create_user(
+            phone="01711000044", name="Agency Sup", role=Role.SUPERVISOR,
+            scope_kind=ScopeKind.AGENCY, agency=mine,
+        )
+        client.force_authenticate(wide)
+        self.assertEqual(client.post(url, body(theirs), format="json").status_code, 400)
+
     def test_households_action_lists_the_families_in_a_building(self):
         holding = self.make_holding()
         self.make_household(holding, "1A")

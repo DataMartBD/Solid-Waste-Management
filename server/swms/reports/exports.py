@@ -203,6 +203,63 @@ def to_pdf(
     return response
 
 
+def to_pdf_pack(title: str, subtitle: str, figures: Sequence[tuple[str, Any]],
+                sections: Sequence[tuple[str, Sequence[Column], Sequence[dict]]]) -> HttpResponse:
+    """A multi-section report: a key-figures table, then one table per section.
+
+    Same look as `to_pdf`. An empty section says so rather than printing an
+    empty grid.
+    """
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    stream = io.BytesIO()
+    document = SimpleDocTemplate(stream, pagesize=landscape(A4), leftMargin=12 * mm, rightMargin=12 * mm,
+                                 topMargin=12 * mm, bottomMargin=12 * mm, title=title)
+    styles = getSampleStyleSheet()
+    body = styles["BodyText"]
+    body.fontSize = 7.5
+    body.leading = 9
+    grid = [
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F6F43")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 8),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#CBD5D0")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F3F7F4")]),
+    ]
+
+    story = [Paragraph(title, styles["Title"])]
+    if subtitle:
+        story.append(Paragraph(subtitle, styles["Normal"]))
+    story.append(Spacer(1, 5 * mm))
+
+    key = Table([["Key figure", "Value"]] + [[Paragraph(_cell(k), body), Paragraph(_cell(v), body)]
+                                             for k, v in figures], colWidths=[110 * mm, 60 * mm], repeatRows=1)
+    key.setStyle(TableStyle(grid))
+    story += [Paragraph("Key figures", styles["Heading2"]), key]
+
+    for heading, columns, rows in sections:
+        story.append(Spacer(1, 5 * mm))
+        head = Paragraph(heading, styles["Heading2"])
+        if not rows:
+            story.append(KeepTogether([head, Paragraph("Nothing to report this month.", styles["Normal"])]))
+            continue
+        data = [[c.label for c in columns]] + [[Paragraph(_cell(c.value(r)), body) for c in columns] for r in rows]
+        table = Table(data, repeatRows=1)
+        table.setStyle(TableStyle(grid))
+        story += [head, table]
+
+    document.build(story)
+    response = HttpResponse(stream.getvalue(), content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{_filename(title, "pdf")}"'
+    return response
+
+
 def export(
     fmt: str,
     title: str,

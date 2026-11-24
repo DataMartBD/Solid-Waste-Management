@@ -435,3 +435,52 @@ class FuelLogModelTests(FleetTestCase):
         self.assertTrue(log.id.startswith("FUEL-"))
         self.assertTrue(record.id.startswith("MNT-"))
         self.assertTrue(van.id.startswith("VAN-KCC-"))
+
+
+class VanFollowsCollectorTests(FleetTestCase):
+    """A van belongs with its collector: their agency holds it, and that
+    agency's admin may add vans and seat their own collectors in them."""
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+
+        from swms.accounts.models import ScopeKind, User
+        from swms.agencies.models import Agency
+        from swms.common.roles import Role
+
+        self.mine = Agency.objects.create(name="Green Co", short_code="GRN")
+        self.rival = Agency.objects.create(name="Rival Co", short_code="RVL")
+        Collector.objects.filter(pk=self.rahim.pk).update(agency=self.mine)
+        Collector.objects.filter(pk=self.karim.pk).update(agency=self.rival)
+        self.rahim.refresh_from_db()
+        admin = User.objects.create_user(
+            phone="01711000555", name="Green Admin", role=Role.AGENCY_ADMIN,
+            scope_kind=ScopeKind.AGENCY, agency=self.mine,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(admin)
+
+    def test_seating_a_collector_gives_the_van_their_agency(self):
+        van = self.make_van()
+        assign_driver(van, self.rahim)
+        van.refresh_from_db()
+        self.assertEqual(van.agency_id, self.mine.id)
+
+    def test_an_agency_admin_adds_a_van_for_their_collector(self):
+        response = self.client.post("/api/vans/", {
+            "plate": "DHAKA-1", "type": VanType.COMPACTOR, "capacity": 900,
+            "fuel": FuelType.DIESEL, "ownership": Ownership.OWNED, "odometer": 0,
+            "driver": self.rahim.id,
+        }, format="json")
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(response.json()["agency"], self.mine.id)
+        # Theirs now: they can open and edit it.
+        van_id = response.json()["id"]
+        self.assertEqual(self.client.patch(f"/api/vans/{van_id}/", {"odometer": 10},
+                                           format="json").status_code, 200)
+
+    def test_an_agency_admin_cannot_seat_another_agencys_collector(self):
+        van = self.make_van(agency=self.mine)
+        response = self.client.post(f"/api/vans/{van.id}/assign-driver/",
+                                    {"driver": self.karim.id}, format="json")
+        self.assertEqual(response.status_code, 400)

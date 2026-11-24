@@ -45,7 +45,7 @@ const PAGE_SIZES = [10, 25, 50, 100]
 
 // The search box ignores case and which digits are typed: ০১৭১১ finds a phone
 // stored as 01711, and 5 still finds a Bangla name written with ৫.
-const fold = (text) => String(text ?? '')
+export const fold = (text) => String(text ?? '')
   .replace(/[০-৯]/g, (d) => '০১২৩৪৫৬৭৮৯'.indexOf(d)).toLowerCase()
 export function searchText(row, columnId, filterValue) {
   const q = fold(filterValue).trim()
@@ -62,6 +62,8 @@ export default function DataTable({
   // has its own toolbar.
   search = true,
   searchPlaceholder,
+  // What the search box starts with, e.g. a search handed over in the URL.
+  initialSearch = '',
   pageSize = 25,
   // Called with the row's original object. Makes the whole row a target, which
   // is how the registers are actually used — click the building, see inside it.
@@ -71,7 +73,7 @@ export default function DataTable({
   toolbar = null,
 }) {
   const { t, n } = useLang()
-  const [globalFilter, setGlobalFilter] = useState('')
+  const [globalFilter, setGlobalFilter] = useState(initialSearch)
   const [sorting, setSorting] = useState([])
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize })
 

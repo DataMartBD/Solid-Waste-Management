@@ -35,7 +35,8 @@ logger = logging.getLogger("swms.ai")
 #: Pages the assistant may deep-link to. Anything else is rejected, so a model
 #: (or an injected instruction) cannot produce an arbitrary navigation target.
 ALLOWED_ROUTES = {
-    "/app/dashboard": "Open dashboard",
+    "/app/dashboard": "Open the daily dashboard",
+    "/app/city-dashboard": "Open the city dashboard",
     "/app/live": "Open live map",
     "/app/holdings": "Open holdings",
     "/app/collection": "Open today's round",
@@ -45,8 +46,8 @@ ALLOWED_ROUTES = {
     "/app/billing": "Open billing",
     "/app/fleet": "Open fleet",
     "/app/collectors": "Open collectors",
-    "/app/reports": "Open reports",
-    "/app/reports-customer": "Open customer reports",
+    "/app/operations-reports": "Open operations reports",
+    "/app/finance-reports": "Open finance reports",
 }
 
 ANSWER_SCHEMA = {

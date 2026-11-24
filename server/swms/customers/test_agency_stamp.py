@@ -181,3 +181,32 @@ class NoBackfillOnEditTests(AgencyStampFixture):
         self.assertEqual(response.status_code, 200, response.data)
         orphan.refresh_from_db()
         self.assertIsNone(orphan.agency_id)
+
+
+class HoldingAreaTests(AgencyStampFixture):
+    """A supervisor registers buildings only in their own wards."""
+
+    def test_a_ward_bound_supervisor_is_refused_another_ward(self):
+        other = Ward.objects.create(id="W-21", name="Ward 21", zone=self.ward.zone)
+        Road.objects.create(ward=other, name="Elsewhere Rd")
+        sup = User.objects.create_user(
+            phone="01700000031", name="Ward Sup", role=Role.SUPERVISOR.value,
+            password="x", scope_kind=ScopeKind.WARD, agency=self.agency,
+        )
+        sup.scope_wards.set([self.ward])
+        self.client.force_authenticate(sup)
+        self.assertEqual(self.post_holding(ward=other.id, road="Elsewhere Rd").status_code, 400)
+        self.assertEqual(self.post_holding().status_code, 201)
+
+    def test_an_agency_wide_supervisor_is_held_to_the_agencys_cities(self):
+        from swms.catalog.models import City
+
+        kcc = City.objects.create(id="KCC", name="Khulna City Corporation", district="Khulna")
+        far = City.objects.create(id="JPS", name="Jashore Pourashova", district="Jashore")
+        Zone.objects.filter(pk=self.ward.zone_id).update(city=kcc)
+        far_ward = Ward.objects.create(id="J-01", name="1", zone=Zone.objects.create(id="Z-J", name="J", city=far))
+        Road.objects.create(ward=far_ward, name="Far Rd")
+        self.agency.cities.set([kcc])
+        self.client.force_authenticate(self.bound)
+        self.assertEqual(self.post_holding(ward=far_ward.id, road="Far Rd").status_code, 400)
+        self.assertEqual(self.post_holding().status_code, 201)

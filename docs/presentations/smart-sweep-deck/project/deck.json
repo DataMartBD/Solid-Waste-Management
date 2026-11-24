@@ -1,0 +1,19 @@
+{
+  "v": 5,
+  "createdOnFiles": { "v": 1, "at": "2026-11-24T10:00:00Z" },
+  "lists": "css",
+  "format": { "v": 1, "shared": ["project/deck.css"] },
+  "title": "Smart Sweep — Client Presentation",
+  "order": ["cover", "problem", "solution", "flow", "users", "city", "agency", "supervisor", "collector", "owner", "reports", "trust", "rollout", "close"],
+  "sections": {
+    "s1": { "description": "Why waste collection needs a system, and what Smart Sweep is.", "start": "cover" },
+    "s2": { "description": "How the service runs, from holding to report.", "start": "flow" },
+    "s3": { "description": "What each type of user gets from it.", "start": "users" },
+    "s4": { "description": "Reports, control, rollout and next steps.", "start": "reports" }
+  },
+  "faces": {
+    "space-grotesk": { "family": "Space Grotesk", "href": "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Inter:wght@400;600&display=swap" },
+    "inter": { "family": "Inter", "href": "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Inter:wght@400;600&display=swap" }
+  },
+  "designSystems": []
+}

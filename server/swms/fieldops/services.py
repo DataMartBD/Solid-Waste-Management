@@ -28,7 +28,7 @@ from swms.common.exceptions import DomainError
 from swms.common.realtime import COLLECTOR_STATUS, VISIT_RECORDED, publish
 from swms.customers.models import Holding, HoldingStatus
 
-from .models import Assignment, Collector, Route, RouteStop, Visit, VisitStatus
+from .models import Assignment, Attendance, AttendanceDay, Collector, Route, RouteStop, Visit, VisitStatus
 
 #: A stop with no visit row for the day *is* pending; there is no such column.
 PENDING = "pending"
@@ -195,6 +195,17 @@ def set_attendance(collector: Collector, attendance: str, user=None) -> Collecto
     """
     collector.attendance = attendance
     collector.save(update_fields=["attendance", "updated_at"])
+    # Day-by-day history for the attendance report (the field above is only the latest).
+    now = timezone.now()
+    day, _ = AttendanceDay.objects.get_or_create(
+        collector=collector, day=timezone.localtime(now).date(),
+        defaults={"status": attendance, "recorded_by": user},
+    )
+    day.status = attendance
+    day.recorded_by = user or day.recorded_by
+    if attendance == Attendance.CHECKED_IN and day.first_in is None:
+        day.first_in = now
+    day.save()
     publish(
         COLLECTOR_STATUS,
         {
@@ -207,6 +218,23 @@ def set_attendance(collector: Collector, attendance: str, user=None) -> Collecto
         agency_id=collector.agency_id,
     )
     return collector
+
+
+def reset_daily_attendance(*, today=None, dry_run: bool = False) -> int:
+    """Start the day with nobody checked in: "Checked in" from an earlier day becomes "Absent".
+
+    A collector checked in *today* (an `AttendanceDay` row for today) keeps it,
+    and one already marked absent is left alone. No history row is written —
+    the reset is not somebody marking them absent, so the attendance report
+    still shows the day as "no record" until they are actually marked.
+    Idempotent and cheap, so it rides on `close_collection_day`, which the
+    server's scheduler runs every 15 minutes, and has a command of its own.
+    """
+    today = today or timezone.localdate()
+    stale = Collector.objects.filter(attendance=Attendance.CHECKED_IN).exclude(attendance_days__day=today)
+    if dry_run:
+        return stale.count()
+    return stale.update(attendance=Attendance.ABSENT, updated_at=timezone.now())
 
 
 # --------------------------------------------------------------------------- #

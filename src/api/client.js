@@ -78,6 +78,20 @@ export function clearTokens() { writeTokens(null) }
 
 export const accessToken = () => readTokens()?.access || null
 
+// Whose session a stored token is: the `user_id` claim of its access token.
+// Read only to notice another tab signing in as someone else — never trusted
+// for roles or scope, which always come from /auth/me/.
+export function tokenUserId(raw) {
+  try {
+    const access = JSON.parse(raw || 'null')?.access
+    if (!access) return null
+    const part = access.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(part)).user_id ?? null
+  } catch { return null }
+}
+
+export const TOKENS_STORAGE_KEY = TOKEN_KEY
+
 // Called when refresh fails, so AuthProvider can drop the session without every
 // caller having to handle it.
 let onSessionExpired = () => {}

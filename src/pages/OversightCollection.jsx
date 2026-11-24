@@ -1,40 +1,41 @@
-// City Corporation dashboard — one city's waste collection, at a glance.
+// City Oversight → Collection: one city's waste pickup (formerly the City
+// Collection page).
 //
 // Everything comes from GET /api/reports/city-collection/. Closed days are read
 // from the daily summary the server writes at each city's cut-off; today, until
-// its cut-off, is counted live. The page keeps three kinds of "collected" apart
+// its cut-off, is counted live. The tab keeps three kinds of "collected" apart
 // on purpose — confirmed by the agency, assumed at the cut-off, missed by
 // complaint — because the city's question is which contractors prove their work.
 //
-// A City Viewer bound to one city gets no picker: the server ignores `city` for
-// them and `cities` comes back empty.
+// The city comes from the page's picker. Complaints and the per-agency figures
+// live on the Overview (complaints card, league table), so they are not repeated
+// here; this tab adds the day-by-day picture and the ward breakdown.
 //
 // Admins get "Mark all collected": the cut-off close, run by hand for a chosen
-// day. It always previews first (a dry run), then writes on confirm. An agency
-// admin's press covers only their own agency's holdings.
+// day. It always previews first (a dry run), then writes on confirm.
 
 import { useEffect, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { PageHeader, Section, StatCard, EmptyState, CHART_TOOLTIP } from '../components/ui.jsx'
-import { ExportMenu } from '../components/ExportMenu.jsx'
+import { Section, StatCard, EmptyState, CHART_TOOLTIP } from '../components/ui.jsx'
 import { Modal, ModalActions } from '../components/Modal.jsx'
-import { IconCheck, IconHome, IconAlert, IconClock, IconRefresh, IconUsers } from '../components/Icons.jsx'
+import { IconCheck, IconHome, IconAlert, IconClock, IconUsers } from '../components/Icons.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useData } from '../context/DataContext.jsx'
 import { useLang } from '../i18n/index.jsx'
+import { ExportButtons, Failed, Loading } from './oversightParts.jsx'
 
 const MODES = ['daily', 'weekly', 'monthly']
 
-export default function CityDashboard() {
+export default function CollectionTab({ city }) {
   const { api } = useData()
   const { isAdmin, isSuperAdmin } = useAuth()
-  const { t, n, percent, date, period, digits, lang, wardName } = useLang()
+  const { t, n, percent, date, period, digits, wardName } = useLang()
   const [mode, setMode] = useState('daily')
-  const [city, setCity] = useState('')
   const [attempt, setAttempt] = useState(0)
   const [state, setState] = useState({ loading: true, error: null, data: null })
   const [closing, setClosing] = useState(false)
   const [notice, setNotice] = useState('')
+  const params = { mode, ...(city ? { city } : {}) }
 
   useEffect(() => {
     let live = true
@@ -56,89 +57,39 @@ export default function CityDashboard() {
   }
 
   const data = state.data
-  const cityName = data ? (lang === 'bn' && data.city.nameBn) || data.city.name : ''
-
   const controls = (
-    <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
-      {data?.cities?.length > 1 && (
-        <select className="select" style={{ width: 'auto' }} value={city || data.city.id}
-          onChange={(e) => setCity(e.target.value)} aria-label={t('city.pickCity')}>
-          {data.cities.map((c) => (
-            <option key={c.id} value={c.id}>{(lang === 'bn' && c.nameBn) || c.name}</option>
-          ))}
-        </select>
-      )}
+    <div className="filter-bar">
       <div className="seg">
         {MODES.map((m) => (
           <button key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{t(`reports.mode.${m}`)}</button>
         ))}
       </div>
+      {data && (
+        <span className="small muted">
+          {t('city.subtitle', { cutoff: digits(data.city.cutoff), deadline: digits(data.city.complaintDeadline) })}
+        </span>
+      )}
+      <div className="grow" />
       {isAdmin && data && (
-        <button className="btn btn-primary" onClick={() => { setNotice(''); setClosing(true) }}>
-          <IconCheck size={16} /> {t('city.close.button')}
+        <button className="btn btn-primary btn-sm" onClick={() => { setNotice(''); setClosing(true) }}>
+          <IconCheck size={15} /> {t('city.close.button')}
         </button>
       )}
-      {data && (
-        <ExportMenu
-          title={t('city.exportTitle', { city: cityName })}
-          subtitle={`${date(data.from)} – ${date(data.to)}`}
-          columns={[
-            { key: 'period', label: t('city.col.period'), get: (r) => periodLabel(r.period) },
-            { key: 'due', label: t('city.col.due') },
-            { key: 'confirmed', label: t('city.col.confirmed') },
-            { key: 'auto', label: t('city.col.auto') },
-            { key: 'missed', label: t('city.col.missed') },
-            { key: 'skipped', label: t('city.col.skipped') },
-            { key: 'collectedPct', label: t('city.col.collectedPct') },
-            { key: 'complaints', label: t('city.col.complaints') },
-          ]}
-          rows={data.rows}
-          filename={`city_collection_${data.city.id}_${mode}`}
-        />
-      )}
+      <ExportButtons filename={`city_collection_${data?.city.id || city || 'city'}_${mode}`}
+        exporter={(p) => api.reports.cityCollection.export({ ...params, ...p })} />
     </div>
   )
 
-  const header = (
-    <PageHeader
-      title={data ? t('city.title', { city: cityName }) : t('city.titlePlain')}
-      subtitle={data ? t('city.subtitle', { cutoff: digits(data.city.cutoff), deadline: digits(data.city.complaintDeadline) }) : ''}
-      actions={controls}
-    />
-  )
-
-  if (state.loading && !data) {
-    return (
-      <div className="fade-in">
-        {header}
-        <div className="card card-pad center row gap-8" style={{ padding: '48px 16px', justifyContent: 'center' }}>
-          <span className="spinner spinner-dark" /> <span className="muted">{t('common.loading')}</span>
-        </div>
-      </div>
-    )
-  }
-
+  if (state.loading && !data) return <>{controls}<Loading /></>
   if (state.error || !data) {
-    return (
-      <div className="fade-in">
-        {header}
-        <div className="card card-pad center" style={{ padding: '40px 20px' }}>
-          <div style={{ color: 'var(--danger)', fontWeight: 700 }}>{t('common.loadFailed')}</div>
-          <div className="small muted mt-8">{state.error?.detail || state.error?.message || t('common.loadFailedUnknown')}</div>
-          <button className="btn btn-ghost btn-sm mt-16" onClick={() => setAttempt((v) => v + 1)}>
-            <IconRefresh size={15} /> {t('common.retry')}
-          </button>
-        </div>
-      </div>
-    )
+    return <>{controls}<Failed error={state.error} onRetry={() => setAttempt((v) => v + 1)} /></>
   }
 
-  const { today, totals, byAgency, byWard, rows } = data
+  const { today, totals, byWard, rows } = data
 
   return (
-    <div className="fade-in">
-      {header}
-
+    <>
+      {controls}
       {notice && <div className="form-note ok" style={{ marginBottom: 16 }}><span>{notice}</span></div>}
 
       {closing && (
@@ -173,8 +124,6 @@ export default function CityDashboard() {
             <StatCard icon={<IconCheck size={18} />} tone="info" label={t('city.today.auto')} value={n(today.auto)}
               sub={t('city.today.autoSub')} />
           )}
-          <StatCard icon={<IconAlert size={18} />} tone="warn" label={t('city.today.complaints')} value={n(today.complaints)}
-            sub={t('city.today.complaintsSub')} />
         </div>
       </Section>
 
@@ -210,17 +159,13 @@ export default function CityDashboard() {
         </Section>
       </div>
 
-      <div className="two-col mt-24">
-        <Section title={t('city.byAgency')} pad={false}>
-          <BreakdownTable rows={byAgency} rowKey="agency" nameLabel={t('city.col.agency')}
-            label={(r) => (lang === 'bn' && r.agencyNameBn) || r.agencyName} />
-        </Section>
+      <div className="mt-24">
         <Section title={t('city.byWard')} pad={false}>
           <BreakdownTable rows={byWard} rowKey="ward" nameLabel={t('city.col.ward')}
             label={(r) => (wardName(r.ward) === r.ward ? r.wardName : wardName(r.ward))} />
         </Section>
       </div>
-    </div>
+    </>
   )
 }
 

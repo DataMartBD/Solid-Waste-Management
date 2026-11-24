@@ -11,6 +11,7 @@ from __future__ import annotations
 from django_filters import rest_framework as filters
 from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from swms.common.roles import SUPER_ADMINS
@@ -57,7 +58,7 @@ class AgencyViewSet(SwmsModelViewSet):
 
     def get_queryset(self):
         return self.scope_queryset(
-            Agency.objects.prefetch_related("service_wards", "collectors", "holdings")
+            Agency.objects.prefetch_related("service_wards", "cities", "collectors", "holdings")
         )
 
     @action(detail=True, methods=["get"])
@@ -97,6 +98,10 @@ class CollectorTransferMixin:
     @extend_schema(request=TransferCollectorSerializer, responses={200: None})
     @action(detail=True, methods=["post"])
     def transfer(self, request, pk=None):
+        # Moving staff between contractors is the corporation's act: an
+        # agency-bound user would be giving away (or poaching) a collector.
+        if request.user.visible_agency_id() is not None:
+            raise PermissionDenied("Only corporation staff can transfer a collector.")
         collector = self.get_object()
         serializer = TransferCollectorSerializer(
             data=request.data, context=self.get_serializer_context()

@@ -23,6 +23,7 @@ from swms.common.exceptions import DomainError
 from .models import (
     Answer,
     FormStatus,
+    OptionSource,
     Question,
     QuestionKind,
     RuleOperator,
@@ -181,10 +182,29 @@ def record_survey(
             f"{form} has no question(s) {', '.join(sorted(unknown))}.", code="unknown_question"
         )
 
+    # The surveyor is whoever is signed in, not a name picked from a list: a
+    # collector's own login files as that collector, anyone else (an admin
+    # entering a paper form, say) under their own name. Done here rather than
+    # in the client so the offline upload follows the same rule.
+    surveyor_questions = [
+        q for q in questions
+        if q.options_source == OptionSource.COLLECTOR and q.maps_to == "surveyor_id"
+    ]
+    if user is not None and getattr(user, "is_authenticated", False) and surveyor_questions:
+        answers = dict(answers)
+        for q in surveyor_questions:
+            if user.collector_id:
+                answers[q.code] = user.collector_id
+            else:
+                answers.pop(q.code, None)
+                surveyor_name = user.name or user.phone
+    named = {q.code for q in surveyor_questions} if surveyor_name else set()
+
     shown = visible_questions(questions, answers)
     missing = [
         q.code for q in questions
-        if q.required and q.code in shown and not _given(answers.get(q.code))
+        if q.required and q.code in shown and q.code not in named
+        and not _given(answers.get(q.code))
     ]
     if missing:
         raise DomainError(

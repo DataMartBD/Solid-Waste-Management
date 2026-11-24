@@ -21,11 +21,12 @@ from __future__ import annotations
 
 from collections import Counter
 
+from django.utils import timezone
 from rest_framework import serializers
 
 from swms.agencies.models import Agency
 from swms.catalog.models import Ward
-from swms.common.scoping import guard, guard_agency
+from swms.common.scoping import caller, guard, guard_agency, guard_ward
 from swms.common.serializers import IdListField, NullableDecimal, SwmsModelSerializer
 from swms.customers.models import Holding
 
@@ -128,7 +129,15 @@ class CollectorSerializer(SwmsModelSerializer):
 
     dspId = serializers.CharField(source="dsp_id", required=False)
     #: The mock's `zone`. It always held a ward id, and still does.
-    zone = serializers.PrimaryKeyRelatedField(source="ward", queryset=Ward.objects.all())
+    #: The home ward. Optional on write: it follows `wards` (the first one
+    #: sent, unless the current home ward is still among them).
+    zone = serializers.PrimaryKeyRelatedField(
+        source="ward", queryset=Ward.objects.all(), required=False
+    )
+    #: Every ward served, all in one city.
+    wards = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Ward.objects.select_related("zone"), required=False
+    )
     onTime = serializers.IntegerField(
         source="on_time", required=False, min_value=0, max_value=100
     )
@@ -138,8 +147,13 @@ class CollectorSerializer(SwmsModelSerializer):
     complaints = serializers.SerializerMethodField()
     vanId = serializers.SerializerMethodField()
     assignmentId = serializers.SerializerMethodField()
-    #: Read-only: employment is changed through POST /collectors/{id}/transfer/,
-    #: which writes the history row and this FK together.
+    #: Set once, when the collector is created (it opens their employment
+    #: record). Afterwards employment changes only through
+    #: POST /collectors/{id}/transfer/, which writes the history row and this FK
+    #: together. An agency-bound creator's own agency is filled in by the view.
+    agency = serializers.PrimaryKeyRelatedField(
+        queryset=Agency.objects.all(), required=False, allow_null=True
+    )
     agencyName = serializers.CharField(source="agency.name", read_only=True, default=None)
     agencyNameBn = serializers.CharField(source="agency.name_bn", read_only=True, default=None)
 
@@ -153,6 +167,7 @@ class CollectorSerializer(SwmsModelSerializer):
             "agencyName",
             "agencyNameBn",
             "zone",
+            "wards",
             "phone",
             "onTime",
             "coverage",
@@ -166,7 +181,89 @@ class CollectorSerializer(SwmsModelSerializer):
             "vanId",
             "assignmentId",
         ]
-        read_only_fields = ["id", "agency"]
+        read_only_fields = ["id"]
+
+    def validate_agency(self, agency):
+        if self.instance is not None:
+            if (agency.id if agency else None) != self.instance.agency_id:
+                raise serializers.ValidationError(
+                    "Move a collector to another agency with Transfer."
+                )
+            return agency
+        if agency is not None and agency.status != "active":
+            raise serializers.ValidationError("This agency is not active.")
+        guard_agency(self, agency.id if agency else None)
+        return agency
+
+    def validate(self, attrs):
+        wards = attrs.get("wards")
+        if wards is not None:
+            if not wards:
+                raise serializers.ValidationError({"wards": "Choose at least one ward."})
+            if len({w.zone.city_id for w in wards}) > 1:
+                raise serializers.ValidationError(
+                    {"wards": "All wards must be in the same city corporation / pourashova."}
+                )
+            for ward in wards:
+                guard_ward(self, ward.id)
+            home = attrs.get("ward") or getattr(self.instance, "ward", None)
+            if home not in wards:
+                attrs["ward"] = wards[0]
+        elif self.instance is None and "ward" not in attrs:
+            raise serializers.ValidationError({"wards": "Choose at least one ward."})
+        self._check_agency_area(attrs, wards)
+        return attrs
+
+    def _check_agency_area(self, attrs, wards):
+        """A collector works only in the cities of their agency.
+
+        The agency is the one chosen on a new collector, else the one they are
+        with, else — for an agency's own staff adding one — the caller's. Only
+        checked when wards (or the agency) are being set.
+        """
+        if wards is None and "agency" not in attrs and "ward" not in attrs:
+            return
+        agency = attrs.get("agency") or getattr(self.instance, "agency", None)
+        if agency is None:
+            user = caller(self)
+            mine = user.visible_agency_id() if user is not None else None
+            agency = Agency.objects.filter(pk=mine).first() if mine else None
+        if agency is None:
+            return
+        cities = {c.id for c in agency.cities.all()} or ({agency.city_id} if agency.city_id else set())
+        if not cities:
+            return  # no city on record for the agency yet: nothing to hold it to
+        if wards is None:
+            wards = [attrs["ward"]] if attrs.get("ward") else list(getattr(self.instance, "wards", Ward.objects.none()).all())
+        foreign = sorted(w.id for w in wards if w.zone.city_id not in cities)
+        if foreign:
+            raise serializers.ValidationError(
+                {"wards": f"{agency.name} does not work in these wards: {', '.join(foreign)}"}
+            )
+
+    def create(self, validated_data):
+        from swms.agencies.services import transfer_collector
+
+        wards = validated_data.pop("wards", None)
+        agency = validated_data.pop("agency", None)
+        collector = super().create(validated_data)
+        collector.wards.set(wards if wards is not None else [collector.ward])
+        if agency is not None:
+            # Through the service, so the employment history opens with them.
+            today = timezone.localdate()
+            joined = collector.joined if collector.joined and collector.joined <= today else today
+            transfer_collector(collector, agency, on_date=joined, note="Joined.")
+        return collector
+
+    def update(self, instance, validated_data):
+        wards = validated_data.pop("wards", None)
+        collector = super().update(instance, validated_data)
+        if wards is not None:
+            collector.wards.set(wards)
+        elif not collector.wards.filter(pk=collector.ward_id).exists():
+            # A client that only moved the home ward still has it served.
+            collector.wards.add(collector.ward)
+        return collector
 
     def get_complaints(self, obj) -> int:
         """Prefers the viewset's annotation; falls back for one-off serialising."""

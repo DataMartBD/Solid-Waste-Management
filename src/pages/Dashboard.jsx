@@ -39,6 +39,7 @@ const timeAgo = (iso, t, n) => {
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const seesMoney = user?.roleKey !== 'kcc_viewer'
   const { t, n, taka, percent, date, day, digits, lang } = useLang()
   const {
     api, visits, complaints, holdings, collectors, bills, payments, vans,
@@ -169,10 +170,11 @@ export default function Dashboard() {
             target: percent(90), done: n(kpis.servedStops), total: n(kpis.scheduledStops),
           })}
           progress={kpis.collectionEfficiency} />
-        <StatCard icon={<IconBill size={18} />} tone="warn" label={t('dashboard.kpi.chargeRate')}
+        {/* Money is not shown to the City Viewer. */}
+        {seesMoney && <StatCard icon={<IconBill size={18} />} tone="warn" label={t('dashboard.kpi.chargeRate')}
           value={percent(kpis.chargeRate)}
           sub={t('dashboard.kpi.chargeRateOf', { received: taka(kpis.received), billed: taka(kpis.billed) })}
-          progress={kpis.chargeRate} />
+          progress={kpis.chargeRate} />}
         <StatCard icon={<IconHome size={18} />} tone="brand" label={t('dashboard.kpi.coverage')}
           value={percent(kpis.coverage)}
           sub={t('dashboard.kpi.coverageOf', { covered: n(kpis.coveredHoldings), total: n(kpis.activeHoldings) })}
@@ -237,7 +239,7 @@ export default function Dashboard() {
                   <th>{t('dashboard.households.household')}</th>
                   <th>{t('dashboard.households.ward')}</th>
                   <th>{t('dashboard.households.onTimePay')}</th>
-                  <th>{t('dashboard.households.dues')}</th>
+                  {seesMoney && <th>{t('dashboard.households.dues')}</th>}
                   <th>{t('dashboard.households.score')}</th>
                 </tr>
               </thead>
@@ -251,7 +253,7 @@ export default function Dashboard() {
                     </td>
                     <td>{wardNo((catalog?.wards || []).find((w) => w.id === h.ward)) || h.ward}</td>
                     <td className="mono">{t('dashboard.households.onTimeOf', { paid: n(h.onTime), total: n(h.billCount) })}</td>
-                    <td>{h.dues > 0 ? <span style={{ color: 'var(--danger)' }}>{taka(h.dues)}</span> : <span className="muted-3">{taka(0)}</span>}</td>
+                    {seesMoney && <td>{h.dues > 0 ? <span style={{ color: 'var(--danger)' }}>{taka(h.dues)}</span> : <span className="muted-3">{taka(0)}</span>}</td>}
                     <td>
                       <div className="row gap-8">
                         <div className="mini-bar"><i style={{ width: `${h.score}%` }} /></div>

@@ -85,13 +85,21 @@ class Collector(TextKeyModel):
         related_name="collectors",
         help_text="Home ward. Exposed as 'zone' by the API for backwards compatibility.",
     )
+    #: Every ward this collector serves, all in one city. `ward` above is the
+    #: home ward — always one of these — kept because the round, the ward
+    #: scoping and the reports read a single ward.
+    wards = models.ManyToManyField(
+        "catalog.Ward", blank=True, related_name="served_by_collectors"
+    )
     phone = models.CharField(max_length=20, blank=True)
 
     status = models.CharField(
         max_length=12, choices=CollectorStatus.choices, default=CollectorStatus.IDLE
     )
+    # The latest mark only (history is `AttendanceDay`). A new collector has not
+    # checked in yet, and `reset_daily_attendance` returns everyone here each day.
     attendance = models.CharField(
-        max_length=12, choices=Attendance.choices, default=Attendance.CHECKED_IN
+        max_length=12, choices=Attendance.choices, default=Attendance.ABSENT
     )
 
     license = models.CharField(max_length=32, blank=True)
@@ -479,3 +487,32 @@ class DailyCollectionSummary(models.Model):
     @property
     def collected(self) -> int:
         return self.confirmed + self.auto
+
+
+class AttendanceDay(models.Model):
+    """One collector's attendance on one day, kept as history.
+
+    `Collector.attendance` is only the latest mark and is overwritten; this row
+    is what the attendance report reads. Written by `set_attendance`: the first
+    check-in of the day is kept in `first_in`, a later "absent" overrides the
+    status (a mistake corrected), and a later check-in turns it back.
+    """
+
+    collector = models.ForeignKey(Collector, on_delete=models.CASCADE, related_name="attendance_days")
+    day = models.DateField(db_index=True)
+    status = models.CharField(max_length=12, choices=Attendance.choices)
+    first_in = models.DateTimeField(null=True, blank=True, help_text="First check-in that day")
+    recorded_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "attendance_day"
+        ordering = ["-day", "collector_id"]
+        constraints = [
+            models.UniqueConstraint(fields=["collector", "day"], name="attendance_one_per_collector_per_day"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.collector_id} {self.day} {self.status}"

@@ -20,12 +20,13 @@
 // moment ago cannot write a plan that breaks them. The picker still filters by
 // them, to keep a planner from being told "no" for something it could have
 // hidden. Rule 4 has no server counterpart and stays here.
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { PageHeader, StatCard, Section, EmptyState, Status } from '../components/ui.jsx'
 import { Modal, Field, ModalActions } from '../components/Modal.jsx'
 import {
   IconRoute, IconHome, IconAlert, IconCheck, IconPlus, IconTrash,
-  IconSearch, IconShield, IconEdit, IconUsers,
+  IconSearch, IconShield, IconEdit, IconUsers, IconArrow,
 } from '../components/Icons.jsx'
 import { useData } from '../context/DataContext.jsx'
 import { useLang } from '../i18n/index.jsx'
@@ -80,12 +81,35 @@ function message(error) {
 export default function RoutePlan() {
   const { collectors, holdings, routes, assignments, wards, api, act, create, update, remove, ready } = useData()
   const { t, n } = useLang()
+  // Arriving from Collectors → "Assign route": ?tab=crew&collector=<id> opens the
+  // Assignments tab with that collector's card picked out and the route picker
+  // open (unless they are off route — rule 4).
+  const [search] = useSearchParams()
+  const focusCollector = search.get('collector') || ''
+  // …and a way back to Collectors, always shown. From a collector's details
+  // panel it reopens that panel; otherwise it opens the list.
+  const from = search.get('from')
+  // `from=route-plan` lets Collectors' own back button return to Assignments.
+  const backTo = from === 'collector-details' && focusCollector
+    ? `/app/collectors?open=${encodeURIComponent(focusCollector)}&from=route-plan`
+    : '/app/collectors?from=route-plan'
+  const navigate = useNavigate()
 
-  const [tab, setTab] = useState('routes')
+  const [tab, setTab] = useState(search.get('tab') === 'crew' || focusCollector ? 'crew' : 'routes')
   const [picked, setPicked] = useState(null)   // selected route id
   const [form, setForm] = useState(null)       // { route } — null route means "create"
   const [picking, setPicking] = useState(false)
   const [attachTo, setAttachTo] = useState(null) // collector id awaiting a route
+  const [assigning, setAssigning] = useState(null) // route id awaiting a collector
+  const [listFilter, setListFilter] = useState('') // '' | 'unassigned' | 'empty'
+  const opened = useRef(false)
+  useEffect(() => {
+    if (opened.current || !focusCollector) return
+    const c = collectors.find((x) => x.id === focusCollector)
+    if (!c) return
+    opened.current = true
+    if (c.status !== 'off_route') setAttachTo(c.id)
+  }, [collectors, focusCollector])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [unplanned, setUnplanned] = useState(NO_GAPS)
@@ -142,7 +166,7 @@ export default function RoutePlan() {
   // `stops` field-wise could leave a half-applied walk behind.
   const writeStops = (target, stops) => run(api.routes.setStops(target.id, stops))
 
-  async function saveRoute({ id, name, ward, win }) {
+  async function saveRoute({ id, name, ward, win, collector }) {
     const period = splitWindow(win)
     const existing = routes.find((r) => r.id === id)
     if (existing) {
@@ -154,7 +178,13 @@ export default function RoutePlan() {
       return res?.ok === true
     }
     const res = await runWrite(() => create('routes', { name, ward, ...period, stops: [], active: true }))
-    if (res?.ok) setPicked(res.data.id)
+    if (res?.ok) {
+      setPicked(res.data.id)
+      // One flow: the route, who walks it, then its stops.
+      const who = collectors.find((c) => c.id === collector)
+      if (who) await attachRoute(who, res.data.id, { fresh: true })
+      setPicking(true)
+    }
     return res?.ok === true
   }
 
@@ -224,9 +254,9 @@ export default function RoutePlan() {
   }
 
   // ---- assignment writes ----------------------------------------------------
-  async function attachRoute(collector, routeId) {
+  async function attachRoute(collector, routeId, { fresh = false } = {}) {
     if (!collector || collector.status === 'off_route') return // rule 4
-    if (!routes.some((r) => r.id === routeId)) return
+    if (!fresh && !routes.some((r) => r.id === routeId)) return
 
     const holder = collectorForRoute(routeId, assignments)
     if (holder === collector.id) return
@@ -266,6 +296,9 @@ export default function RoutePlan() {
         subtitle={t('routePlan.subtitle')}
         actions={(
           <div className="row gap-8 wrap">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate(backTo)}>
+              <IconArrow size={14} style={{ transform: 'rotate(180deg)' }} /> {t('routePlan.backToCollectors')}
+            </button>
             {busy && <span className="spinner spinner-dark" />}
             <div className="seg">
               <button type="button" className={tab === 'routes' ? 'on' : ''} onClick={() => setTab('routes')}>
@@ -299,17 +332,29 @@ export default function RoutePlan() {
           value={n(unplanned.unverified.length)} sub={t('routePlan.stat.unverifiedSub')} />
       </div>
 
+      <TodoStrip
+        unassigned={routes.filter((r) => !collectorForRoute(r.id, assignments)).length}
+        empty={routes.filter((r) => !r.stops.length).length}
+        notOnRoute={unplanned.routable.length}
+        filter={listFilter}
+        onFilter={(f) => { setTab('routes'); setListFilter((now) => (now === f ? '' : f)) }}
+      />
+
       <CoverageGap unplanned={unplanned} />
 
       {tab === 'routes' ? (
         <>
           <RouteList
-            routes={routes}
+            routes={listFilter === 'unassigned' ? routes.filter((r) => !collectorForRoute(r.id, assignments))
+              : listFilter === 'empty' ? routes.filter((r) => !r.stops.length) : routes}
+            filter={listFilter}
+            onClearFilter={() => setListFilter('')}
             assignments={assignments}
             collectors={collectors}
             picked={picked}
             onPick={setPicked}
             onNew={() => setForm({ route: null })}
+            onAssign={(id) => { setPicked(id); setAssigning(id) }}
           />
 
           <div className="mt-16">
@@ -331,6 +376,7 @@ export default function RoutePlan() {
                 onMove={(id, delta) => move(route, id, delta)}
                 onRemove={(id) => dropStop(route, id)}
                 onMoveTo={(id, toId) => moveStop(route, id, toId)}
+                onAssign={() => setAssigning(route.id)}
               />
             )}
           </div>
@@ -343,6 +389,7 @@ export default function RoutePlan() {
           busy={busy}
           onAttach={setAttachTo}
           onDetach={detachRoute}
+          focus={focusCollector}
         />
       )}
 
@@ -350,6 +397,9 @@ export default function RoutePlan() {
         <RouteForm
           route={form.route}
           wards={wards}
+          collectors={collectors}
+          routes={routes}
+          assignments={assignments}
           busy={busy}
           onSave={async (values) => { if (await saveRoute(values)) setForm(null) }}
           onClose={() => setForm(null)}
@@ -366,6 +416,28 @@ export default function RoutePlan() {
         />
       )}
 
+      {assigning && routes.find((r) => r.id === assigning) && (
+        <AssignCollector
+          route={routes.find((r) => r.id === assigning)}
+          collectors={collectors}
+          routes={routes}
+          assignments={assignments}
+          busy={busy}
+          onPick={async (collectorId) => {
+            await attachRoute(collectors.find((c) => c.id === collectorId), assigning)
+            setAssigning(null)
+          }}
+          onRemove={(holderId) => {
+            const target = routes.find((r) => r.id === assigning)
+            const holder = collectors.find((c) => c.id === holderId)
+            if (!window.confirm(t('routePlan.assignC.removeConfirm', { route: target?.name || assigning, name: holder?.name || holderId }))) return
+            detachRoute(holderId, assigning)
+            setAssigning(null)
+          }}
+          onClose={() => setAssigning(null)}
+        />
+      )}
+
       {attachTo && (
         <AttachRoute
           collector={collectors.find((c) => c.id === attachTo)}
@@ -375,7 +447,42 @@ export default function RoutePlan() {
           busy={busy}
           onPick={(routeId) => attachRoute(collectors.find((c) => c.id === attachTo), routeId)}
           onClose={() => setAttachTo(null)}
+          onBack={() => navigate(backTo)}
         />
+      )}
+    </div>
+  )
+}
+
+// ---- to-do strip ------------------------------------------------------------
+// What still needs doing before every holding has a collector: routes nobody
+// walks, routes with no stops, and verified holdings on no route. The first two
+// filter the route list; the third opens the Holdings list on exactly those.
+function TodoStrip({ unassigned, empty, notOnRoute, filter, onFilter }) {
+  const { t, n } = useLang()
+  if (!unassigned && !empty && !notOnRoute) {
+    return (
+      <div className="form-note ok" style={{ marginBottom: 16 }}>
+        <IconCheck size={15} /><span className="grow">{t('routePlan.todo.allDone')}</span>
+      </div>
+    )
+  }
+  const chip = (on, tone, label, onClick) => (
+    <button type="button" className={`btn btn-sm ${on ? 'btn-primary' : 'btn-ghost'}`} onClick={onClick}
+      style={on ? undefined : { borderColor: `var(--${tone})` }}>
+      {label}
+    </button>
+  )
+  return (
+    <div className="form-note info row gap-8 wrap" style={{ marginBottom: 16 }}>
+      <IconAlert size={15} />
+      <span style={{ fontWeight: 600 }}>{t('routePlan.todo.title')}</span>
+      {unassigned > 0 && chip(filter === 'unassigned', 'warn', t('routePlan.todo.unassigned', { count: n(unassigned) }), () => onFilter('unassigned'))}
+      {empty > 0 && chip(filter === 'empty', 'warn', t('routePlan.todo.empty', { count: n(empty) }), () => onFilter('empty'))}
+      {notOnRoute > 0 && (
+        <Link className="btn btn-sm btn-ghost" to="/app/holdings?route=none" style={{ borderColor: 'var(--danger)' }}>
+          {t('routePlan.todo.notOnRoute', { count: n(notOnRoute) })}
+        </Link>
       )}
     </div>
   )
@@ -433,7 +540,7 @@ function CoverageGap({ unplanned }) {
 }
 
 // ---- route list ------------------------------------------------------------
-function RouteList({ routes, assignments, collectors, picked, onPick, onNew }) {
+function RouteList({ routes, assignments, collectors, picked, onPick, onNew, onAssign, filter, onClearFilter }) {
   const { t, n, digits, wardName } = useLang()
 
   return (
@@ -441,7 +548,13 @@ function RouteList({ routes, assignments, collectors, picked, onPick, onNew }) {
       title={t('routePlan.routes.title')}
       actions={(
         <div className="row gap-12 wrap">
-          <span className="tiny muted-3">{t('routePlan.routes.hint')}</span>
+          {filter
+            ? (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={onClearFilter}>
+                {t(`routePlan.todo.showing.${filter}`)} · {t('routePlan.todo.showAll')}
+              </button>
+            )
+            : <span className="tiny muted-3">{t('routePlan.routes.hint')}</span>}
           <button className="btn btn-primary btn-sm" onClick={onNew}>
             <IconPlus size={14} /> {t('routePlan.routes.new')}
           </button>
@@ -478,7 +591,20 @@ function RouteList({ routes, assignments, collectors, picked, onPick, onNew }) {
                   <span className="badge badge-info"><span className="dot" />{t('routePlan.routes.stops', { count: n(r.stops.length) })}</span>
                   {who
                     ? <span className="badge badge-ok"><span className="dot" />{who.name}</span>
-                    : <span className="badge badge-warn"><span className="dot" />{t('routePlan.routes.unassigned')}</span>}
+                    : (
+                      // Not a nested <button>: the card itself is one.
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className="badge badge-warn"
+                        style={{ cursor: 'pointer' }}
+                        title={t('routePlan.routes.assignNow')}
+                        onClick={(e) => { e.stopPropagation(); onAssign(r.id) }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onAssign(r.id) } }}
+                      >
+                        <span className="dot" />{t('routePlan.routes.unassigned')} · {t('routePlan.routes.assignNow')}
+                      </span>
+                    )}
                 </div>
               </button>
             )
@@ -492,11 +618,23 @@ function RouteList({ routes, assignments, collectors, picked, onPick, onNew }) {
 // ---- route form ------------------------------------------------------------
 // Create and edit share a dialog: the fields are the same three, and a rename
 // is far more common than a fresh round.
-function RouteForm({ route, wards, busy, onSave, onClose }) {
-  const { t } = useLang()
+function RouteForm({ route, wards, collectors = [], routes = [], assignments = [], busy, onSave, onClose }) {
+  const { t, n } = useLang()
   const [name, setName] = useState(route?.name || '')
   const [ward, setWard] = useState(route?.ward || wards[0]?.id || '')
   const [win, setWin] = useState(() => (route ? joinWindow(route) : DEFAULT_WINDOW))
+  const [collector, setCollector] = useState('')
+  // On create only: who will walk it. Collectors of the chosen ward first; nobody off route.
+  const choices = useMemo(() => {
+    const able = collectors.filter((c) => c.active !== false && c.status !== 'off_route')
+    const inWard = (c) => c.zone === ward || (c.wards || []).includes(ward)
+    const label = (c) => {
+      const held = routesForCollector(c.id, { routes, assignments }).length
+      return `${c.name} · ${t('routePlan.assignC.routesHeld', { count: n(held) })}${inWard(c) ? '' : ` · ${t('routePlan.form.otherWard')}`}`
+    }
+    return [...able.filter(inWard), ...able.filter((c) => !inWard(c))].map((c) => ({ value: c.id, label: label(c) }))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectors, routes, assignments, ward])
 
   const trimmed = win.trim()
   const windowOk = WINDOW_RE.test(trimmed)
@@ -536,6 +674,18 @@ function RouteForm({ route, wards, busy, onSave, onClose }) {
           placeholder={DEFAULT_WINDOW}
         />
       </div>
+      {!route && (
+        <div className="mt-16">
+          <Field
+            as="select"
+            label={t('routePlan.form.collector')}
+            hint={t('routePlan.form.collectorHint')}
+            value={collector}
+            onChange={(e) => setCollector(e.target.value)}
+            options={[{ value: '', label: t('routePlan.form.collectorLater') }, ...choices]}
+          />
+        </div>
+      )}
 
       <ModalActions>
         <button type="button" className="btn btn-ghost" onClick={onClose}>{t('common.cancel')}</button>
@@ -543,7 +693,7 @@ function RouteForm({ route, wards, busy, onSave, onClose }) {
           type="button"
           className="btn btn-primary"
           disabled={!nameOk || !windowOk || busy}
-          onClick={() => onSave({ id: route?.id, name: name.trim(), ward, win: trimmed })}
+          onClick={() => onSave({ id: route?.id, name: name.trim(), ward, win: trimmed, collector: route ? '' : collector })}
         >
           {busy ? <span className="spinner" /> : route ? t('common.save') : t('routePlan.form.create')}
         </button>
@@ -555,7 +705,7 @@ function RouteForm({ route, wards, busy, onSave, onClose }) {
 // ---- route editor ----------------------------------------------------------
 function RouteEditor({
   route, collector, rows, siblings, busy,
-  onAdd, onEdit, onDelete, onSort, onMove, onRemove, onMoveTo,
+  onAdd, onEdit, onDelete, onSort, onMove, onRemove, onMoveTo, onAssign,
 }) {
   const { t, n, digits, wardName } = useLang()
   const shown = joinWindow(route)
@@ -595,8 +745,11 @@ function RouteEditor({
         </div>
         <div>
           <div className="tiny muted-3">{t('routePlan.editor.collectorLabel')}</div>
-          <div style={{ fontWeight: 600, fontSize: 13 }}>
-            {collector ? collector.name : t('routePlan.routes.unassigned')}
+          <div className="row gap-8" style={{ fontWeight: 600, fontSize: 13 }}>
+            {collector ? collector.name : <span style={{ color: 'var(--warn, #b45309)' }}>{t('routePlan.routes.unassigned')}</span>}
+            <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={onAssign}>
+              <IconUsers size={14} /> {collector ? t('routePlan.editor.change') : t('routePlan.editor.assign')}
+            </button>
           </div>
         </div>
         <div className="grow" />
@@ -833,7 +986,7 @@ function StopPicker({ route, unplanned, busy, onAdd, onClose }) {
 // One card per collector: the rounds they hold and what those add up to. An
 // off-route collector keeps their card so the planner can see why they are
 // empty, but nothing can be handed to them.
-function AssignmentBoard({ collectors, routes, assignments, busy, onAttach, onDetach }) {
+function AssignmentBoard({ collectors, routes, assignments, busy, onAttach, onDetach, focus }) {
   const { t, n, digits, wardName } = useLang()
 
   const orphans = routes.filter((r) => !collectorForRoute(r.id, assignments))
@@ -860,12 +1013,17 @@ function AssignmentBoard({ collectors, routes, assignments, busy, onAttach, onDe
             const held = routesForCollector(c.id, { routes, assignments })
             const stops = held.reduce((sum, r) => sum + r.stops.length, 0)
             const off = c.status === 'off_route'
+            const focused = c.id === focus
             return (
               <div
                 key={c.id}
+                ref={focused ? (el) => el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' }) : undefined}
+                data-focused={focused || undefined}
                 style={{
                   flex: '1 1 300px', minWidth: 280, padding: 14,
-                  borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)',
+                  borderRadius: 10, background: 'var(--surface)',
+                  border: focused ? '2px solid var(--brand)' : '1px solid var(--border)',
+                  boxShadow: focused ? '0 0 0 4px var(--focus-ring)' : undefined,
                 }}
               >
                 <div className="row between wrap gap-8">
@@ -931,7 +1089,7 @@ function AssignmentBoard({ collectors, routes, assignments, busy, onAttach, onDe
 // Free routes come first; the ones already held are still listed, because
 // re-balancing a ward usually means taking a round off somebody — but the move
 // is explicit and confirmed, never a silent second holder.
-function AttachRoute({ collector, routes, assignments, collectors, busy, onPick, onClose }) {
+function AttachRoute({ collector, routes, assignments, collectors, busy, onPick, onClose, onBack }) {
   const { t, n, digits, wardName } = useLang()
   const [q, setQ] = useState('')
 
@@ -1009,6 +1167,103 @@ function AttachRoute({ collector, routes, assignments, collectors, busy, onPick,
       )}
 
       <ModalActions>
+        {/* Opened straight from Collectors, the picker covers the page's own back button. */}
+        {onBack && (
+          <button type="button" className="btn btn-ghost" onClick={onBack}>
+            <IconArrow size={14} style={{ transform: 'rotate(180deg)' }} /> {t('routePlan.backToCollectors')}
+          </button>
+        )}
+        <span className="tiny muted-3 grow">{t('common.shown', { count: n(rows.length) })}</span>
+        <button type="button" className="btn btn-ghost" onClick={onClose}>{t('common.close')}</button>
+      </ModalActions>
+    </Modal>
+  )
+}
+
+// ---- assign-collector picker ----------------------------------------------
+// The route-side twin of AttachRoute: pick who walks this route. Collectors of
+// the route's ward come first; anyone off route is listed but cannot be picked
+// (rule 4). Taking the route from its current collector is confirmed by
+// attachRoute; "Remove" leaves the route unassigned.
+function AssignCollector({ route, collectors, routes, assignments, busy, onPick, onRemove, onClose }) {
+  const { t, n, wardName } = useLang()
+  const [q, setQ] = useState('')
+  const holder = collectorForRoute(route.id, assignments)
+  const current = collectors.find((c) => c.id === holder)
+
+  const rows = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    return collectors
+      .filter((c) => c.active !== false && c.id !== holder)
+      .filter((c) => !needle || [c.name, c.dspId, c.id].some((v) => String(v || '').toLowerCase().includes(needle)))
+      .map((c) => {
+        const held = routesForCollector(c.id, { routes, assignments })
+        return {
+          c, held: held.length, stops: held.reduce((sum, r) => sum + r.stops.length, 0),
+          inWard: c.zone === route.ward || (c.wards || []).includes(route.ward),
+          otherAgency: Boolean(route.agency && c.agency && route.agency !== c.agency),
+        }
+      })
+      .sort((a, b) => a.held - b.held || a.c.name.localeCompare(b.c.name))
+  }, [collectors, routes, assignments, holder, q, route])
+
+  const group = (title, list, tone) => (
+    <div style={{ marginBottom: 14 }}>
+      <div className="tiny" style={{ fontWeight: 700, marginBottom: 6 }}>
+        <span className={`badge badge-${tone}`}><span className="dot" />{title}</span>
+      </div>
+      {list.map(({ c, held, stops, otherAgency }, i) => {
+        const off = c.status === 'off_route'
+        return (
+          <div key={c.id} className="row gap-12 wrap" style={{ padding: '9px 0', borderTop: i ? '1px solid var(--border)' : undefined }}>
+            <div className="grow" style={{ minWidth: 200 }}>
+              <div className="row gap-8 wrap">
+                <span style={{ fontWeight: 600 }}>{c.name}</span>
+                {off && <span className="badge badge-danger"><span className="dot" />{t('routePlan.assignC.offRoute')}</span>}
+                {otherAgency && <span className="badge badge-warn"><span className="dot" />{t('routePlan.assignC.otherAgency')}</span>}
+              </div>
+              <div className="tiny muted-3 mt-4">
+                {wardName(c.zone)} · {t('routePlan.assignC.load', { routes: n(held), stops: n(stops) })}
+              </div>
+            </div>
+            <button className="btn btn-primary btn-sm" disabled={busy || off} onClick={() => !off && onPick(c.id)}>
+              {t('routePlan.assignC.assign')}
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
+
+  const here = rows.filter((r) => r.inWard)
+  const elsewhere = rows.filter((r) => !r.inWard)
+
+  return (
+    <Modal
+      title={t('routePlan.assignC.title', { route: route.name })}
+      subtitle={current ? t('routePlan.assignC.current', { name: current.name }) : t('routePlan.assignC.subtitle')}
+      onClose={onClose}
+      width={620}
+    >
+      <div className="chip-input" style={{ marginBottom: 12 }}>
+        <IconSearch size={16} />
+        <input className="grow" placeholder={t('routePlan.assignC.search')} value={q} onChange={(e) => setQ(e.target.value)}
+          aria-label={t('routePlan.assignC.search')} />
+      </div>
+      {rows.length === 0 ? (
+        <EmptyState><IconUsers size={26} /><div className="mt-8">{t('routePlan.assignC.none')}</div></EmptyState>
+      ) : (
+        <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+          {here.length > 0 && group(t('routePlan.assignC.thisWard', { ward: wardName(route.ward) }), here, 'ok')}
+          {elsewhere.length > 0 && group(t('routePlan.assignC.otherWards'), elsewhere, 'muted')}
+        </div>
+      )}
+      <ModalActions>
+        {current && (
+          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => onRemove(current.id)}>
+            <IconTrash size={14} /> {t('routePlan.assignC.remove', { name: current.name })}
+          </button>
+        )}
         <span className="tiny muted-3 grow">{t('common.shown', { count: n(rows.length) })}</span>
         <button type="button" className="btn btn-ghost" onClick={onClose}>{t('common.close')}</button>
       </ModalActions>

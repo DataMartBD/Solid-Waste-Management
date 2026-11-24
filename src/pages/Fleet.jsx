@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { PageHeader, Section, StatCard, Status } from '../components/ui.jsx'
 import { Modal, Field, FormRow, ModalActions } from '../components/Modal.jsx'
-import { IconTruck, IconWrench, IconFuel, IconAlert, IconPlus, IconDownload, IconEye, IconEdit, IconTrash, IconCheck } from '../components/Icons.jsx'
+import { IconTruck, IconWrench, IconFuel, IconAlert, IconPlus, IconDownload, IconEye, IconEdit, IconTrash, IconCheck, IconSearch } from '../components/Icons.jsx'
+import { fold } from '../components/DataTable.jsx'
 import { useData } from '../context/DataContext.jsx'
 import { downloadCSV } from '../utils/export.js'
 import { useLang } from '../i18n/index.jsx'
@@ -70,6 +72,23 @@ export default function Fleet() {
   const { vans, collectors, maintenance, fuelLogs, create, update, remove, act, reload, api, ready, collectorName } = useData()
   const { t, n, taka, percent } = useLang()
   const [selected, setSelected] = useState(null)
+  // The top-bar search opens a van here as /app/fleet?van=<id>.
+  const [params, setParams] = useSearchParams()
+  const vanParam = params.get('van')
+  useEffect(() => {
+    if (!vanParam) return
+    const van = vans.find((v) => v.id === vanParam)
+    if (van) { setSelected(van); setParams({}, { replace: true }) }
+  }, [vanParam, vans, setParams])
+  // The search box: van ID, plate or driver. Spaces and dashes are ignored, so
+  // "khulna metro 7" finds KHULNA-METRO-7.
+  const [query, setQuery] = useState('')
+  const shown = useMemo(() => {
+    const squash = (s) => fold(s).replace(/[\s-]+/g, '')
+    const q = squash(query)
+    if (!q) return vans
+    return vans.filter((v) => squash([v.id, v.plate, v.driver ? collectorName(v.driver) : ''].join(' ')).includes(q))
+  }, [vans, query, collectorName])
   const [editing, setEditing] = useState(null)
   const [maintFor, setMaintFor] = useState(null)
   const [fuelFor, setFuelFor] = useState(null)
@@ -165,11 +184,20 @@ export default function Fleet() {
 
       <div className="two-col">
         <Section title={t('fleet.registry')} pad={false}>
+          <div className="row gap-8 wrap" style={{ padding: '12px 16px' }}>
+            <div className="chip-input">
+              <IconSearch size={16} />
+              <input placeholder={t('fleet.searchPlaceholder')} aria-label={t('fleet.searchPlaceholder')}
+                value={query} onChange={(e) => setQuery(e.target.value)} />
+            </div>
+            <div className="grow" />
+            <span className="tiny muted">{t('common.shown', { count: n(shown.length) })}</span>
+          </div>
           <div className="table-wrap">
             <table className="data">
               <thead><tr><th>{t('fleet.col.van')}</th><th>{t('fleet.col.type')}</th><th>{t('fleet.col.driver')}</th><th>{t('fleet.col.odometer')}</th><th>{t('fleet.col.fitness')}</th><th>{t('fleet.col.status')}</th><th></th></tr></thead>
               <tbody>
-                {vans.map((v) => (
+                {shown.map((v) => (
                   <tr key={v.id}>
                     <td style={{ cursor: 'pointer' }} onClick={() => setSelected(v)}>
                       <div style={{ fontWeight: 600 }}>{v.id}</div>

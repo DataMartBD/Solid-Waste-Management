@@ -76,18 +76,47 @@ class AccessTests(UserAdminFixture):
         self.client.force_authenticate(self.collector)
         self.assertEqual(self.client.get(reverse("user-list")).status_code, 403)
 
-    def test_a_supervisor_may_not_read_it_either(self):
-        """Supervisors write operational records, not accounts."""
+    def test_a_supervisor_sees_only_collectors_and_themselves(self):
+        """A supervisor manages collectors; other staff's details stay hidden."""
         self.client.force_authenticate(self.supervisor)
-        self.assertEqual(self.client.get(reverse("user-list")).status_code, 403)
+        response = self.client.get(reverse("user-list"))
+        self.assertEqual(response.status_code, 200)
+        rows = response.json().get("results", response.json())
+        self.assertEqual({r["role"] for r in rows} - {"collector"}, {"supervisor"})
+        self.assertNotIn(self.admin.id, {r["id"] for r in rows})
 
     def test_an_anonymous_caller_is_refused(self):
         self.client.force_authenticate(None)
         self.assertIn(self.client.get(reverse("user-list")).status_code, (401, 403))
 
-    def test_a_supervisor_cannot_create_one(self):
+    def test_a_supervisor_cannot_create_a_supervisor(self):
         self.client.force_authenticate(self.supervisor)
-        self.assertEqual(self.create().status_code, 403)
+        response = self.create()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("role", response.json()["fields"])
+
+    def test_a_supervisor_adds_a_collector_only_inside_their_wards(self):
+        sup = User.objects.create_user(
+            phone="01700000066", name="Ward Sup", role=Role.SUPERVISOR.value, password="x",
+            scope_kind=ScopeKind.WARD,
+        )
+        sup.scope_wards.set([self.ward])
+        self.client.force_authenticate(sup)
+        body = dict(role=Role.COLLECTOR.value, scopeKind=ScopeKind.WARD)
+        self.assertEqual(self.create(scopeWards=[self.other_ward.id], **body).status_code, 400)
+        self.assertEqual(self.create(scopeKind=ScopeKind.CITY, role=Role.COLLECTOR.value).status_code, 400)
+        response = self.create(scopeWards=[self.ward.id], **body)
+        self.assertEqual(response.status_code, 201, response.json())
+        # And they see that collector afterwards, but not one of another ward.
+        other = User.objects.create_user(
+            phone="01700000067", name="Elsewhere", role=Role.COLLECTOR.value, password="x",
+            scope_kind=ScopeKind.WARD,
+        )
+        other.scope_wards.set([self.other_ward])
+        rows = self.client.get(reverse("user-list")).json()
+        ids = {r["id"] for r in rows.get("results", rows)}
+        self.assertIn(response.json()["id"], ids)
+        self.assertNotIn(other.id, ids)
 
 
 class CreateTests(UserAdminFixture):
@@ -351,3 +380,185 @@ class AgencyScopeTests(UserAdminFixture):
         self.client.force_authenticate(self.bound)
         response = self.create(agency=self.agency.id)
         self.assertEqual(response.status_code, 201, response.data)
+
+
+class AgencyAreaTests(UserAdminFixture):
+    """An agency user's area must be inside the cities their agency works in."""
+
+    def setUp(self):
+        super().setUp()
+        from swms.catalog.models import City
+
+        self.kcc = City.objects.create(id="KCC", name="Khulna City Corporation", district="Khulna")
+        self.pps = City.objects.create(id="PPS", name="Phultala Pourashova", district="Khulna")
+        Zone.objects.filter(pk="Z-03").update(city=self.kcc)
+        self.pzone = Zone.objects.create(id="Z-90", name="Phultala", city=self.pps)
+        self.pward = Ward.objects.create(id="P-01", name="1", zone=self.pzone)
+        self.agency.cities.set([self.pps])
+
+    def test_a_city_scope_outside_the_agency_is_refused(self):
+        response = self.create(role=Role.AGENCY_ADMIN.value, agency=self.agency.id, city="KCC")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("city", response.json()["fields"])
+
+    def test_the_agencys_own_city_is_accepted(self):
+        response = self.create(role=Role.AGENCY_ADMIN.value, agency=self.agency.id, city="PPS")
+        self.assertEqual(response.status_code, 201, response.json())
+
+    def test_the_agency_scope_is_accepted(self):
+        response = self.create(role=Role.AGENCY_ADMIN.value, agency=self.agency.id,
+                               scopeKind=ScopeKind.AGENCY)
+        self.assertEqual(response.status_code, 201, response.json())
+
+    def test_wards_outside_the_agency_are_refused(self):
+        response = self.create(agency=self.agency.id, scopeKind=ScopeKind.WARD,
+                               scopeWards=[self.pward.id, self.ward.id])
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("W-14", str(response.json()))
+
+    def test_a_zone_outside_the_agency_is_refused(self):
+        response = self.create(agency=self.agency.id, scopeKind=ScopeKind.ZONE, scopeZone="Z-03")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("scopeZone", response.json()["fields"])
+
+    def test_renaming_an_older_mismatched_account_is_not_blocked(self):
+        user = User.objects.create_user(
+            phone="01700000077", name="Old", role=Role.AGENCY_ADMIN.value, password="x",
+            scope_kind=ScopeKind.CITY, city=self.kcc, agency=self.agency,
+        )
+        response = self.client.patch(reverse("user-detail", args=[user.id]), {"name": "Renamed"},
+                                     format="json")
+        self.assertEqual(response.status_code, 200, response.json())
+
+
+class AgencyAdminReachTests(UserAdminFixture):
+    """An agency admin adds and manages collectors and supervisors only."""
+
+    def setUp(self):
+        super().setUp()
+        self.boss = User.objects.create_user(
+            phone="01700000088", name="Boss", role=Role.AGENCY_ADMIN.value, password="x",
+            scope_kind=ScopeKind.AGENCY, agency=self.agency,
+        )
+        self.client.force_authenticate(self.boss)
+
+    def test_a_collector_or_supervisor_can_be_added(self):
+        self.assertEqual(self.create(role=Role.SUPERVISOR.value, scopeKind=ScopeKind.AGENCY).status_code, 201)
+        response = self.create(phone="01911000112", role=Role.COLLECTOR.value,
+                               scopeKind=ScopeKind.WARD, scopeWards=[self.ward.id])
+        self.assertEqual(response.status_code, 201, response.json())
+
+    def test_no_other_role_can_be_added(self):
+        for role in (Role.AGENCY_ADMIN, Role.KCC_VIEWER, Role.SUPER_ADMIN):
+            response = self.create(role=role.value, scopeKind=ScopeKind.AGENCY)
+            self.assertEqual(response.status_code, 400, role)
+            self.assertIn("role", response.json()["fields"])
+
+    def test_another_agency_admin_cannot_be_edited(self):
+        other = User.objects.create_user(
+            phone="01700000089", name="Peer", role=Role.AGENCY_ADMIN.value, password="x",
+            scope_kind=ScopeKind.AGENCY, agency=self.agency,
+        )
+        response = self.client.patch(reverse("user-detail", args=[other.id]), {"name": "X"},
+                                     format="json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_a_supervisor_cannot_be_promoted(self):
+        sup = User.objects.create_user(
+            phone="01700000090", name="Sup", role=Role.SUPERVISOR.value, password="x",
+            scope_kind=ScopeKind.AGENCY, agency=self.agency,
+        )
+        response = self.client.patch(reverse("user-detail", args=[sup.id]),
+                                     {"role": Role.AGENCY_ADMIN.value}, format="json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_their_own_contact_details_are_still_theirs(self):
+        response = self.client.patch(reverse("user-detail", args=[self.boss.id]),
+                                     {"email": "boss@example.com"}, format="json")
+        self.assertEqual(response.status_code, 200, response.json())
+
+
+class AgencyWideAreaTests(UserAdminFixture):
+    """Collector, supervisor and agency admin are held to an area the same
+    way: an agency-wide account sees only its agency's cities' wards."""
+
+    def test_an_agency_wide_account_sees_only_its_agencys_wards(self):
+        from swms.catalog.models import City
+
+        kcc = City.objects.create(id="KCC", name="Khulna City Corporation", district="Khulna")
+        far = City.objects.create(id="JPS", name="Jashore Pourashova", district="Jashore")
+        Zone.objects.filter(pk="Z-03").update(city=kcc)
+        Ward.objects.create(id="J-01", name="1", zone=Zone.objects.create(id="Z-J", name="J", city=far))
+        self.agency.cities.set([kcc])
+        for i, role in enumerate((Role.AGENCY_ADMIN, Role.SUPERVISOR, Role.COLLECTOR)):
+            user = User.objects.create_user(
+                phone=f"0171234560{i}", name=role.value, role=role.value,
+                password="x", scope_kind=ScopeKind.AGENCY, agency=self.agency,
+            )
+            self.assertCountEqual(user.visible_ward_ids(), ["W-14", "W-21"], role)
+
+    def test_kcc_staff_and_an_agency_with_no_city_stay_unrestricted(self):
+        self.assertIsNone(self.supervisor.visible_ward_ids())
+        user = User.objects.create_user(
+            phone="01700000099", name="No City", role=Role.SUPERVISOR.value, password="x",
+            scope_kind=ScopeKind.AGENCY, agency=self.rival,
+        )
+        self.assertIsNone(user.visible_ward_ids())
+
+
+class CityViewerTests(UserAdminFixture):
+    """The City Viewer: no money, their own city, and only the super admin's."""
+
+    def setUp(self):
+        super().setUp()
+        from swms.catalog.models import City
+
+        self.kcc = City.objects.create(id="KCC", name="Khulna City Corporation", district="Khulna")
+        Zone.objects.filter(pk="Z-03").update(city=self.kcc)
+        self.viewer = User.objects.create_user(
+            phone="01700000055", name="Viewer", role=Role.KCC_VIEWER.value, password="x",
+            scope_kind=ScopeKind.CITY, city=self.kcc,
+        )
+
+    def test_financial_reports_and_billing_are_refused(self):
+        self.client.force_authenticate(self.viewer)
+        for url in ("/api/reports/bill-collection/", "/api/reports/customer-bill-status/",
+                    "/api/reports/reconciliation/", "/api/bills/", "/api/payments/"):
+            self.assertEqual(self.client.get(url).status_code, 403, url)
+
+    def test_service_reports_carry_no_money(self):
+        self.client.force_authenticate(self.viewer)
+        kpis = self.client.get("/api/reports/kpis/", {"period": "2026-11"}).json()
+        self.assertIn("coverage", kpis)
+        for key in ("billed", "received", "chargeRate"):
+            self.assertNotIn(key, kpis)
+        rows = self.client.get("/api/reports/service-series/", {"days": 3}).json()["rows"]
+        self.assertTrue(rows)
+        self.assertNotIn("billed", rows[0])
+
+    def test_a_viewer_given_a_city_sees_that_city_only(self):
+        self.assertCountEqual(self.viewer.visible_ward_ids(), ["W-14", "W-21"])
+
+    def test_the_city_dashboard_is_the_viewers_and_super_admins_only(self):
+        self.client.force_authenticate(self.supervisor)
+        self.assertEqual(self.client.get("/api/reports/city-collection/").status_code, 403)
+        self.client.force_authenticate(self.viewer)
+        self.assertEqual(self.client.get("/api/reports/city-collection/").status_code, 200)
+
+    def test_only_a_super_admin_sees_or_makes_viewer_accounts(self):
+        boss = User.objects.create_user(
+            phone="01700000056", name="Boss", role=Role.AGENCY_ADMIN.value, password="x",
+            scope_kind=ScopeKind.AGENCY, agency=self.agency,
+        )
+        self.client.force_authenticate(boss)
+        rows = self.client.get(reverse("user-list")).json()
+        self.assertNotIn(self.viewer.id, {r["id"] for r in rows.get("results", rows)})
+        self.assertEqual(self.create(role=Role.KCC_VIEWER.value).status_code, 400)
+
+        self.client.force_authenticate(self.admin)
+        response = self.create(role=Role.KCC_VIEWER.value, scopeKind=ScopeKind.WARD, city="KCC")
+        self.assertEqual(response.status_code, 201, response.json())
+        made = User.objects.get(pk=response.json()["id"])
+        self.assertEqual(made.scope_kind, ScopeKind.CITY)
+        self.assertEqual(made.city_id, "KCC")
+        self.assertIsNone(made.agency_id)

@@ -68,7 +68,12 @@ def assign_driver(van: Van, collector) -> Van:
             driver=None, updated_at=timezone.now()
         )
     van.driver = collector
-    van.save(update_fields=["driver", "updated_at"])
+    fields = ["driver", "updated_at"]
+    # The van follows its collector: their agency now holds it.
+    if collector is not None and collector.agency_id and van.agency_id != collector.agency_id:
+        van.agency_id = collector.agency_id
+        fields.append("agency")
+    van.save(update_fields=fields)
     return van
 
 

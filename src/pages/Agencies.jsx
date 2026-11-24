@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { PageHeader, StatCard, EmptyState } from '../components/ui.jsx'
 import { Modal, Field, FormRow, FormSection, ModalActions } from '../components/Modal.jsx'
 import { ExportMenu } from '../components/ExportMenu.jsx'
+import { SearchSelect } from '../components/SearchSelect.jsx'
+import { sortWards } from './Holdings.jsx'
 import { agencies as api, remittances as remitApi } from '../api/endpoints.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useData } from '../context/DataContext.jsx'
@@ -14,14 +17,34 @@ const STATUS_TONES = { active: 'ok', suspended: 'warn', expired: 'muted', termin
 const THIS_PERIOD = new Date().toISOString().slice(0, 7)
 
 export default function Agencies() {
-  const { t, n, taka, optLabel: typeLabel } = useLang()
+  const { t, n, taka, lang, localName, optLabel: typeLabel } = useLang()
   const { canWrite } = useAuth()
-  const { wards, paymentModes, optLabel, agencyTypes } = useData()
+  const { wards, paymentModes, optLabel, agencyTypes, cities = [], districts = [] } = useData()
+
+  // An agency's District and its City Corporations / Pourashovas (all in that
+  // one district), for the list and the export.
+  const geoOf = useMemo(() => {
+    const cityById = new Map(cities.map((c) => [c.id, c]))
+    const districtByName = new Map(districts.map((d) => [d.name, d]))
+    return (r) => {
+      const ids = r.cities?.length ? r.cities : r.city ? [r.city] : []
+      const list = ids.map((id) => cityById.get(id) || { id, name: id })
+      const name = list.find((c) => c.district)?.district || ''
+      const d = districtByName.get(name)
+      return {
+        district: d ? (lang === 'bn' && d.nameBn ? d.nameBn : d.name) : name,
+        city: list.map((c) => localName(c)).join(', '),
+      }
+    }
+  }, [cities, districts, lang, localName])
 
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [query, setQuery] = useState('')
+  // The top-bar search lands here as /app/agencies?q=….
+  const searchParam = useSearchParams()[0].get('q') || ''
+  const [query, setQuery] = useState(searchParam)
+  useEffect(() => { if (searchParam) setQuery(searchParam) }, [searchParam])
   const [status, setStatus] = useState('')
   const [editing, setEditing] = useState(null)     // agency row, or {} for new
   const [expanded, setExpanded] = useState(null)   // agency id whose staff are shown
@@ -68,6 +91,8 @@ export default function Agencies() {
     { key: 'shortCode', label: t('agencies.col.code') },
     { key: 'name', label: t('agencies.col.name') },
     { key: 'agencyType', label: t('agencies.col.type'), get: (r) => typeLabel(agencyTypes, r.agencyType) },
+    { key: 'district', label: t('holdings.district'), get: (r) => geoOf(r).district },
+    { key: 'cities', label: t('agencies.city'), get: (r) => geoOf(r).city },
     { key: 'contactPerson', label: t('agencies.col.contact') },
     { key: 'phone', label: t('agencies.col.phone') },
     { key: 'collectorCount', label: t('agencies.col.collectors') },
@@ -133,6 +158,8 @@ export default function Agencies() {
                 <th>{t('agencies.col.id')}</th>
                 <th>{t('agencies.col.name')}</th>
                 <th>{t('agencies.col.type')}</th>
+                <th>{t('holdings.district')}</th>
+                <th>{t('agencies.city')}</th>
                 <th>{t('agencies.col.contact')}</th>
                 <th>{t('agencies.col.collectors')}</th>
                 <th>{t('agencies.col.holdings')}</th>
@@ -151,6 +178,7 @@ export default function Agencies() {
                   onToggle={() => openStaff(row.id)}
                   onEdit={canWrite ? () => setEditing(row) : null}
                   onRemit={canWrite ? () => setRemitting(row) : null}
+                  geo={geoOf(row)}
                   t={t}
                   n={n}
                 />
@@ -185,7 +213,7 @@ export default function Agencies() {
   )
 }
 
-function AgencyRow({ row, open, staff, onToggle, onEdit, onRemit, t, n }) {
+function AgencyRow({ row, open, staff, onToggle, onEdit, onRemit, geo, t, n }) {
   const { optLabel: typeLabel, localName } = useLang()
   const { agencyTypes } = useData()
   return (
@@ -197,6 +225,8 @@ function AgencyRow({ row, open, staff, onToggle, onEdit, onRemit, t, n }) {
           <div className="tiny muted-3 mono" style={{ fontWeight: 500 }}>{row.shortCode}</div>
         </td>
         <td className="small">{typeLabel(agencyTypes, row.agencyType)}</td>
+        <td className="small">{geo.district || <span className="muted-3">—</span>}</td>
+        <td className="small">{geo.city || <span className="muted-3">—</span>}</td>
         <td>
           <div>{row.contactPerson || '—'}</div>
           {row.phone && <div className="tiny muted-3 mono">{row.phone}</div>}
@@ -231,7 +261,7 @@ function AgencyRow({ row, open, staff, onToggle, onEdit, onRemit, t, n }) {
       </tr>
       {open && (
         <tr>
-          <td colSpan={9} style={{ background: 'var(--surface-2)' }}>
+          <td colSpan={11} style={{ background: 'var(--surface-2)' }}>
             {!staff && <span className="tiny muted-3">{t('common.loading')}</span>}
             {staff && staff.length === 0 && (
               <span className="tiny muted-3">{t('agencies.noCollectors')}</span>
@@ -254,12 +284,16 @@ function AgencyRow({ row, open, staff, onToggle, onEdit, onRemit, t, n }) {
 }
 
 function AgencyForm({ agency, wards, onClose, onSaved }) {
-  const { t, optLabel: typeLabel, localName } = useLang()
+  const { t, lang, optLabel: typeLabel, localName } = useLang()
   // From setup (/api/agency-types/), so a type added there appears here.
-  const { agencyTypes, cities, zones } = useData()
+  const { agencyTypes, cities, zones, districts = [] } = useData()
   const isNew = !agency?.id
   const [form, setForm] = useState({
-    city: agency?.city || (cities.length === 1 ? cities[0].id : ''),
+    // Every city corporation / pourashova served; a row saved before there
+    // could be several has its one `city`.
+    cities: agency?.cities?.length ? agency.cities
+      : agency?.city ? [agency.city]
+        : cities.length === 1 ? [cities[0].id] : [],
     name: agency?.name || '',
     nameBn: agency?.nameBn || '',
     shortCode: agency?.shortCode || '',
@@ -275,6 +309,7 @@ function AgencyForm({ agency, wards, onClose, onSaved }) {
     contractNo: agency?.contractNo || '',
     contractStart: agency?.contractStart || '',
     contractEnd: agency?.contractEnd || '',
+    targetHoldings: agency?.targetHoldings ?? '',
     serviceWards: agency?.serviceWards || [],
     status: agency?.status || 'active',
     notes: agency?.notes || '',
@@ -284,19 +319,40 @@ function AgencyForm({ agency, wards, onClose, onSaved }) {
 
   const set = (k) => (e) => { setForm((f) => ({ ...f, [k]: e.target.value })); setError('') }
 
-  // An agency only serves wards of its own city; the server refuses the rest.
+  // District -> City Corporation / Pourashova (several, one district) -> wards,
+  // as on the Holding Master. The district is not saved: it is the cities'.
+  // An agency only serves wards of its own cities; the server refuses the rest.
+  const cityById = useMemo(() => new Map(cities.map((c) => [c.id, c])), [cities])
   const cityOfZone = useMemo(() => new Map((zones || []).map((z) => [z.id, z.city])), [zones])
-  const cityWards = (wards || []).filter((w) => !form.city || cityOfZone.get(w.zone) === form.city)
-  const setCity = (e) => {
-    const city = e.target.value
-    setForm((f) => ({
-      ...f,
-      city,
-      serviceWards: f.serviceWards.filter((id) => {
-        const ward = (wards || []).find((w) => w.id === id)
-        return !city || (ward && cityOfZone.get(ward.zone) === city)
-      }),
-    }))
+  const wardCity = (w) => w.city || cityOfZone.get(w.zone)
+  const [district, setDistrict] = useState(() => cityById.get(form.cities[0])?.district || '')
+  // Nothing is listed until a district is chosen.
+  const cityChoices = cities
+    .filter((c) => district && c.district === district)
+    .sort((a, b) => String(localName(a)).localeCompare(String(localName(b))))
+  // Grouped by city, each city's wards in number order.
+  const wardGroups = form.cities.map((id) => ({
+    city: cityById.get(id) || { id, name: id },
+    wards: sortWards((wards || []).filter((w) => wardCity(w) === id), () => ''),
+  }))
+  const geoLabel = (row) => (lang === 'bn' && row.nameBn ? row.nameBn : row.name)
+
+  // Keeps only the given cities, and the wards that are in them.
+  const keepCities = (f, next) => ({
+    ...f,
+    cities: next,
+    serviceWards: f.serviceWards.filter((id) => {
+      const ward = (wards || []).find((w) => w.id === id)
+      return ward && next.includes(wardCity(ward))
+    }),
+  })
+  function toggleCity(id) {
+    setForm((f) => keepCities(f, f.cities.includes(id) ? f.cities.filter((c) => c !== id) : [...f.cities, id]))
+    setError('')
+  }
+  function chooseDistrict(value) {
+    setDistrict(value)
+    setForm((f) => keepCities(f, value ? f.cities.filter((id) => cityById.get(id)?.district === value) : []))
     setError('')
   }
 
@@ -314,12 +370,16 @@ function AgencyForm({ agency, wards, onClose, onSaved }) {
     if (busy) return
     if (!form.name.trim()) { setError(t('agencies.nameRequired')); return }
     if (!form.shortCode.trim()) { setError(t('agencies.codeRequired')); return }
+    if (!district) { setError(t('agencies.districtRequired')); return }
+    if (form.cities.length === 0) { setError(t('agencies.cityRequired')); return }
 
     const body = {
       ...form,
-      city: form.city || null,
+      status: isNew ? 'active' : form.status,
+      cities: form.cities,
       contractStart: form.contractStart || null,
       contractEnd: form.contractEnd || null,
+      targetHoldings: form.targetHoldings === '' ? null : Number(form.targetHoldings),
     }
     setBusy(true)
     try {
@@ -329,7 +389,7 @@ function AgencyForm({ agency, wards, onClose, onSaved }) {
     } catch (err) {
       // The short code is unique server-side; surface what it says rather than
       // guessing, so a clash reads as a clash.
-      setError(err?.fieldError?.('shortCode') || err?.fieldError?.('serviceWards') || err?.detail || t('common.requestFailed'))
+      setError(err?.fieldError?.('shortCode') || err?.fieldError?.('cities') || err?.fieldError?.('serviceWards') || err?.detail || t('common.requestFailed'))
     } finally {
       setBusy(false)
     }
@@ -354,14 +414,75 @@ function AgencyForm({ agency, wards, onClose, onSaved }) {
           <FormRow>
             <Field half as="select" label={t('agencies.col.type')} value={form.agencyType} onChange={set('agencyType')} disabled={busy}
               options={agencyTypes.map((v) => ({ value: v.id, label: typeLabel(agencyTypes, v.id) }))} />
-            <Field half as="select" label={t('agencies.col.status')} value={form.status} onChange={set('status')} disabled={busy}
-              options={['active', 'suspended', 'expired', 'terminated'].map((v) => ({ value: v, label: t(`opt.agencyStatus.${v}`) }))} />
+            {/* A new agency starts active; it is deactivated later, on edit. */}
+            {!isNew && (
+              <Field half as="select" label={t('agencies.col.status')} value={form.status} onChange={set('status')} disabled={busy}
+                options={['active', 'suspended', 'expired', 'terminated'].map((v) => ({ value: v, label: t(`opt.agencyStatus.${v}`) }))} />
+            )}
           </FormRow>
           <FormRow>
-            <Field half as="select" label={t('agencies.city')} value={form.city} onChange={setCity} disabled={busy}
-              hint={t('agencies.cityHint')}
-              options={[{ value: '', label: '—' }, ...cities.map((c) => ({ value: c.id, label: localName(c) }))]} />
+            <SearchSelect size="md" label={`${t('holdings.district')} *`} value={district}
+              invalid={!!error && !district}
+              onChange={chooseDistrict} disabled={busy}
+              placeholder={t('common.typeToSearch')} emptyText={t('common.noMatch')}
+              options={districts.map((d) => ({ value: d.name, label: geoLabel(d), keywords: [d.name, d.nameBn] }))} />
           </FormRow>
+          <div className="field">
+            <label>{t('agencies.city')} *</label>
+            {form.cities.length > 0 && (
+              <div className="ward-chips">
+                {form.cities.map((id) => (
+                  <span key={id} className="ward-chip">
+                    {cityById.get(id) ? localName(cityById.get(id)) : id}
+                    {!busy && (
+                      <button type="button" aria-label={t('agencies.removeCity')} onClick={() => toggleCity(id)}>×</button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+            {!district ? (
+              <span className="tiny muted">{t('agencies.pickDistrictFirst')}</span>
+            ) : cityChoices.length === 0 ? (
+              <span className="tiny muted">{t('holdings.noCityInDistrict')}</span>
+            ) : (
+              <div className="check-grid">
+                {cityChoices.map((c) => (
+                  <label key={c.id} className="check">
+                    <input type="checkbox" disabled={busy}
+                      checked={form.cities.includes(c.id)} onChange={() => toggleCity(c.id)} />
+                    <span>{localName(c)}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="tiny muted-3 mt-4">{t('agencies.cityHint')}</div>
+          </div>
+          <div className="field">
+            <label>{t('agencies.serviceWards')}</label>
+            {form.cities.length === 0 && <span className="tiny muted">{t('agencies.pickCityFirst')}</span>}
+            {wardGroups.map(({ city, wards: list }) => (
+              <div key={city.id} className="agency-ward-group">
+                {form.cities.length > 1 && <div className="tiny muted-3">{localName(city)}</div>}
+                <div className="row gap-8 wrap">
+                  {list.length === 0 && <span className="tiny muted">{t('holdings.noWardInCity')}</span>}
+                  {list.map((w) => (
+                    <button
+                      key={w.id} type="button" disabled={busy}
+                      className={`btn btn-sm ${form.serviceWards.includes(w.id) ? 'btn-primary' : 'btn-ghost'}`}
+                      onClick={() => toggleWard(w.id)}
+                    >
+                      {localName(w)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {form.cities.length > 0 && form.serviceWards.length === 0 && (
+              <div className="tiny mt-4">{t('agencies.allWards')}</div>
+            )}
+            <div className="tiny muted-3 mt-4">{t('agencies.serviceWardsHint')}</div>
+          </div>
         </FormSection>
 
         <FormSection title={t('agencies.group.registration')}>
@@ -390,21 +511,11 @@ function AgencyForm({ agency, wards, onClose, onSaved }) {
             <Field third type="date" label={t('agencies.contractStart')} value={form.contractStart || ''} onChange={set('contractStart')} disabled={busy} />
             <Field third type="date" label={t('agencies.col.contractEnd')} value={form.contractEnd || ''} onChange={set('contractEnd')} disabled={busy} />
           </FormRow>
-          <div className="field">
-            <label>{t('agencies.serviceWards')}</label>
-            <div className="row gap-8 wrap">
-              {cityWards.map((w) => (
-                <button
-                  key={w.id} type="button" disabled={busy}
-                  className={`btn btn-sm ${form.serviceWards.includes(w.id) ? 'btn-primary' : 'btn-ghost'}`}
-                  onClick={() => toggleWard(w.id)}
-                >
-                  {w.name}
-                </button>
-              ))}
-            </div>
-            <div className="tiny muted-3 mt-4">{t('agencies.serviceWardsHint')}</div>
-          </div>
+          {/* Read by the City Corporation's target-vs-actual report. */}
+          <FormRow>
+            <Field half type="number" min="0" label={t('agencies.targetHoldings')} value={form.targetHoldings}
+              onChange={set('targetHoldings')} disabled={busy} hint={t('agencies.targetHoldingsHint')} />
+          </FormRow>
           <Field as="textarea" label={t('agencies.notes')} value={form.notes} onChange={set('notes')} disabled={busy} rows={2} />
         </FormSection>
 

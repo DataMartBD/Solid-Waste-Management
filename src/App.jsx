@@ -4,7 +4,9 @@ import { canAccess, homeFor } from './access.js'
 import Layout from './components/Layout.jsx'
 import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
-import CityDashboard from './pages/CityDashboard.jsx'
+import Oversight from './pages/Oversight.jsx'
+import OperationsReports from './pages/OperationsReports.jsx'
+import FinanceReports from './pages/FinanceReports.jsx'
 import Setup from './pages/Setup.jsx'
 import LiveMap from './pages/LiveMap.jsx'
 import Agencies from './pages/Agencies.jsx'
@@ -19,8 +21,6 @@ import Complaints from './pages/Complaints.jsx'
 import Billing from './pages/Billing.jsx'
 import Fleet from './pages/Fleet.jsx'
 import Collectors from './pages/Collectors.jsx'
-import Reports from './pages/Reports.jsx'
-import ReportsCustomer from './pages/ReportsCustomer.jsx'
 import Collection from './pages/Collection.jsx'
 import RoutePlan from './pages/RoutePlan.jsx'
 import Profile from './pages/Profile.jsx'
@@ -69,7 +69,13 @@ export default function App() {
       <Route path="/app" element={<Protected><Layout /></Protected>}>
         <Route index element={<Navigate to={homeFor(user)} replace />} />
         <Route path="dashboard" element={gated(<Dashboard />)} />
-        <Route path="city" element={gated(<CityDashboard />)} />
+        {/* City Collection is now the Collection tab of the City Dashboard; /app/oversight was its old address. */}
+        <Route path="city" element={<Navigate to="/app/city-dashboard?tab=collection" replace />} />
+        <Route path="city-dashboard" element={gated(<Oversight />)} />
+        <Route path="operations-reports" element={gated(<OperationsReports />)} />
+        <Route path="finance-reports" element={gated(<FinanceReports />)} />
+        <Route path="agency-reports" element={<Navigate to="/app/operations-reports" replace />} />
+        <Route path="oversight" element={<Navigate to="/app/city-dashboard" replace />} />
         <Route path="live" element={gated(<LiveMap />)} />
         <Route path="holdings" element={gated(<Holdings />)} />
         <Route path="holdings/new" element={gated(<HoldingEditor />)} />
@@ -87,8 +93,9 @@ export default function App() {
         <Route path="agencies" element={gated(<Agencies />)} />
         <Route path="users" element={gated(<Users />)} />
         <Route path="setup" element={gated(<Setup />)} />
-        <Route path="reports" element={gated(<Reports />)} />
-        <Route path="reports-customer" element={gated(<ReportsCustomer />)} />
+        <Route path="reports" element={<Navigate to="/app/operations-reports" replace />} />
+        {/* The three old report pages are now Operations Reports and Finance Reports. */}
+        <Route path="reports-customer" element={<Navigate to="/app/finance-reports" replace />} />
         <Route path="profile" element={<Profile />} />
       </Route>
       <Route path="*" element={<Navigate to={user ? homeFor(user) : '/'} replace />} />

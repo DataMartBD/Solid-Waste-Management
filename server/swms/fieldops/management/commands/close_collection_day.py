@@ -9,6 +9,9 @@ Meant for cron, every 15 minutes:
 
     */15 * * * *  cd /srv/swms/server && .venv/bin/python manage.py close_collection_day
 
+Every run also resets collector attendance for the new day (see
+`reset_daily_attendance`): a check-in from an earlier day becomes "Absent".
+
 Without `--date` each city closes yesterday (in case the server was down at
 its cut-off) and, once the clock has passed today's cut-off, today. Re-running
 is safe: households that already have a visit for the day are left alone.
@@ -23,6 +26,7 @@ from django.utils import timezone
 
 from swms.catalog.models import City
 from swms.fieldops.collection_day import close_day, is_closed
+from swms.fieldops.services import reset_daily_attendance
 
 
 class Command(BaseCommand):
@@ -49,6 +53,9 @@ class Command(BaseCommand):
 
         now = timezone.now()
         today = timezone.localdate()
+        reset = reset_daily_attendance(today=today, dry_run=dry_run)
+        if reset:
+            self.stdout.write(f"{reset} collector(s) reset to absent for {today}" + (" [dry run]" if dry_run else ""))
         for city in rows:
             if date:
                 if not is_closed(city, date, now):

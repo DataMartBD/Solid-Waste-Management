@@ -72,6 +72,29 @@ def first_option(model):
     return row
 
 
+
+def guard_agency_city(serializer, ward):
+    """An agency's staff work only where their agency works.
+
+    Covers the account not narrowed by ward (an agency-wide supervisor or
+    admin), which `guard_ward` lets through: a building, or a household in
+    one, outside the agency's cities is refused.
+    """
+    from swms.agencies.models import Agency
+    from swms.common.scoping import OUTSIDE, caller
+
+    user = caller(serializer)
+    mine = user.visible_agency_id() if user is not None else None
+    if ward is None or mine is None:
+        return
+    agency = Agency.objects.filter(pk=mine).first()
+    if agency is None:
+        return
+    cities = {c.id for c in agency.cities.all()} or ({agency.city_id} if agency.city_id else set())
+    if cities and ward.zone.city_id not in cities:
+        raise serializers.ValidationError(OUTSIDE)
+
+
 class RoadNameField(serializers.CharField):
     """Reads/writes a road as its name; the ward decides which row that is."""
 
@@ -340,7 +363,9 @@ class HoldingSerializer(SwmsModelSerializer):
         in rather than the way out.
         """
         guard_ward(self, ward.id if ward else None)
+        guard_agency_city(self, ward)
         return ward
+
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -775,6 +800,9 @@ class HoldingSerializerBase(SwmsModelSerializer):
         allowed = user.visible_ward_ids() if user and user.is_authenticated else None
         if allowed is not None and holding.ward_id not in allowed:
             raise serializers.ValidationError("That holding is outside your assigned area.")
+        # Another agency's building, or one outside the agency's cities.
+        guard_agency(self, holding.agency_id)
+        guard_agency_city(self, holding.ward)
         return holding
 
 

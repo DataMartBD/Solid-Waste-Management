@@ -471,3 +471,61 @@ class OfflineQueueTests(FieldOpsData):
         self.assertEqual([row["index"] for row in response.data["failed"]], [1, 2])
         visit = Visit.objects.get(holding=self.household.holding)
         self.assertTrue(visit.synced)
+
+
+class CollectorWardsApiTests(TestCase):
+    """A collector serves several wards of one city; `zone` is the home ward."""
+
+    def setUp(self):
+        from swms.catalog.models import City, Ward, Zone
+
+        kcc = City.objects.create(id="KCC", name="Khulna City Corporation")
+        jcc = City.objects.create(id="JPS", name="Jashore Pourashova")
+        z1 = Zone.objects.create(id="Z-1", name="Zone 1", city=kcc)
+        z9 = Zone.objects.create(id="Z-9", name="Zone 9", city=jcc)
+        self.w1 = Ward.objects.create(id="W-1", name="Ward 1", zone=z1)
+        self.w2 = Ward.objects.create(id="W-2", name="Ward 2", zone=z1)
+        self.j1 = Ward.objects.create(id="J-1", name="Ward 1", zone=z9)
+        admin = User.objects.create_user(
+            phone="01900445599", name="Admin", role=Role.SUPER_ADMIN, scope_kind=ScopeKind.CITY,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(admin)
+
+    def test_create_with_several_wards_sets_the_home_ward(self):
+        response = self.client.post(
+            reverse("collector-list"), {"name": "Rafiq", "wards": ["W-2", "W-1"]}, format="json"
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(response.json()["zone"], "W-2")
+        self.assertEqual(sorted(response.json()["wards"]), ["W-1", "W-2"])
+
+    def test_wards_of_two_cities_are_refused(self):
+        response = self.client.post(
+            reverse("collector-list"), {"name": "Rafiq", "wards": ["W-1", "J-1"]}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("wards", response.json()["fields"])
+
+    def test_at_least_one_ward_is_required(self):
+        response = self.client.post(
+            reverse("collector-list"), {"name": "Rafiq", "wards": []}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_old_clients_sending_only_zone_still_work(self):
+        response = self.client.post(
+            reverse("collector-list"), {"name": "Rafiq", "zone": "W-1"}, format="json"
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(response.json()["wards"], ["W-1"])
+
+    def test_dropping_the_home_ward_moves_it(self):
+        collector = Collector.objects.create(name="Rafiq", ward=self.w1)
+        collector.wards.set([self.w1, self.w2])
+        response = self.client.patch(
+            reverse("collector-detail", args=[collector.id]), {"wards": ["W-2"]}, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.json())
+        self.assertEqual(response.json()["zone"], "W-2")
+        self.assertEqual(response.json()["wards"], ["W-2"])

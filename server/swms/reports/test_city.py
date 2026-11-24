@@ -91,7 +91,8 @@ class CityReportTests(CollectionDayData):
         self.assertEqual(body["city"]["id"], "SCC")
         self.assertEqual([c["id"] for c in body["cities"]], ["KCC", "SCC"])
 
-    def test_a_ward_supervisor_cannot_open_another_city(self):
+    def test_a_supervisor_cannot_open_the_city_dashboard_at_all(self):
+        """The City Viewer's own screen, and the super admin's — no one else's."""
         user = User.objects.create_user(
             phone="01900445567", name="Sup", role=Role.SUPERVISOR, scope_kind=ScopeKind.WARD
         )
@@ -99,7 +100,7 @@ class CityReportTests(CollectionDayData):
         client = APIClient()
         client.force_authenticate(user)
         response = client.get(reverse("report-city-collection"), {"city": "SCC"})
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 403)
 
     def test_the_series_exports(self):
         client = self.client_for(role=Role.SUPER_ADMIN, scope_kind=ScopeKind.CITY)
@@ -130,5 +131,5 @@ class CityScopeTests(CollectionDayData):
         self.assertIsNone(user.visible_ward_ids())
 
     def test_the_viewer_lands_on_the_city_dashboard(self):
-        self.assertEqual(ROLE_HOME[Role.KCC_VIEWER], "/app/city")
+        self.assertEqual(ROLE_HOME[Role.KCC_VIEWER], "/app/city-dashboard")
         self.assertEqual(Role.KCC_VIEWER.label, "City Viewer")

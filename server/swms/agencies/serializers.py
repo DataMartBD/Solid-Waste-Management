@@ -34,8 +34,18 @@ class AgencySerializer(SwmsModelSerializer):
     contractNo = serializers.CharField(source="contract_no", required=False, allow_blank=True)
     contractStart = serializers.DateField(source="contract_start", required=False, allow_null=True)
     contractEnd = serializers.DateField(source="contract_end", required=False, allow_null=True)
+    #: The main city. Optional on write: it follows `cities` (the first one
+    #: sent, unless the current main city is still among them).
     city = serializers.PrimaryKeyRelatedField(
         queryset=City.objects.all(), allow_null=True, required=False
+    )
+    #: Every city corporation / pourashova served, all in one district.
+    cities = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=City.objects.all(), required=False
+    )
+    #: Holdings to serve each month, for the target-vs-actual report.
+    targetHoldings = serializers.IntegerField(
+        source="target_holdings", required=False, allow_null=True, min_value=0
     )
     serviceWards = serializers.PrimaryKeyRelatedField(
         source="service_wards", many=True, queryset=Ward.objects.all(), required=False
@@ -68,7 +78,9 @@ class AgencySerializer(SwmsModelSerializer):
             "contractStart",
             "contractEnd",
             "city",
+            "cities",
             "serviceWards",
+            "targetHoldings",
             "status",
             "active",
             "notes",
@@ -79,23 +91,70 @@ class AgencySerializer(SwmsModelSerializer):
         read_only_fields = ["id"]
 
     def validate(self, attrs):
-        """An agency may only be given wards in its own city."""
+        """Cities of one district; wards only in those cities.
+
+        A new agency must name its city corporation(s) / pourashova(s), and so
+        its district. Ticking no ward means every ward of those cities.
+        """
         attrs = super().validate(attrs)
         instance = self.instance
-        city = attrs["city"] if "city" in attrs else getattr(instance, "city", None)
+        new = instance is None
+
+        if "cities" in attrs:
+            cities = attrs["cities"]
+            if len({(c.district or "").strip().lower() for c in cities}) > 1:
+                raise serializers.ValidationError(
+                    {"cities": "All city corporations / pourashovas must be in one district."}
+                )
+            main = attrs.get("city") or getattr(instance, "city", None)
+            attrs["city"] = main if main in cities else (cities[0] if cities else None)
+        elif "city" in attrs:
+            # An older client that sends one city only: that city alone.
+            cities = [attrs["city"]] if attrs["city"] else []
+            attrs["cities"] = cities
+        elif instance is not None:
+            cities = list(instance.cities.all()) or ([instance.city] if instance.city else [])
+        else:
+            cities = []
+
+        if not cities and (new or "cities" in attrs or "city" in attrs):
+            raise serializers.ValidationError(
+                {"cities": "Choose the district and at least one city corporation / pourashova."}
+            )
+
+        if cities and (new or "service_wards" in attrs) and not attrs.get("service_wards"):
+            attrs["service_wards"] = list(
+                Ward.objects.filter(zone__city__in=cities).select_related("zone")
+            )
+
         if "service_wards" in attrs:
             wards = attrs["service_wards"]
-        elif instance is not None and "city" in attrs:
+        elif instance is not None and ("cities" in attrs or "city" in attrs):
             wards = list(instance.service_wards.select_related("zone"))
         else:
             wards = []
-        if city is not None:
-            foreign = sorted(w.id for w in wards if w.zone.city_id != city.id)
+        if cities:
+            allowed = {c.id for c in cities}
+            foreign = sorted(w.id for w in wards if w.zone.city_id not in allowed)
             if foreign:
+                names = ", ".join(c.name for c in cities)
                 raise serializers.ValidationError(
-                    {"serviceWards": f"Not in {city.name}: {', '.join(foreign)}"}
+                    {"serviceWards": f"Not in {names}: {', '.join(foreign)}"}
                 )
         return attrs
+
+    def create(self, validated_data):
+        cities = validated_data.pop("cities", None)
+        agency = super().create(validated_data)
+        agency.cities.set(cities if cities is not None else ([agency.city] if agency.city else []))
+        return agency
+
+    def update(self, instance, validated_data):
+        cities = validated_data.pop("cities", None)
+        agency = super().update(instance, validated_data)
+        if cities is not None:
+            agency.cities.set(cities)
+        return agency
 
     def get_collectorCount(self, obj) -> int:
         return obj.collectors.filter(active=True).count()
@@ -127,4 +186,9 @@ class TransferCollectorSerializer(serializers.Serializer):
 
     agency = serializers.PrimaryKeyRelatedField(queryset=Agency.objects.all())
     onDate = serializers.DateField(required=False, allow_null=True)
+
+    def validate_agency(self, agency):
+        if agency.status != "active":
+            raise serializers.ValidationError("This agency is not active.")
+        return agency
     note = serializers.CharField(required=False, allow_blank=True, max_length=200)

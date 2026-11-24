@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PageHeader, StatCard, EmptyState } from '../components/ui.jsx'
 import DataTable from '../components/DataTable.jsx'
 import { Modal, Field, FormRow, FormSection, ModalActions } from '../components/Modal.jsx'
@@ -12,8 +12,10 @@ import { useLang } from '../i18n/index.jsx'
 import VerifyLocationModal from '../components/VerifyLocationModal.jsx'
 import { QrPrintModal } from '../components/QrLabels.jsx'
 import {
-  IconHome, IconPlus, IconCheck, IconAlert, IconMap, IconClipboard, IconDownload, IconQr,
+  IconHome, IconPlus, IconCheck, IconAlert, IconMap, IconClipboard, IconDownload, IconQr, IconRoute,
 } from '../components/Icons.jsx'
+import { AddToRouteModal } from '../components/RouteAssign.jsx'
+import { canAccess } from '../access.js'
 
 // Derived server-side from the households on each holding, so it cannot go
 // stale the way a stored column would.
@@ -83,8 +85,16 @@ export default function Holdings() {
   const [importing, setImporting] = useState(false)
   // QR stickers to print: one holding, or every holding in the list.
   const [printing, setPrinting] = useState(null)
-  const { catalog } = useData()
+  const { catalog, routes: allRoutes = [] } = useData()
   const navigate = useNavigate()
+  // Putting holdings on a route from here: office roles only, as on Route Plan.
+  const canRoute = canAccess('/app/route-plan', user)
+  const [searchParams] = useSearchParams()
+  // '' every holding · 'on' on a route · 'none' on no route (Route Plan links here).
+  const [onRoute, setOnRoute] = useState(searchParams.get('route') === 'none' ? 'none' : '')
+  const [picked, setPicked] = useState(() => new Set())
+  const [routing, setRouting] = useState(false)
+  const routeName = useMemo(() => new Map(allRoutes.map((r) => [r.id, r.name])), [allRoutes])
 
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -161,6 +171,12 @@ export default function Holdings() {
 
   useEffect(() => { load() }, [load])
 
+  // The route filter is applied to what was loaded (the server filters city,
+  // ward and service); everything below reads `shown`.
+  const shown = useMemo(() => (
+    onRoute === 'none' ? rows.filter((r) => !r.routeId)
+      : onRoute === 'on' ? rows.filter((r) => r.routeId) : rows
+  ), [rows, onRoute])
   const stats = useMemo(() => {
     const total = rows.length
     const served = rows.filter((r) => r.serviceStatus !== 'none').length
@@ -191,7 +207,38 @@ export default function Holdings() {
     const w = wardsById.get(id)
     return wardNo(w) || w?.name || id
   }, [wardsById])
+  // A holding's City Corporation / Pourashova is its ward's city; its district
+  // is the one saved on it, or else that city's district.
+  const cityOf = useCallback((row) => citiesById.get(wardsById.get(row.ward)?.city), [wardsById, citiesById])
+  const cityText = useCallback((row) => {
+    const city = cityOf(row)
+    return city ? localName(city) : ''
+  }, [cityOf, localName])
+  const districtText = useCallback((row) => row.district || cityOf(row)?.district || '', [cityOf])
+  const togglePick = useCallback((id) => setPicked((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  }), [])
+  const pickColumn = canRoute ? [{
+    id: 'pick',
+    enableSorting: false,
+    meta: { width: 36, label: t('routeAssign.select') },
+    header: () => (
+      <input type="checkbox" aria-label={t('routeAssign.selectAll')}
+        checked={shown.length > 0 && shown.every((r) => picked.has(r.id))}
+        onChange={(e) => setPicked(e.target.checked ? new Set(shown.map((r) => r.id)) : new Set())} />
+    ),
+    cell: ({ row }) => (
+      <input type="checkbox" aria-label={t('routeAssign.selectOne', { holding: row.original.holdingNo })}
+        checked={picked.has(row.original.id)}
+        onClick={(e) => e.stopPropagation()}
+        onChange={() => togglePick(row.original.id)} />
+    ),
+  }] : []
   const columns = useMemo(() => [
+    ...pickColumn,
     {
       accessorKey: 'holdingNo',
       header: t('holdings.col.holdingNo'),
@@ -210,12 +257,12 @@ export default function Holdings() {
       // splitting them would push the register past the width it fits in. The
       // accessor is both names joined so the whole-table search finds a holding
       // by its thana, not only by its district, and sorting groups by district.
-      accessorFn: (row) => [row.district, row.thana].filter(Boolean).join(' '),
+      accessorFn: (row) => [districtText(row), row.thana].filter(Boolean).join(' '),
       header: t('holdings.col.district'),
-      cell: ({ row }) => (row.original.district
+      cell: ({ row }) => (districtText(row.original)
         ? (
           <>
-            <div>{row.original.district}</div>
+            <div>{districtText(row.original)}</div>
             {row.original.thana && <div className="tiny muted-3">{row.original.thana}</div>}
           </>
         )
@@ -227,6 +274,14 @@ export default function Holdings() {
       accessorKey: 'ward',
       header: t('holdings.col.ward'),
       cell: ({ row }) => wardText(row.original.ward),
+    },
+    {
+      id: 'route',
+      accessorFn: (row) => routeName.get(row.routeId) || '',
+      header: t('routeAssign.col'),
+      cell: ({ row }) => (row.original.routeId
+        ? (routeName.get(row.original.routeId) || row.original.routeId)
+        : <span className="muted-3">{t('routeAssign.noneShort')}</span>),
     },
     {
       accessorKey: 'road',
@@ -288,15 +343,6 @@ export default function Holdings() {
         : <span className="tiny muted">—</span>),
     },
     {
-      accessorKey: 'dues',
-      header: t('households.field.duesOutstanding'),
-      cell: ({ row }) => (
-        <span style={{ color: row.original.dues ? 'var(--danger-fg)' : undefined, fontWeight: row.original.dues ? 600 : 400 }}>
-          {taka(row.original.dues || 0)}
-        </span>
-      ),
-    },
-    {
       accessorKey: 'serviceStatus',
       header: t('holdings.col.service'),
       cell: ({ row }) => (
@@ -348,14 +394,16 @@ export default function Holdings() {
         </div>
       ),
     },
-  ], [t, n, taka, canWrite, navigate, wardText])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t, n, taka, canWrite, navigate, wardText, cityText, districtText, routeName, canRoute, picked, shown, togglePick])
 
   const exportColumns = [
     { key: 'id', label: t('holdings.col.id') },
     { key: 'holdingNo', label: t('holdings.col.holdingNo') },
     // Separate columns in an export, unlike on screen: a spreadsheet is filtered
     // and pivoted on one field at a time.
-    { key: 'district', label: t('holdings.col.district') },
+    { key: 'district', label: t('holdings.col.district'), get: (r) => districtText(r) },
+    { key: 'city', label: t('holdings.city'), get: (r) => cityText(r) },
     { key: 'thana', label: t('holdings.col.thana') },
     { key: 'road', label: t('holdings.col.road') },
     { key: 'lane', label: t('holdings.lane') },
@@ -440,13 +488,29 @@ export default function Holdings() {
           <option value="">{t('holdings.allWards')}</option>
           {sortedWards.map((w) => <option key={w.id} value={w.id}>{wardText(w.id)}</option>)}
         </select>
+        <select className="select" style={{ width: 'auto' }} value={onRoute} aria-label={t('routeAssign.filter')}
+          onChange={(e) => { setOnRoute(e.target.value); setPicked(new Set()) }}>
+          <option value="">{t('routeAssign.filterAll')}</option>
+          <option value="on">{t('routeAssign.filterOn')}</option>
+          <option value="none">{t('routeAssign.filterNone')}</option>
+        </select>
       </div>
+
+      {canRoute && picked.size > 0 && (
+        <div className="form-note info" style={{ marginBottom: 12 }}>
+          <span className="grow">{t('routeAssign.selected', { count: n(picked.size) })}</span>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => setRouting(true)}>
+            <IconRoute size={14} /> {t('routeAssign.addSelected')}
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPicked(new Set())}>{t('routeAssign.clear')}</button>
+        </div>
+      )}
 
       {error && <div className="app-banner error" role="alert">{error}</div>}
 
       <DataTable
         columns={columns}
-        data={rows}
+        data={shown}
         loading={loading}
         searchPlaceholder={t('holdings.searchPlaceholder')}
         empty={<EmptyState>{t('holdings.empty')}</EmptyState>}
@@ -454,6 +518,14 @@ export default function Holdings() {
         // it rather than expanding in place.
         onRowClick={(row) => navigate(`/app/holdings/${row.id}/households`)}
       />
+
+      {routing && (
+        <AddToRouteModal
+          holdings={rows.filter((r) => picked.has(r.id))}
+          onClose={() => setRouting(false)}
+          onDone={() => { setRouting(false); setPicked(new Set()); load() }}
+        />
+      )}
 
       {verifying && (
         <VerifyLocationModal

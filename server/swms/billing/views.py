@@ -18,10 +18,11 @@ from django.db.models import F, Q
 from django.utils import timezone
 from django_filters import rest_framework as filters
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from swms.common.exceptions import DomainError
-from swms.common.permissions import IsAgencyAdmin, IsSuperAdmin
+from swms.common.permissions import IsAgencyAdmin, IsSuperAdmin, SeesMoney, sees_money
 from swms.common.roles import ADMIN_WRITERS, OPERATIONAL_WRITERS, Role, SUPER_ADMINS
 from swms.common.views import SwmsModelViewSet
 
@@ -55,6 +56,15 @@ from .services import (
 #: collector at the door is the person the cash is handed to.
 PAYMENT_WRITERS = OPERATIONAL_WRITERS | {Role.COLLECTOR}
 
+
+
+class NoCityViewerMixin:
+    """Billing is not shown to the City Viewer — not even a read."""
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if not sees_money(request.user):
+            raise PermissionDenied(SeesMoney.message)
 
 class BillFilter(filters.FilterSet):
     """What the Billing page and the customer-collection report ask for."""
@@ -100,7 +110,7 @@ class BillFilter(filters.FilterSet):
         return queryset.filter(paid_total__gte=F("amount"))
 
 
-class BillViewSet(SwmsModelViewSet):
+class BillViewSet(NoCityViewerMixin, SwmsModelViewSet):
     """Monthly charges. Read widely, written only by a billing run or a payment."""
 
     serializer_class = BillSerializer
@@ -245,7 +255,7 @@ class PaymentFilter(filters.FilterSet):
         return queryset.filter(deposit__isnull=value)
 
 
-class PaymentViewSet(SwmsModelViewSet):
+class PaymentViewSet(NoCityViewerMixin, SwmsModelViewSet):
     """Money received. Immutable in practice: correct one by voiding it."""
 
     serializer_class = PaymentSerializer
@@ -298,7 +308,7 @@ class DepositFilter(filters.FilterSet):
         fields = ["period", "collector", "method"]
 
 
-class DepositViewSet(SwmsModelViewSet):
+class DepositViewSet(NoCityViewerMixin, SwmsModelViewSet):
     """Collector cash hand-ins, and the reconciliation they feed."""
 
     serializer_class = DepositSerializer
@@ -346,7 +356,7 @@ class DepositViewSet(SwmsModelViewSet):
         return Response(cash_position(period))
 
 
-class BillingRunViewSet(SwmsModelViewSet):
+class BillingRunViewSet(NoCityViewerMixin, SwmsModelViewSet):
     """The audit list of billing runs. Written by `POST /bills/generate/`."""
 
     serializer_class = BillingRunSerializer
@@ -382,7 +392,7 @@ class RemittanceFilter(filters.FilterSet):
         fields = ["agency", "period", "method"]
 
 
-class RemittanceViewSet(SwmsModelViewSet):
+class RemittanceViewSet(NoCityViewerMixin, SwmsModelViewSet):
     """Agency hand-overs to KCC, and the cash position they close out."""
 
     serializer_class = RemittanceSerializer

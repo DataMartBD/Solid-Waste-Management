@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from swms.catalog.models import Block, HoldingType, Road, Ward
+from swms.catalog.models import Block, City, HoldingType, Road, Ward
 from swms.common.scoping import guard, guard_ward
 from swms.customers.models import Holding
 from swms.fieldops.models import Collector
@@ -113,8 +113,8 @@ class AnswerSerializer(serializers.ModelSerializer):
     questionTextBn = serializers.CharField(source="question.text_bn", read_only=True)
     number = serializers.CharField(read_only=True)
     option = serializers.CharField(source="option.code", read_only=True, default=None)
-    label = serializers.CharField(source="option.label", read_only=True, default=None)
-    labelBn = serializers.CharField(source="option.label_bn", read_only=True, default=None)
+    label = serializers.SerializerMethodField()
+    labelBn = serializers.SerializerMethodField()
 
     class Meta:
         model = Answer
@@ -122,6 +122,28 @@ class AnswerSerializer(serializers.ModelSerializer):
             "question", "questionNumber", "questionText", "questionTextBn",
             "option", "label", "labelBn", "text", "number", "date",
         ]
+
+    # A city-sourced answer (the survey area) is stored as the city's code, as
+    # every sourced answer is; the reader is shown the city's name instead.
+    def _city(self, answer):
+        if answer.option_id or answer.question.options_source != OptionSource.CITY:
+            return None
+        cache = self.context.setdefault("_cities", {})
+        if answer.text not in cache:
+            cache[answer.text] = City.objects.filter(pk=answer.text).first()
+        return cache[answer.text]
+
+    def get_label(self, answer):
+        if answer.option_id:
+            return answer.option.label
+        city = self._city(answer)
+        return city.name if city else None
+
+    def get_labelBn(self, answer):
+        if answer.option_id:
+            return answer.option.label_bn
+        city = self._city(answer)
+        return (city.name_bn or None) if city else None
 
 
 class SurveyPhotoSerializer(serializers.ModelSerializer):
@@ -255,10 +277,30 @@ class RecordSurveySerializer(serializers.Serializer):
                 continue
             picked[question.options_source] = value[0] if isinstance(value, list) else value
 
+        # District -> survey area (city corporation / pourashova) -> ward, the
+        # same chain the holding register uses, so each must sit inside the one
+        # above it.
+        city_id = picked.get(OptionSource.CITY)
+        city = None
+        if city_id is not None:
+            city = City.objects.filter(pk=city_id).first()
+            if city is None:
+                raise serializers.ValidationError(
+                    f"No city corporation / pourashova '{city_id}'."
+                )
+            district = picked.get(OptionSource.DISTRICT)
+            if district and city.district and city.district != district:
+                raise serializers.ValidationError(
+                    f"'{city.name}' is not in {district} district."
+                )
+
         ward_id = picked.get(OptionSource.WARD)
         if ward_id is not None:
-            if not Ward.objects.filter(pk=ward_id).exists():
+            ward = Ward.objects.select_related("zone").filter(pk=ward_id).first()
+            if ward is None:
                 raise serializers.ValidationError(f"No ward '{ward_id}'.")
+            if city is not None and ward.zone.city_id != city.pk:
+                raise serializers.ValidationError(f"Ward '{ward.name}' is not in {city.name}.")
             guard_ward(self, ward_id)
 
         block_id = picked.get(OptionSource.BLOCK)

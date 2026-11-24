@@ -13,8 +13,12 @@ const fold = (text) => String(text || '').toLocaleLowerCase().normalize('NFC')
 
 export function SearchSelect({
   label, value, options, onChange, placeholder, disabled, hint, emptyText, half, size, mark, clearable = true,
+  // `id` lets a label outside the component point at the input; `invalid`
+  // marks a required answer left empty.
+  id: idProp, invalid = false,
 }) {
-  const id = useId()
+  const autoId = useId()
+  const id = idProp || autoId
   const listId = `${id}-list`
   const selected = options.find((o) => o.value === value) || null
   const [text, setText] = useState(selected?.label || '')
@@ -61,7 +65,7 @@ export function SearchSelect({
       <FieldLabel htmlFor={id} label={label} mark={mark} />
       <div className="search-select-box">
         <input
-          id={id} className="input" value={text} placeholder={placeholder} disabled={disabled}
+          id={id} className={`input${invalid ? ' invalid' : ''}`} value={text} placeholder={placeholder} disabled={disabled}
           role="combobox" aria-expanded={open} aria-controls={listId} aria-autocomplete="list"
           autoComplete="off"
           onFocus={(e) => { setOpen(true); setActive(0); e.target.select() }}

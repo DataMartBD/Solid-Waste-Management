@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
-import Users from './Users.jsx'
+import { MemoryRouter } from 'react-router-dom'
+import UsersPage from './Users.jsx'
+
+const Users = () => <MemoryRouter><UsersPage /></MemoryRouter>
 
 // The account register, which is the one page that can lock its own operator
 // out of the application. So what these pin is mostly the refusals: the fields
@@ -30,14 +33,18 @@ const ME = { id: 1, roleKey: 'agency_admin' }
 
 vi.mock('../context/AuthContext.jsx', () => ({ useAuth: () => ({ user: ME }) }))
 
+// Mutable so one test can give the catalog two cities; reset before each test.
+const BASE_CATALOG = {
+  wards: [{ id: 'W-14', name: 'Ward 14' }, { id: 'W-21', name: 'Ward 21' }],
+  zones: [{ id: 'Z-03', name: 'Sonadanga' }],
+  bloodGroups: ['A+', 'O−'],
+}
+let CATALOG = BASE_CATALOG
+
 vi.mock('../context/DataContext.jsx', () => ({
   useData: () => ({
-    catalog: {
-      wards: [{ id: 'W-14', name: 'Ward 14' }, { id: 'W-21', name: 'Ward 21' }],
-      zones: [{ id: 'Z-03', name: 'Sonadanga' }],
-      bloodGroups: ['A+', 'O−'],
-    },
-    agencies: [{ id: 'AGN-1', name: 'Premier Clean' }],
+    catalog: CATALOG,
+    agencies: [{ id: 'AGN-1', name: 'Premier Clean', cities: ['C-K'] }, { id: 'AGN-9', name: 'Old Contractor', status: 'terminated' }],
   }),
 }))
 
@@ -80,6 +87,7 @@ function rowFor(name) {
 describe('Users', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    CATALOG = BASE_CATALOG
     list.mockResolvedValue(ROWS)
     create.mockResolvedValue({ name: 'New Operator' })
     update.mockResolvedValue({ name: 'Rafiq Mia' })
@@ -91,6 +99,14 @@ describe('Users', () => {
     render(<Users />)
     expect(await screen.findByText('Farhana Haque')).toBeInTheDocument()
     expect(screen.getByText('Rafiq Mia')).toBeInTheDocument()
+  })
+
+  it('finds a user by mobile number in the search box', async () => {
+    render(<Users />)
+    await screen.findByText('Farhana Haque')
+    fireEvent.change(screen.getByPlaceholderText('users.searchPlaceholder'), { target: { value: '0171100' } })
+    expect(screen.getByText('Rafiq Mia')).toBeInTheDocument()
+    expect(screen.queryByText('Farhana Haque')).toBeNull()
   })
 
   it('marks an account nobody has ever used', async () => {
@@ -136,6 +152,108 @@ describe('Users', () => {
 
     await waitFor(() => expect(create).toHaveBeenCalled())
     expect(create.mock.calls[0][0].scopeWards).toEqual(['W-14'])
+  })
+
+  it('gives an agency admin only their agency’s district, city and agency', async () => {
+    CATALOG = {
+      ...BASE_CATALOG,
+      districts: [{ name: 'Khulna' }, { name: 'Jashore' }],
+      cities: [{ id: 'C-K', name: 'Khulna City', district: 'Khulna' }, { id: 'C-J', name: 'Jessore', district: 'Jashore' }],
+      zones: [{ id: 'Z-1', name: 'Zone 1', city: 'C-K' }, { id: 'Z-9', name: 'Zone 9', city: 'C-J' }],
+      wards: [
+        { id: 'K-2', name: 'Ward 2', zone: 'Z-1', city: 'C-K' },
+        { id: 'J-1', name: 'Jessore Ward 1', zone: 'Z-9', city: 'C-J' },
+      ],
+    }
+    ME.agency = 'AGN-1'
+    try {
+      render(<Users />)
+      fireEvent.click(await screen.findByText('users.add'))
+      // The agency's one city is already chosen, its wards listed.
+      expect(screen.getByLabelText('Ward 2')).toBeInTheDocument()
+      expect(screen.queryByLabelText('Jessore Ward 1')).toBeNull()
+      const district = screen.getByLabelText('holdings.district')
+      fireEvent.focus(district)
+      fireEvent.change(district, { target: { value: '' } })
+      expect(screen.getAllByRole('option').map((o) => o.textContent)).not.toContain('Jashore')
+      // Their own agency, fixed.
+      const agency = screen.getByLabelText('users.field.agency')
+      expect(agency).toBeDisabled()
+      expect(agency.value).toBe('AGN-1')
+
+      fireEvent.change(screen.getByLabelText('users.col.name'), { target: { value: 'Field One' } })
+      fireEvent.change(screen.getByLabelText('users.col.phone'), { target: { value: '01911000116' } })
+      fireEvent.change(screen.getByLabelText('users.field.password'), { target: { value: 'Kh2-street-sweep' } })
+      fireEvent.click(screen.getByLabelText('Ward 2'))
+      fireEvent.click(screen.getByText('common.save'))
+      await waitFor(() => expect(create).toHaveBeenCalled())
+      expect(create.mock.calls[0][0].agency).toBe('AGN-1')
+    } finally {
+      delete ME.agency
+    }
+  })
+
+  it('lets a supervisor add only collectors, in their own wards', async () => {
+    Object.assign(ME, { roleKey: 'supervisor', scopeKind: 'ward', scopeWards: ['W-14'] })
+    try {
+      render(<Users />)
+      fireEvent.click(await screen.findByText('users.add'))
+      const roles = [...screen.getByLabelText('users.col.role').querySelectorAll('option')].map((o) => o.value)
+      expect(roles).toEqual(['collector'])
+      const scopes = [...screen.getByLabelText('users.field.scopeKind').querySelectorAll('option')].map((o) => o.value)
+      expect(scopes).toEqual(['ward', 'zone'])
+      expect(screen.getByLabelText('Ward 14')).toBeInTheDocument()
+      expect(screen.queryByLabelText('Ward 21')).toBeNull()
+      expect(screen.getByLabelText('users.field.agency')).toBeDisabled()
+    } finally {
+      Object.assign(ME, { roleKey: 'agency_admin' })
+      delete ME.scopeKind
+      delete ME.scopeWards
+    }
+  })
+
+  it('lists wards only for the chosen city and zone, in number order', async () => {
+    CATALOG = {
+      ...BASE_CATALOG,
+      districts: [{ name: 'Khulna' }, { name: 'Jashore' }],
+      cities: [{ id: 'C-K', name: 'Khulna City', district: 'Khulna' }, { id: 'C-J', name: 'Jessore', district: 'Jashore' }],
+      zones: [{ id: 'Z-1', name: 'Zone 1', city: 'C-K' }, { id: 'Z-2', name: 'Zone 2', city: 'C-K' },
+        { id: 'Z-9', name: 'Zone 9', city: 'C-J' }],
+      wards: [
+        { id: 'K-10', name: 'Ward 10', zone: 'Z-1', city: 'C-K' },
+        { id: 'K-2', name: 'Ward 2', zone: 'Z-1', city: 'C-K' },
+        { id: 'K-5', name: 'Ward 5', zone: 'Z-2', city: 'C-K' },
+        { id: 'J-1', name: 'Jessore Ward 1', zone: 'Z-9', city: 'C-J' },
+      ],
+    }
+    render(<Users />)
+    fireEvent.click(await screen.findByText('users.add'))
+    // Two cities: nothing is listed until one is chosen.
+    expect(screen.getByText('users.pickCityFirst')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Ward 2')).toBeNull()
+
+    // No city is offered until a district is chosen.
+    expect(screen.getByText('users.pickDistrictFirst')).toBeInTheDocument()
+    const pick = (label, typed, option) => {
+      const box = screen.getByLabelText(label)
+      fireEvent.focus(box)
+      fireEvent.change(box, { target: { value: typed } })
+      fireEvent.mouseDown(screen.getByRole('option', { name: option }))
+    }
+    pick('holdings.district', 'Khul', 'Khulna')
+    pick('holdings.city', 'Khul', 'Khulna City')
+    expect(screen.queryByLabelText('Jessore Ward 1')).toBeNull()
+    const names = [...document.querySelectorAll('.ward-list label')].map((l) => l.textContent)
+    expect(names).toEqual(['Ward 2', 'Ward 5', 'Ward 10'])
+
+    fireEvent.change(screen.getByLabelText('users.field.filterZone'), { target: { value: 'Z-1' } })
+    expect(screen.queryByLabelText('Ward 5')).toBeNull()
+    fireEvent.click(screen.getByText('users.selectAllWards'))
+    expect(screen.getByText('users.wardsSelected:{"count":2}')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('users.searchWards'), { target: { value: '10' } })
+    expect(screen.queryByLabelText('Ward 2')).toBeNull()
+    expect(screen.getByLabelText('Ward 10')).toBeInTheDocument()
   })
 
   it('drops the ward list when a wider scope is chosen', async () => {
@@ -220,9 +338,17 @@ describe('Users', () => {
     // refuses it either way — the option is simply not there.
     render(<Users />)
     fireEvent.click(await screen.findByText('users.add'))
-    const roles = within(screen.getByLabelText('users.col.role'))
-    expect(roles.queryByText('users.role.super_admin')).toBeNull()
-    expect(roles.getByText('users.role.agency_admin')).toBeInTheDocument()
+    const roles = [...screen.getByLabelText('users.col.role').querySelectorAll('option')].map((o) => o.value)
+    // An agency admin adds field staff only: collectors and supervisors.
+    expect(roles).toEqual(['collector', 'supervisor'])
+  })
+
+  it('lets an agency admin edit only collectors and supervisors', async () => {
+    render(<Users />)
+    await screen.findByText('Rafiq Mia')
+    // Their own row (Farhana, agency admin) and the collector: two edit links,
+    // but no deactivate link on another agency admin.
+    expect(screen.getAllByText('common.edit')).toHaveLength(2)
   })
 
   it('offers it to a super admin', async () => {
@@ -245,6 +371,35 @@ describe('Users', () => {
     fireEvent.change(screen.getByLabelText('users.col.role'), { target: { value: 'super_admin' } })
     expect(screen.getByLabelText('users.field.agency')).toBeDisabled()
     ME.roleKey = 'agency_admin'
+  })
+
+  it('will not create an agency admin without an agency', async () => {
+    ME.roleKey = 'super_admin'
+    render(<Users />)
+    fireEvent.click(await screen.findByText('users.add'))
+    fireEvent.change(screen.getByLabelText('users.col.name'), { target: { value: 'Agency Boss' } })
+    fireEvent.change(screen.getByLabelText('users.col.phone'), { target: { value: '01911000115' } })
+    fireEvent.change(screen.getByLabelText('users.field.password'), { target: { value: 'Kh2-street-sweep' } })
+    fireEvent.change(screen.getByLabelText('users.col.role'), { target: { value: 'agency_admin' } })
+    const agency = screen.getByLabelText('users.field.agency *')
+    fireEvent.change(agency, { target: { value: '' } })
+    fireEvent.click(screen.getByText('common.save'))
+    expect(screen.getByText('users.agencyMissing')).toBeInTheDocument()
+    expect(create).not.toHaveBeenCalled()
+
+    fireEvent.change(agency, { target: { value: 'AGN-1' } })
+    fireEvent.click(screen.getByText('common.save'))
+    await waitFor(() => expect(create).toHaveBeenCalled())
+    expect(create.mock.calls[0][0].agency).toBe('AGN-1')
+    ME.roleKey = 'agency_admin'
+  })
+
+  it('offers only active agencies', async () => {
+    render(<Users />)
+    fireEvent.click(await screen.findByText('users.add'))
+    const agency = within(screen.getByLabelText('users.field.agency'))
+    expect(agency.getByText('Premier Clean')).toBeInTheDocument()
+    expect(agency.queryByText('Old Contractor')).toBeNull()
   })
 
   it('clears a previously chosen agency when the role becomes super admin', async () => {

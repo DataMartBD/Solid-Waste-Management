@@ -22,6 +22,11 @@ Transcription notes, so a later reader can check it against the paper:
   questions of the survey section that are the same at every door in the city
   carry a `default`. Sylhet and READO are kept on their lists so the answers
   already given against v1 and v2 still read.
+* Version 4 chains the address the way the holding register does: district,
+  then the survey area (a city corporation or pourashova of that district,
+  drawn from the catalog's cities instead of a printed list), then thana (of
+  the district) and ward (of the survey area). v1-v3 keep their printed
+  `kcc` / `scc` options, so the answers already given against them still read.
 * `default` is a suggestion the client prefills, never an answer: nothing is
   recorded unless it comes back with the submission. On a date question the word
   `today` is sent as it stands, because a device downloads the form once and may
@@ -37,8 +42,9 @@ Transcription notes, so a later reader can check it against the paper:
 
 CODE = "d2d-household"
 #: v1 and v2 have surveys attached, so both are frozen — the engine refuses to
-#: edit a version people have already answered. This is v3.
-VERSION = 3
+#: v1, v2 and v3 have surveys attached, so they are frozen — the engine refuses
+#: to edit a version people have already answered. This is v4.
+VERSION = 4
 TITLE = "Door-to-door solid waste household survey"
 TITLE_BN = "বাড়ি বাড়ি কঠিন বর্জ্য সংগ্রহ জরিপ"
 ORGANISATION = "Sylhet City Corporation · READO Bangladesh"
@@ -81,23 +87,22 @@ QUESTIONS = [
     q("holding_no", "1", SURVEY_META, "text", "House no.", "বাসা নং",
       hint="One per premises", hint_bn="একটা স্থাপনায় একটা হবে",
       required=True, maps_to="holding_no"),
-    # A single-option dropdown on the paper, because that copy was printed for
-    # Sylhet. From v3 the corporation this system actually serves is on the list
-    # and stands first, so a Khulna surveyor is not scrolling past another city's
-    # name at every door. Sylhet stays: v2 surveys were answered with it, and a
-    # code that no longer exists on the form makes those answers unreadable.
-    q("survey_area", "2", SURVEY_META, "single", "Survey area", "জরিপ এলাকা",
-      hint="Choose the survey area", hint_bn="জরিপ এলাকা নির্বাচন করুন", required=True,
-      default="kcc",
-      options=opts(("kcc", "Khulna City Corporation", "খুলনা সিটি কর্পোরেশন"),
-                   ("scc", "Sylhet City Corporation", "সিলেট সিটি কর্পোরেশন"))),
     # District and thana were one hard-coded option ("Sylhet") on the paper.
     # They now draw on the national geography table, the same list the holding
     # register offers, so a survey and the holding it becomes agree on where the
-    # building is. Thana narrows to the district chosen above it.
-    q("district", "3", SURVEY_META, "single", "District", "জেলা",
+    # building is. From v4 the district comes first and narrows both the survey
+    # area and the thana below it.
+    q("district", "2", SURVEY_META, "single", "District", "জেলা",
       hint_bn="জেলা নির্বাচন করুন", required=True, default="Khulna",
       maps_to="district", options_source="district"),
+    # The survey area is a city corporation or pourashova of the district above,
+    # from the catalog's cities (what Setup lists), and narrows the ward list —
+    # the holding register's District -> City -> Ward chain. It is answered with
+    # the city's code and promotes nowhere: a survey's city is its ward's.
+    q("survey_area", "3", SURVEY_META, "single", "Survey area", "জরিপ এলাকা",
+      hint="City corporation / pourashova of the district chosen above",
+      hint_bn="উপরে নির্বাচিত জেলার সিটি কর্পোরেশন / পৌরসভা", required=True,
+      default="KCC", options_source="city"),
     # Khulna Sadar is the city corporation's own area. The national table lists
     # the district's nine rural upazilas and did not carry it, so it was added
     # to `geo_locations.json` — a default the dropdown does not offer prefills a
@@ -107,7 +112,8 @@ QUESTIONS = [
       hint_bn="উপরে নির্বাচিত জেলার থানা", default="Khulna Sadar",
       maps_to="thana", options_source="thana"),
     q("ward", "5", SURVEY_META, "single", "Ward no.", "ওয়ার্ড নং",
-      hint_bn="ওয়ার্ড নং নির্বাচন করুন", required=True, maps_to="ward_id",
+      hint="Wards of the survey area chosen above",
+      hint_bn="উপরে নির্বাচিত জরিপ এলাকার ওয়ার্ড", required=True, maps_to="ward_id",
       options_source="ward"),
     q("block", "6", SURVEY_META, "single", "Block name", "ব্লক নাম", maps_to="block_id",
       hint="Blocks of the ward chosen above", hint_bn="উপরে নির্বাচিত ওয়ার্ডের ব্লক",

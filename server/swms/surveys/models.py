@@ -76,6 +76,7 @@ class OptionSource(models.TextChoices):
     COLLECTOR = "collector", "Collectors on record"
     DISTRICT = "district", "Districts, from the national geography"
     THANA = "thana", "Thanas of the chosen district"
+    CITY = "city", "City corporations / pourashovas of the chosen district"
 
 
 #: `options_source` -> the `Survey` column the chosen row lands in.

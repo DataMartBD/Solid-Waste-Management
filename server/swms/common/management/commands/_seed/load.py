@@ -193,6 +193,7 @@ def load_agencies() -> Agency:
         status="active",
     )
     agency.service_wards.set([row["id"] for row in mock.WARDS])
+    agency.cities.set(["KCC"])
     ids.reserve("agency", 1)
     return agency
 
@@ -215,6 +216,11 @@ def load_collectors(agency: Agency) -> None:
             on_time=row["onTime"],
             coverage=row["coverage"],
         )
+        for row in mock.COLLECTORS
+    )
+    # Each collector serves their home ward to begin with.
+    Collector.wards.through.objects.bulk_create(
+        Collector.wards.through(collector_id=row["id"], ward_id=row["zone"])
         for row in mock.COLLECTORS
     )
     # The history behind `Collector.agency`. Opened on the joining date so the

@@ -329,7 +329,10 @@ class UserAdminSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
         me = caller(self)
+        self._check_city_viewer(attrs, me)
+        self._check_agency_admin_reach(attrs, me)
         self._check_agency_boundary(attrs, me)
+        self._check_area_within_agency(attrs)
 
         if self.instance is None and not attrs.get("password"):
             raise serializers.ValidationError(
@@ -386,6 +389,141 @@ class UserAdminSerializer(serializers.ModelSerializer):
         ):
             raise serializers.ValidationError({"scopeZone": "Choose a zone."})
         return attrs
+
+    def _check_city_viewer(self, attrs, me):
+        """City Viewer accounts are the super admin's alone, and city-wide.
+
+        Only a super admin creates, sees or edits one. Its area is a city: the
+        one the super admin names (then it sees that city only), or none (the
+        whole system). It belongs to no agency.
+        """
+        inst = self.instance
+        role = attrs.get("role", getattr(inst, "role", None))
+        involved = role == Role.KCC_VIEWER.value or getattr(inst, "role", None) == Role.KCC_VIEWER.value
+        if not involved:
+            return
+        is_super = me is None or me.is_superuser or me.role == Role.SUPER_ADMIN.value
+        if not is_super:
+            raise serializers.ValidationError(
+                {"role": "Only a super administrator can manage City Viewer accounts."}
+            )
+        if role == Role.KCC_VIEWER.value:
+            if attrs.get("agency") or (inst is not None and "agency" not in attrs and inst.agency_id):
+                raise serializers.ValidationError({"agency": "A City Viewer belongs to no agency."})
+            attrs["scope_kind"] = ScopeKind.CITY
+            attrs["scope_zone"] = ""
+            attrs["scope_wards"] = []
+
+    #: All an agency admin may create or manage: their own field staff.
+    AGENCY_ADMIN_MANAGES = {Role.COLLECTOR.value, Role.SUPERVISOR.value}
+    #: A supervisor: collectors only.
+    SUPERVISOR_MANAGES = {Role.COLLECTOR.value}
+
+    def _check_agency_admin_reach(self, attrs, me):
+        """An agency admin manages collectors and supervisors; a supervisor,
+        collectors of their own area. Nothing else.
+
+        The other roles are the corporation's to hand out. Their own row
+        (contact details) is still theirs to edit; its role is locked separately.
+        """
+        if me is None or me.is_superuser:
+            return
+        if me.role == Role.AGENCY_ADMIN.value:
+            manages = self.AGENCY_ADMIN_MANAGES
+            message = {"role": "An agency admin can only add or change collectors and supervisors."}
+        elif me.role == Role.SUPERVISOR.value:
+            manages = self.SUPERVISOR_MANAGES
+            message = {"role": "A supervisor can only add or change collectors."}
+        else:
+            return
+        inst = self.instance
+        if inst is not None and inst.pk == me.pk:
+            return
+        if inst is not None and inst.role not in manages:
+            raise serializers.ValidationError(message)
+        role = attrs.get("role", getattr(inst, "role", None))
+        if role not in manages:
+            raise serializers.ValidationError(message)
+        if me.role == Role.SUPERVISOR.value:
+            self._check_within_supervisor_area(attrs, me)
+
+    def _check_within_supervisor_area(self, attrs, me):
+        """A supervisor's collector works inside the supervisor's own area."""
+        allowed = me.visible_ward_ids()
+        if allowed is None:
+            return
+        allowed = set(allowed)
+        inst = self.instance
+        kind = attrs.get("scope_kind", getattr(inst, "scope_kind", None))
+        if kind == ScopeKind.WARD:
+            wards = attrs.get("scope_wards")
+            if wards is None:
+                wards = list(inst.scope_wards.all()) if inst is not None else []
+            outside = sorted(w.pk for w in wards if w.pk not in allowed)
+            if outside:
+                raise serializers.ValidationError(
+                    {"scopeWards": f"Outside your area: {', '.join(outside)}"}
+                )
+        elif kind == ScopeKind.ZONE:
+            zone = attrs.get("scope_zone", getattr(inst, "scope_zone", ""))
+            ids = set(Ward.objects.filter(zone_id=zone).values_list("id", flat=True))
+            if not ids or not ids <= allowed:
+                raise serializers.ValidationError({"scopeZone": "This zone is outside your area."})
+        else:
+            raise serializers.ValidationError(
+                {"scopeKind": "Give the collector wards (or a zone) inside your area."}
+            )
+
+    def _check_area_within_agency(self, attrs):
+        """An agency user's area must lie in the cities their agency works in.
+
+        Otherwise the account can see its agency's rows but may write none of
+        them: an agency in a pourashova with an admin scoped to KCC is refused
+        every ward it actually works — "outside your assigned area" on the very
+        first collector it adds. Checked only when the agency or the area is
+        being set, so renaming an older account is not blocked by this.
+        """
+        from swms.catalog.models import Ward, Zone
+
+        inst = self.instance
+        fields = {"agency", "role", "scope_kind", "scope_zone", "scope_wards", "city"}
+        if inst is not None and not fields & attrs.keys():
+            return
+        role = attrs.get("role", getattr(inst, "role", None))
+        agency = attrs.get("agency", getattr(inst, "agency", None))
+        if agency is None or role == Role.SUPER_ADMIN:
+            return
+        cities = {c.id for c in agency.cities.all()} or ({agency.city_id} if agency.city_id else set())
+        if not cities:
+            return  # an agency with no city on record yet: nothing to hold it to
+
+        names = ", ".join(sorted(cities))
+        kind = attrs.get("scope_kind", getattr(inst, "scope_kind", None))
+        if kind == ScopeKind.CITY:
+            city = attrs.get("city", getattr(inst, "city", None))
+            if city is not None and city.id not in cities:
+                raise serializers.ValidationError(
+                    {"city": f"{agency.name} does not work in {city.name}; choose {names}, or the Agency scope."}
+                )
+        elif kind == ScopeKind.ZONE:
+            zone_id = attrs.get("scope_zone", getattr(inst, "scope_zone", ""))
+            zone = Zone.objects.filter(pk=zone_id).first() if zone_id else None
+            if zone is not None and zone.city_id not in cities:
+                raise serializers.ValidationError(
+                    {"scopeZone": f"This zone is outside {agency.name}'s area ({names})."}
+                )
+        elif kind == ScopeKind.WARD:
+            wards = attrs.get("scope_wards")
+            if wards is None:
+                wards = list(inst.scope_wards.all()) if inst is not None else []
+            ids = [w.pk for w in wards]
+            foreign = sorted(
+                Ward.objects.filter(pk__in=ids).exclude(zone__city_id__in=cities).values_list("id", flat=True)
+            )
+            if foreign:
+                raise serializers.ValidationError(
+                    {"scopeWards": f"Outside {agency.name}'s area ({names}): {', '.join(foreign)}"}
+                )
 
     def _check_agency_boundary(self, attrs, me):
         """Keep the agency boundary from being escaped through this form.

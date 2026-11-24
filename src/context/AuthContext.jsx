@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
 import {
   ApiError, clearTokens, get, patch, post, readTokens, request,
-  setRemember, setSessionExpiredHandler, writeTokens,
+  setRemember, setSessionExpiredHandler, writeTokens, tokenUserId, TOKENS_STORAGE_KEY,
 } from '../api/client.js'
 
 const AuthContext = createContext(null)
@@ -15,7 +15,7 @@ export const ROLE_HOME = {
   Collector: '/app/collection',
   Supervisor: '/app/dashboard',
   'Agency Admin': '/app/dashboard',
-  'City Viewer': '/app/city',
+  'City Viewer': '/app/city-dashboard',
 }
 
 export const normalizePhone = (phone) => String(phone || '').replace(/\D/g, '').replace(/^88/, '')
@@ -76,6 +76,20 @@ export function AuthProvider({ children }) {
     restore()
     return () => { cancelled = true }
   }, [])
+
+  // Another tab signed in as someone else (or signed out). The tokens are
+  // shared, so this tab would go on showing the old user's lists while every
+  // request went out as the new one — e.g. offering a van the new user cannot
+  // see, refused as "No Van matches". Start over as whoever is signed in now.
+  // A routine token refresh keeps the same user and is ignored.
+  useEffect(() => {
+    function onStorage(event) {
+      if (event.key !== TOKENS_STORAGE_KEY || !user) return
+      if (tokenUserId(event.newValue) !== user.id) window.location.reload()
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [user])
 
   // A failed token refresh drops the session here, so no caller has to.
   useEffect(() => {

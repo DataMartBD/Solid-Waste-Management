@@ -22,7 +22,14 @@ vi.mock('../api/endpoints.js', () => ({
 vi.mock('../context/DataContext.jsx', () => ({
   useData: () => ({
     catalog: {
-      wards: [{ id: 'W-14', name: 'Ward 14' }, { id: 'W-21', name: 'Ward 21' }],
+      wards: [
+        { id: 'W-14', name: 'Ward 14', city: 'KCC' }, { id: 'W-21', name: 'Ward 21', city: 'KCC' },
+        { id: 'W-3', name: '3', city: 'KCC' }, { id: 'B-1', name: '1', city: 'BPS' },
+      ],
+      cities: [
+        { id: 'KCC', name: 'Khulna City', district: 'Khulna' },
+        { id: 'BPS', name: 'Bagerhat Pourashova', district: 'Bagerhat' },
+      ],
       districts: [{ name: 'Khulna', nameBn: 'খুলনা' }, { name: 'Bagerhat', nameBn: 'বাগেরহাট' }],
       thanasByDistrict: {
         Khulna: [{ name: 'Dumuria', nameBn: 'ডুমুরিয়া' }],
@@ -31,6 +38,10 @@ vi.mock('../context/DataContext.jsx', () => ({
     },
     collectors: [{ id: 'C-101', name: 'Rafiq Mia' }],
   }),
+}))
+
+vi.mock('../context/AuthContext.jsx', () => ({
+  useAuth: () => ({ user: { id: 9, name: 'Signed In', phone: '01700000009', collector: null } }),
 }))
 
 vi.mock('../i18n/index.jsx', () => ({
@@ -90,6 +101,22 @@ const FORM = {
   ],
 }
 
+// The address questions are search boxes: type, then pick from the list.
+function choose(label, option) {
+  const input = screen.getByLabelText(label)
+  fireEvent.focus(input)
+  fireEvent.change(input, { target: { value: option } })
+  fireEvent.mouseDown(screen.getByRole('option', { name: option }))
+}
+
+function optionsOf(label) {
+  const input = screen.getByLabelText(label)
+  fireEvent.focus(input)
+  const names = [...input.closest('.search-select').querySelectorAll('[role=option]')].map((o) => o.textContent)
+  fireEvent.keyDown(input, { key: 'Escape' })
+  return names
+}
+
 function renderForm(props = {}) {
   return render(<SurveyForm onClose={() => {}} onSaved={() => {}} {...props} />)
 }
@@ -133,7 +160,7 @@ describe('SurveyForm', () => {
     renderForm()
     await screen.findByLabelText(/5\. Premises type/)
 
-    fireEvent.change(screen.getByLabelText(/1\. Ward/), { target: { value: 'W-14' } })
+    choose(/1\. Ward/, 'Ward 14')
     fireEvent.change(screen.getByLabelText(/5\. Premises type/), { target: { value: 'residential' } })
     fireEvent.change(await screen.findByLabelText(/6\. Storeys/), { target: { value: '5' } })
     fireEvent.change(screen.getByLabelText(/5\. Premises type/), { target: { value: 'commercial' } })
@@ -183,7 +210,7 @@ describe('SurveyForm', () => {
     // 'storeys' is required, but only of a residential premises.
     renderForm()
     await screen.findByLabelText(/1\. Ward/)
-    fireEvent.change(screen.getByLabelText(/1\. Ward/), { target: { value: 'W-14' } })
+    choose(/1\. Ward/, 'Ward 14')
     fireEvent.change(screen.getByLabelText(/5\. Premises type/), { target: { value: 'commercial' } })
     fireEvent.click(submitButton())
     await waitFor(() => expect(record).toHaveBeenCalled())
@@ -194,29 +221,27 @@ describe('SurveyForm', () => {
     await screen.findByLabelText(/1\. Ward/)
     expect(blocks).not.toHaveBeenCalled()
 
-    fireEvent.change(screen.getByLabelText(/1\. Ward/), { target: { value: 'W-14' } })
+    choose(/1\. Ward/, 'Ward 14')
     await waitFor(() => expect(blocks).toHaveBeenCalledWith('W-14'))
     expect(await screen.findByRole('option', { name: 'Block-A' })).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText(/1\. Ward/), { target: { value: 'W-21' } })
+    choose(/1\. Ward/, 'Ward 21')
     await waitFor(() => expect(blocks).toHaveBeenLastCalledWith('W-21'))
   })
 
   it('offers districts from the catalog, not from the form', async () => {
     renderForm()
     await screen.findByLabelText(/3\. District/)
-    expect(await screen.findByRole('option', { name: 'Khulna' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Bagerhat' })).toBeInTheDocument()
+    expect(optionsOf(/3\. District/)).toEqual(['Khulna', 'Bagerhat'])
   })
 
   it('narrows the thana list to the district chosen above it', async () => {
     renderForm()
     await screen.findByLabelText(/3\. District/)
-    expect(screen.queryByRole('option', { name: 'Dumuria' })).not.toBeInTheDocument()
+    expect(optionsOf(/4\. Thana/)).toEqual([])
 
-    fireEvent.change(screen.getByLabelText(/3\. District/), { target: { value: 'Khulna' } })
-    expect(await screen.findByRole('option', { name: 'Dumuria' })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: 'Fakirhat' })).not.toBeInTheDocument()
+    choose(/3\. District/, 'Khulna')
+    expect(optionsOf(/4\. Thana/)).toEqual(['Dumuria'])
   })
 
   it('drops the thana when the district changes under it', async () => {
@@ -224,14 +249,14 @@ describe('SurveyForm', () => {
     // wrong, and no display rule hides it.
     renderForm()
     await screen.findByLabelText(/3\. District/)
-    fireEvent.change(screen.getByLabelText(/3\. District/), { target: { value: 'Khulna' } })
-    fireEvent.change(await screen.findByLabelText(/4\. Thana/), { target: { value: 'Dumuria' } })
-    fireEvent.change(screen.getByLabelText(/3\. District/), { target: { value: 'Bagerhat' } })
+    choose(/3\. District/, 'Khulna')
+    choose(/4\. Thana/, 'Dumuria')
+    choose(/3\. District/, 'Bagerhat')
 
     await waitFor(() => expect(screen.getByLabelText(/4\. Thana/).value).toBe(''))
 
     fireEvent.change(screen.getByLabelText(/5\. Premises type/), { target: { value: 'commercial' } })
-    fireEvent.change(screen.getByLabelText(/1\. Ward/), { target: { value: 'W-14' } })
+    choose(/1\. Ward/, 'Ward 14')
     fireEvent.click(submitButton())
     await waitFor(() => expect(record).toHaveBeenCalled())
     expect(record.mock.calls[0][0].answers).not.toHaveProperty('thana')
@@ -240,19 +265,83 @@ describe('SurveyForm', () => {
   it('drops the block when the ward changes under it', async () => {
     renderForm()
     await screen.findByLabelText(/1\. Ward/)
-    fireEvent.change(screen.getByLabelText(/1\. Ward/), { target: { value: 'W-14' } })
+    choose(/1\. Ward/, 'Ward 14')
     fireEvent.change(await screen.findByLabelText(/2\. Block/), { target: { value: 'W-14-A' } })
-    fireEvent.change(screen.getByLabelText(/1\. Ward/), { target: { value: 'W-21' } })
+    choose(/1\. Ward/, 'Ward 21')
 
     await waitFor(() => expect(screen.getByLabelText(/2\. Block/).value).toBe(''))
+  })
+
+  it('chains district, survey area and ward the way the holding register does', async () => {
+    published.mockResolvedValue({
+      ...FORM,
+      questions: [
+        { code: 'district', number: '1', section: 'S', kind: 'single', text: 'District',
+          required: true, optionsSource: 'district', options: [], rules: [] },
+        { code: 'survey_area', number: '2', section: 'S', kind: 'single', text: 'Survey area',
+          required: true, optionsSource: 'city', options: [], rules: [] },
+        { code: 'thana', number: '3', section: 'S', kind: 'single', text: 'Thana',
+          required: false, optionsSource: 'thana', options: [], rules: [] },
+        { code: 'ward', number: '4', section: 'S', kind: 'single', text: 'Ward no',
+          required: true, optionsSource: 'ward', options: [], rules: [] },
+      ],
+    })
+    renderForm()
+    const area = await screen.findByLabelText(/2\. Survey area/)
+
+    // Nothing to choose until the level above is answered.
+    expect(optionsOf(/2\. Survey area/)).toEqual([])
+    // Survey area and thana both wait on the district; the ward on the area.
+    expect(screen.getAllByText('surveys.pickDistrictFirst')).toHaveLength(2)
+    expect(screen.getByText('surveys.pickAreaFirst')).toBeInTheDocument()
+    expect(optionsOf(/4\. Ward no/)).toEqual([])
+
+    choose(/1\. District/, 'Khulna')
+    expect(optionsOf(/2\. Survey area/)).toEqual(['Khulna City'])
+    choose(/2\. Survey area/, 'Khulna City')
+    // That city's wards only, in number order.
+    expect(optionsOf(/4\. Ward no/)).toEqual(['3', 'Ward 14', 'Ward 21'])
+    choose(/4\. Ward no/, 'Ward 14')
+
+    // A new district clears the survey area and, with it, the ward.
+    choose(/1\. District/, 'Bagerhat')
+    expect(screen.getByLabelText(/2\. Survey area/).value).toBe('')
+    expect(screen.getByLabelText(/4\. Ward no/).value).toBe('')
+    choose(/2\. Survey area/, 'Bagerhat Pourashova')
+    choose(/4\. Ward no/, '1')
+    fireEvent.click(submitButton())
+
+    await waitFor(() => expect(record).toHaveBeenCalled())
+    expect(record.mock.calls[0][0].answers).toMatchObject({ district: 'Bagerhat', survey_area: 'BPS', ward: 'B-1' })
+  })
+
+  it('takes the surveyor from the signed-in user instead of asking', async () => {
+    published.mockResolvedValue({
+      ...FORM,
+      questions: [
+        { code: 'house', number: '1', section: 'S', kind: 'text', text: 'House no.',
+          required: true, optionsSource: 'static', options: [], rules: [] },
+        { code: 'surveyor', number: '2', section: 'S', kind: 'single', text: 'Surveyor name',
+          required: true, optionsSource: 'collector', mapsTo: 'surveyor_id', options: [], rules: [] },
+      ],
+    })
+    renderForm()
+    const surveyor = await screen.findByLabelText(/2\. Surveyor name/)
+    expect(surveyor.value).toBe('Signed In')
+    expect(surveyor).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText(/1\. House no\./), { target: { value: '12/A' } })
+    fireEvent.click(submitButton())
+    await waitFor(() => expect(record).toHaveBeenCalled())
+    expect(record.mock.calls[0][0].answers).toEqual({ house: '12/A' })
   })
 
   it('sends the district and thana as names, which is what the register stores', async () => {
     renderForm()
     await screen.findByLabelText(/3\. District/)
-    fireEvent.change(screen.getByLabelText(/1\. Ward/), { target: { value: 'W-14' } })
-    fireEvent.change(screen.getByLabelText(/3\. District/), { target: { value: 'Khulna' } })
-    fireEvent.change(await screen.findByLabelText(/4\. Thana/), { target: { value: 'Dumuria' } })
+    choose(/1\. Ward/, 'Ward 14')
+    choose(/3\. District/, 'Khulna')
+    choose(/4\. Thana/, 'Dumuria')
     fireEvent.change(screen.getByLabelText(/5\. Premises type/), { target: { value: 'commercial' } })
     fireEvent.click(submitButton())
 

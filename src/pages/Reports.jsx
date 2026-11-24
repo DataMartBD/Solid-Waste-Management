@@ -1,4 +1,7 @@
-// Reporting & Records.
+// Report components shared by Operations Reports and Finance Reports (and the
+// KPI card on the City Dashboard). This file used to be the "Reports" page; the
+// page itself is gone, and each component takes `extra` — query parameters sent
+// with every request (the super admin's agency pick, or the City Dashboard's city).
 //
 // Every tab on this page is now one GET against /api/reports/. The rollups used
 // to run in the browser over the whole visit / bill / payment history; they were
@@ -14,42 +17,17 @@
 //     in utils/export.js still does the work, and that is called out inline.
 
 import { useEffect, useMemo, useState } from 'react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { PageHeader, Section, StatCard, EmptyState, CHART_TOOLTIP } from '../components/ui.jsx'
+import { Section, StatCard, EmptyState } from '../components/ui.jsx'
 import { ExportMenu } from '../components/ExportMenu.jsx'
-import {
-  IconChart, IconBill, IconDownload, IconHome, IconUsers, IconEye, IconTruck,
-  IconCheck, IconAlert, IconRefresh,
-} from '../components/Icons.jsx'
+import { IconChart, IconBill, IconDownload, IconHome, IconUsers, IconEye, IconTruck, IconCheck, IconAlert, IconRefresh } from '../components/Icons.jsx'
 import { useData } from '../context/DataContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 import { useLang } from '../i18n/index.jsx'
 import { downloadCSV, downloadExcel, printReport, viewReport, tableToHTML } from '../utils/export.js'
-import { REPORT_MODES, isoWeek, totalsOf } from '../utils/reports.js'
+import { REPORT_MODES, totalsOf } from '../utils/reports.js'
 
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0)
 
-// How much history to ask for at each granularity. /reports/service-series/ is
-// deliberately one row per day — the finest truth — so a coarser view is a
-// window size plus local grouping, not a different query.
-const SERIES_DAYS = { daily: 30, weekly: 84, monthly: 365 }
-
-function bucket(rows, mode) {
-  if (mode === 'daily') return rows.map((r) => ({ label: r.date, ...r, days: 1 }))
-  const map = new Map()
-  rows.forEach((r) => {
-    const key = mode === 'weekly' ? isoWeek(r.date) : r.date.slice(0, 7)
-    const g = map.get(key) || { label: key, scheduled: 0, served: 0, billed: 0, collected: 0, days: 0 }
-    g.scheduled += r.scheduled; g.served += r.served; g.billed += r.billed; g.collected += r.collected; g.days += 1
-    map.set(key, g)
-  })
-  return [...map.values()]
-}
-
-/* ============ shared request plumbing ============ */
-
-// One GET, three states. A request that failed shows the server's own message
-// with a retry — never an empty table or a chart of zeros, which an operator
-// would read as a genuinely quiet month.
 function useReport(load, deps, { skip = false } = {}) {
   const [state, setState] = useState({ loading: !skip, error: null, data: null })
   const [attempt, setAttempt] = useState(0)
@@ -144,30 +122,7 @@ function ExportBar({ title, subtitle, columns, rows, filename, exporter }) {
   )
 }
 
-const TABS = ['service', 'waste', 'bills', 'recon', 'customers', 'kpi']
-
-export default function Reports() {
-  const { t } = useLang()
-  const [tab, setTab] = useState('service')
-  return (
-    <div className="fade-in">
-      <PageHeader title={t('reports.title')} subtitle={t('reports.subtitle')} />
-      <div className="filter-bar">
-        <div className="seg">
-          {TABS.map((id) => (
-            <button key={id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{t(`reports.tab.${id}`)}</button>
-          ))}
-        </div>
-      </div>
-      {tab === 'service' && <ServiceCollection />}
-      {tab === 'waste' && <WasteByCollector />}
-      {tab === 'bills' && <BillsByCollector />}
-      {tab === 'recon' && <Reconciliation />}
-      {tab === 'customers' && <CustomerReports />}
-      {tab === 'kpi' && <KpiScorecard />}
-    </div>
-  )
-}
+export const useSeesMoney = () => useAuth()?.user?.roleKey !== 'kcc_viewer'
 
 /* ============ shared chrome for the collector-wise reports ============ */
 
@@ -244,7 +199,7 @@ function ReportTable({ columns, rows, rowKey }) {
 }
 
 /* ============ 1. Waste collection by collector ============ */
-function WasteByCollector() {
+export function WasteByCollector({ extra = {} }) {
   const { t, n, percent } = useLang()
   const { api, collectorName } = useData()
   const [mode, setMode] = useState('daily')
@@ -256,10 +211,12 @@ function WasteByCollector() {
   // filtering first and then rolling up is the server's job, and asking it that
   // way keeps "overall for one collector" meaning that collector's totals.
   const params = useMemo(() => ({
+    ...extra,
     mode,
     collector: who === 'all' ? undefined : who,
     overall: scope === 'overall' ? true : undefined,
-  }), [mode, who, scope])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [mode, who, scope, extra.agency])
 
   const report = useReport(() => api.reports.wasteCollection.load(params), [api, params])
 
@@ -323,7 +280,7 @@ function WasteByCollector() {
 }
 
 /* ============ 2. Bill collection by collector ============ */
-function BillsByCollector() {
+export function BillsByCollector({ extra = {} }) {
   const { t, n, taka, percent } = useLang()
   const { api, collectorName } = useData()
   const [mode, setMode] = useState('monthly')
@@ -335,9 +292,11 @@ function BillsByCollector() {
   // whoever took it, which the server has to resolve before it can be filtered —
   // so the collector picker narrows the returned rows here.
   const params = useMemo(() => ({
+    ...extra,
     mode,
     overall: scope === 'overall' ? true : undefined,
-  }), [mode, scope])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [mode, scope, extra.agency])
 
   const report = useReport(() => api.reports.billCollection.load(params), [api, params])
 
@@ -429,7 +388,7 @@ const RECON_METRICS = [
 ]
 const EXCEPTION_KINDS = ['servedNotBilled', 'billedNotServed', 'paidNotServed']
 
-function Reconciliation() {
+export function Reconciliation({ extra = {} }) {
   const { t, n, taka, percent, period: fmtPeriod, optLabel, wardName, lang } = useLang()
   const { api, bills, paymentModes, collectorName } = useData()
 
@@ -441,8 +400,8 @@ function Reconciliation() {
   const month = months.includes(picked) ? picked : months[0]
 
   const report = useReport(
-    () => api.reports.reconciliation.load({ period: month }),
-    [api, month],
+    () => api.reports.reconciliation.load({ ...extra, period: month }),
+    [api, month, extra.agency],
     { skip: !month },
   )
 
@@ -620,128 +579,15 @@ function Reconciliation() {
 }
 
 /* ============ Service collection: daily / weekly / monthly ============ */
-function ServiceCollection() {
-  const { t, n, taka, percent, date, period, digits } = useLang()
-  const { api } = useData()
-  const [mode, setMode] = useState('daily')
-  const days = SERIES_DAYS[mode]
-
-  const report = useReport(() => api.reports.serviceSeries.load({ days }), [api, days])
-
-  const data = useMemo(
-    () => bucket(report.data?.rows || [], mode).slice().reverse(),
-    [report.data, mode],
-  )
-  const totals = useMemo(() => totalsOf(data, ['scheduled', 'served', 'billed', 'collected']), [data])
-
-  // Bucket keys stay machine-readable (ISO date, "2026-W27", "2026-07"); only the
-  // display label goes through the locale helpers.
-  const labelFor = (label) => {
-    if (mode === 'monthly') return period(label)
-    if (mode === 'weekly') {
-      const [year, week] = String(label).split('-W')
-      return t('reports.service.weekLabel', { week: n(Number(week)), year: digits(year) })
-    }
-    return date(label)
-  }
-
-  const chartData = data.slice(0, 12).reverse().map((r) => ({ label: labelFor(r.label), collected: r.collected }))
-
-  const columns = [
-    {
-      key: 'label',
-      label: t(mode === 'monthly' ? 'reports.service.col.month' : mode === 'weekly' ? 'reports.service.col.week' : 'reports.service.col.date'),
-      get: (r) => labelFor(r.label),
-    },
-    { key: 'scheduled', label: t('reports.service.col.scheduled'), get: (r) => n(r.scheduled) },
-    { key: 'served', label: t('reports.service.col.served'), get: (r) => n(r.served) },
-    { key: 'eff', label: t('reports.service.col.efficiency'), get: (r) => percent(pct(r.served, r.scheduled)) },
-    { key: 'billed', label: t('reports.service.col.billed'), get: (r) => n(r.billed) },
-    { key: 'collected', label: t('reports.service.col.collected'), get: (r) => n(r.collected) },
-    { key: 'rate', label: t('reports.service.col.chargeRate'), get: (r) => percent(pct(r.collected, r.billed)) },
-  ]
-
-  const title = t(`reports.service.title.${mode}`)
-  const filename = `service_collection_${mode}`
-
-  return (
-    <>
-      <div className="filter-bar">
-        <div className="seg">
-          {['daily', 'weekly', 'monthly'].map((m) => (
-            <button key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)} style={{ textTransform: 'capitalize' }}>{t(`reports.mode.${m}`)}</button>
-          ))}
-        </div>
-        <div className="grow" />
-        {/* The server exporter emits the daily rows it computed. In the weekly and
-            monthly views the table is re-grouped here, so the file has to be too
-            — otherwise the download would not match the screen it came from. */}
-        <ExportBar title={title} subtitle={t('reports.service.exportSubtitle', { count: n(data.length) })}
-          columns={columns} rows={data} filename={filename}
-          exporter={mode === 'daily'
-            ? (format) => api.reports.serviceSeries.export({ days, format, filename: `${filename}.${format}` })
-            : null} />
-      </div>
-
-      {report.loading ? <Loading /> : report.error ? <LoadFailed error={report.error} onRetry={report.retry} /> : (
-        <>
-          <div className="stat-grid" style={{ marginBottom: 20 }}>
-            <StatCard icon={<IconChart size={18} />} label={t('reports.service.stat.served')} value={n(totals.served)} sub={t('reports.service.stat.servedSub', { count: n(totals.scheduled) })} />
-            <StatCard icon={<IconChart size={18} />} tone="ok" label={t('reports.service.stat.efficiency')} value={percent(pct(totals.served, totals.scheduled))} sub={t('reports.service.stat.efficiencySub')} progress={pct(totals.served, totals.scheduled)} />
-            <StatCard icon={<IconBill size={18} />} label={t('reports.service.stat.billed')} value={taka(totals.billed)} sub={t('reports.service.stat.billedSub', { count: n(data.length), mode: t(`reports.mode.${mode}`) })} />
-            <StatCard icon={<IconBill size={18} />} tone="info" label={t('reports.service.stat.collected')} value={taka(totals.collected)} sub={t('reports.service.stat.collectedSub', { pct: percent(pct(totals.collected, totals.billed)) })} progress={pct(totals.collected, totals.billed)} />
-          </div>
-
-          <Section title={t('reports.service.chart')}>
-            <ResponsiveContainer width="100%" height={230}>
-              <BarChart data={chartData} margin={{ left: -10, right: 8, top: 6 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} tickFormatter={(v) => n(v)} />
-                <Tooltip contentStyle={CHART_TOOLTIP} formatter={(v) => [taka(v), t('reports.service.series')]} cursor={{ fill: 'var(--surface-2)' }} />
-                <Bar dataKey="collected" name={t('reports.service.series')} radius={[6, 6, 0, 0]}>
-                  {chartData.map((_, i) => <Cell key={i} fill={i % 2 ? 'var(--brand-600)' : 'var(--brand)'} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </Section>
-
-          <Section title={title} pad={false} actions={<span className="tiny muted">{t('reports.rows', { count: n(data.length) })}</span>}>
-            <div className="table-wrap">
-              <table className="data">
-                <thead><tr>{columns.map((c) => <th key={c.key}>{c.label}</th>)}</tr></thead>
-                <tbody>
-                  {data.map((r) => (
-                    <tr key={r.label}>
-                      <td style={{ fontWeight: 600 }}>{labelFor(r.label)}</td>
-                      <td className="mono">{n(r.scheduled)}</td>
-                      <td className="mono">{n(r.served)}</td>
-                      <td><span className={`badge ${pct(r.served, r.scheduled) >= 90 ? 'badge-ok' : 'badge-warn'}`}>{percent(pct(r.served, r.scheduled))}</span></td>
-                      <td className="mono">{taka(r.billed)}</td>
-                      <td className="mono">{taka(r.collected)}</td>
-                      <td><span className={`badge ${pct(r.collected, r.billed) >= 80 ? 'badge-ok' : 'badge-warn'}`}>{percent(pct(r.collected, r.billed))}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="tiny muted-3" style={{ padding: '12px 20px' }}>{t('reports.service.note')}</div>
-          </Section>
-        </>
-      )}
-    </>
-  )
-}
-
-/* ============ Customer reports: existing + potential, by ward / road ============ */
-//
-// Still computed in the browser: no server aggregate groups the customer register
-// by ward or road, and both collections are already in memory for the Households
-// screen. The reference lists come from /api/catalog/ through useData().
-function CustomerReports() {
+export function CustomerReports({ extra = {} }) {
   const { t, n, taka, percent, date, optLabel, wardName } = useLang()
   // The register is holding-wise: the charge, the bill and the dues are the building's.
-  const { holdings, potentialCustomers, tiers, potentialReasons, currentPractices, effectiveCharge } = useData()
+  const data = useData()
+  const { tiers, potentialReasons, currentPractices, effectiveCharge } = data
+  // The register is client-side, so the agency pick narrows it here.
+  const holdings = useMemo(() => (extra.agency ? data.holdings.filter((h) => h.agency === extra.agency) : data.holdings),
+    [data.holdings, extra.agency])
+  const potentialCustomers = data.potentialCustomers
   const [kind, setKind] = useState('existing') // existing | potential
   const [groupBy, setGroupBy] = useState('ward')
 
@@ -941,10 +787,11 @@ const KPI_TARGETS = [
 ]
 const meets = (r) => (r.unit === 'h' ? r.good : r.value >= r.target)
 
-function KpiScorecard() {
+export function KpiScorecard({ extra = {} }) {
   const { t, n, taka, percent, period } = useLang()
+  const seesMoney = useSeesMoney()
   const { api } = useData()
-  const report = useReport(() => api.reports.kpis(), [api])
+  const report = useReport(() => api.reports.kpis(extra), [api, extra.agency, extra.city])
 
   const hours = (v) => t('reports.kpi.hours', { value: n(v) })
   const targetText = (r) => (r.unit === 'h'
@@ -963,7 +810,7 @@ function KpiScorecard() {
     chargeRate: t('reports.kpi.of', { done: taka(kpis.received), total: taka(kpis.billed) }),
     coverage: t('reports.kpi.of', { done: n(kpis.coveredHoldings), total: n(kpis.activeHoldings) }),
   }
-  const rows = KPI_TARGETS.map((r) => {
+  const rows = KPI_TARGETS.filter((r) => seesMoney || r.id !== 'chargeRate').map((r) => {
     const value = kpis[r.field] ?? 0
     return { ...r, value, good: r.unit === 'h' ? value < r.target : undefined }
   })

@@ -1,3 +1,4 @@
+import { canAccess, homeFor } from '../access.js'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { AuthProvider, useAuth, ROLE_HOME, validatePin, normalizePhone } from './AuthContext.jsx'
@@ -29,6 +30,8 @@ vi.mock('../api/client.js', () => {
     writeTokens: vi.fn((tokens) => { store.tokens = tokens; return tokens }),
     clearTokens: vi.fn(() => { store.tokens = null }),
     setSessionExpiredHandler: vi.fn((fn) => { store.expiredHandler = fn }),
+    TOKENS_STORAGE_KEY: 'swms.tokens',
+    tokenUserId: (raw) => JSON.parse(raw || 'null')?.uid ?? null,
     __store: store,
   }
 })
@@ -86,9 +89,18 @@ describe('normalizePhone', () => {
 })
 
 describe('ROLE_HOME', () => {
-  it('sends a collector to their round and a viewer to reports', () => {
+  it('sends a collector to their round and a viewer to the city dashboard', () => {
     expect(ROLE_HOME.Collector).toBe('/app/collection')
-    expect(ROLE_HOME['City Viewer']).toBe('/app/city')
+    expect(ROLE_HOME['City Viewer']).toBe('/app/city-dashboard')
+  })
+
+  it('keeps the daily dashboard from the City Viewer, who lands on the city dashboard', () => {
+    const viewer = { roleKey: 'kcc_viewer' }
+    expect(canAccess('/app/dashboard', viewer)).toBe(false)
+    expect(homeFor(viewer)).toBe('/app/city-dashboard')
+    for (const roleKey of ['collector', 'supervisor', 'agency_admin', 'super_admin']) {
+      expect(canAccess('/app/dashboard', { roleKey })).toBe(true)
+    }
   })
 })
 
@@ -115,6 +127,29 @@ describe('session restore', () => {
     const { result } = await setupReady()
     expect(result.current.user).toBeNull()
     expect(client.clearTokens).toHaveBeenCalled()
+  })
+
+  // Tokens are shared between tabs: another tab signing in as someone else
+  // must not leave this one showing the old user's data.
+  it('reloads when another tab signs in as a different user, not on a refresh', async () => {
+    client.__store.tokens = { access: 'a', refresh: 'r' }
+    client.get.mockResolvedValueOnce(USER)
+    const reload = vi.fn()
+    const original = window.location
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, reload } })
+    try {
+      const { result } = await setupReady()
+      await waitFor(() => expect(result.current.user).not.toBeNull())
+      const fire = (uid) => window.dispatchEvent(new StorageEvent('storage', {
+        key: 'swms.tokens', newValue: JSON.stringify({ uid }),
+      }))
+      fire(1)
+      expect(reload).not.toHaveBeenCalled()
+      fire(2)
+      expect(reload).toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: original })
+    }
   })
 })
 

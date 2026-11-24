@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { PageHeader, Status, StatCard, EmptyState } from '../components/ui.jsx'
 import { Modal, Field, FormRow, ModalActions } from '../components/Modal.jsx'
 import { ExportMenu } from '../components/ExportMenu.jsx'
@@ -57,6 +58,14 @@ export default function Complaints() {
   const [q, setQ] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [selectedId, setSelectedId] = useState(null)
+  // The top-bar search opens a ticket here as /app/complaints?id=<id>.
+  const [params, setParams] = useSearchParams()
+  const idParam = params.get('id')
+  useEffect(() => {
+    if (!idParam) return
+    setSelectedId(idParam)
+    setParams({}, { replace: true })
+  }, [idParam, setParams])
   // The id of the ticket with a write in flight, so a slow round trip cannot be
   // double-submitted from the row button and the drawer at the same time.
   const [busyId, setBusyId] = useState(null)

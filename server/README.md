@@ -167,7 +167,8 @@ The role sets live in `swms/common/roles.py`.
 | `manage.py migrate` | Apply schema changes |
 | `manage.py test` | Run the backend test suite |
 | `manage.py spectacular --file ../docs/api/openapi.yml` | Regenerate the OpenAPI schema in `docs/api` |
-| `manage.py close_collection_day [--city KCC] [--date YYYY-MM-DD] [--dry-run]` | Close the collection day: at each city's cut-off, due holdings with no complaint count as collected |
+| `manage.py close_collection_day [--city KCC] [--date YYYY-MM-DD] [--dry-run]` | Close the collection day: at each city's cut-off, due holdings with no complaint count as collected. Each run also resets collector attendance for the new day |
+| `manage.py reset_attendance [--dry-run]` | Start the day with nobody checked in: a check-in from an earlier day becomes Absent (also done by every `close_collection_day` run) |
 | `manage.py seed_blocks [--ward W-14] [--through F] [--names …] [--dry-run]` | Create Block rows under wards |
 | `manage.py seed_survey_form [--form d2d] [--publish]` | Load a questionnaire definition into the survey engine |
 | `manage.py load_geo_locations [--path …] [--dry-run]` | Load division/district/upazila/union rows |
