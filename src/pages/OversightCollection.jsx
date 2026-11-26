@@ -114,27 +114,27 @@ export default function CollectionTab({ city }) {
           : <span className="badge badge-warn"><span className="dot" />{t('city.today.open', { cutoff: digits(today.cutoff) })}</span>}
       >
         <div className="stat-grid">
-          <StatCard icon={<IconHome size={18} />} tone="brand" label={t('city.today.due')} value={n(today.due)}
+          <StatCard icon={<IconHome size={18} />} vivid tone="info" label={t('city.today.due')} value={n(today.due)}
             sub={t('city.today.dueSub')} />
-          <StatCard icon={<IconCheck size={18} />} tone="ok" label={t('city.today.confirmed')} value={n(today.confirmed)}
+          <StatCard icon={<IconCheck size={18} />} vivid tone="brand" label={t('city.today.confirmed')} value={n(today.confirmed)}
             sub={t('city.today.confirmedSub')} progress={today.due ? Math.round((today.confirmed / today.due) * 100) : 0} />
-          <StatCard icon={<IconClock size={18} />} tone="info" label={t('city.today.pending')} value={n(today.pending)}
+          <StatCard icon={<IconClock size={18} />} vivid tone="warn" label={t('city.today.pending')} value={n(today.pending)}
             sub={today.closed ? t('city.today.pendingClosed') : t('city.today.pendingSub', { cutoff: digits(today.cutoff) })} />
           {!today.closed && today.auto > 0 && (
-            <StatCard icon={<IconCheck size={18} />} tone="info" label={t('city.today.auto')} value={n(today.auto)}
+            <StatCard icon={<IconCheck size={18} />} vivid tone="cyan" label={t('city.today.auto')} value={n(today.auto)}
               sub={t('city.today.autoSub')} />
           )}
         </div>
       </Section>
 
       <div className="stat-grid mt-24">
-        <StatCard icon={<IconCheck size={18} />} tone="ok" label={t('city.kpi.collected')} value={percent(totals.collectedPct)}
+        <StatCard icon={<IconCheck size={18} />} vivid tone="brand" label={t('city.kpi.collected')} value={percent(totals.collectedPct)}
           sub={t('city.kpi.collectedSub', { done: n(totals.collected), total: n(totals.due) })} progress={totals.collectedPct} />
-        <StatCard icon={<IconUsers size={18} />} tone="brand" label={t('city.kpi.confirmed')} value={percent(totals.confirmedPct)}
+        <StatCard icon={<IconUsers size={18} />} vivid tone="violet" label={t('city.kpi.confirmed')} value={percent(totals.confirmedPct)}
           sub={t('city.kpi.confirmedSub', { n: n(totals.confirmed) })} progress={totals.confirmedPct} />
-        <StatCard icon={<IconClock size={18} />} tone="info" label={t('city.kpi.auto')} value={n(totals.auto)}
+        <StatCard icon={<IconClock size={18} />} vivid tone="info" label={t('city.kpi.auto')} value={n(totals.auto)}
           sub={t('city.kpi.autoSub')} />
-        <StatCard icon={<IconAlert size={18} />} tone="warn" label={t('city.kpi.missed')} value={n(totals.missed)}
+        <StatCard icon={<IconAlert size={18} />} vivid tone="danger" label={t('city.kpi.missed')} value={n(totals.missed)}
           sub={t('city.kpi.missedSub', { pct: percent(totals.missedPct) })} />
       </div>
 
@@ -150,9 +150,9 @@ export default function CollectionTab({ city }) {
                 <YAxis tickFormatter={(v) => n(v)} tick={{ fontSize: 12, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={CHART_TOOLTIP} labelFormatter={periodLabel} formatter={(value, name) => [n(value), name]} />
                 <Legend />
-                <Bar dataKey="confirmed" stackId="c" name={t('city.col.confirmed')} fill="var(--brand)" />
-                <Bar dataKey="auto" stackId="c" name={t('city.col.auto')} fill="var(--info, #60a5fa)" />
-                <Bar dataKey="missed" stackId="c" name={t('city.col.missed')} fill="var(--danger)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="confirmed" stackId="c" name={t('city.col.confirmed')} fill="var(--viz-1)" />
+                <Bar dataKey="auto" stackId="c" name={t('city.col.auto')} fill="var(--viz-2)" />
+                <Bar dataKey="missed" stackId="c" name={t('city.col.missed')} fill="var(--viz-5)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

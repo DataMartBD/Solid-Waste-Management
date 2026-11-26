@@ -37,6 +37,10 @@ const timeAgo = (iso, t, n) => {
   return t('dashboard.timeAgo.days', { n: n(Math.round(mins / 1440)) })
 }
 
+
+// One colour per zone bar, from the dashboards' chart palette.
+const ZONE_COLORS = ['var(--viz-1)', 'var(--viz-2)', 'var(--viz-3)', 'var(--viz-4)', 'var(--viz-5)', 'var(--viz-6)', 'var(--viz-7)', 'var(--viz-8)']
+
 export default function Dashboard() {
   const { user } = useAuth()
   const seesMoney = user?.roleKey !== 'kcc_viewer'
@@ -128,7 +132,7 @@ export default function Dashboard() {
 
   if (report.loading) {
     return (
-      <div className="fade-in">
+      <div className="fade-in dash-vivid">
         {header}
         <div className="card card-pad center row gap-8" style={{ padding: '48px 16px', justifyContent: 'center' }}>
           <span className="spinner spinner-dark" /> <span className="muted">{t('common.loading')}</span>
@@ -139,7 +143,7 @@ export default function Dashboard() {
 
   if (report.error || !report.data) {
     return (
-      <div className="fade-in">
+      <div className="fade-in dash-vivid">
         {header}
         <div className="card card-pad center" style={{ padding: '40px 20px' }}>
           <div style={{ color: 'var(--danger)', fontWeight: 700 }}>{t('common.loadFailed')}</div>
@@ -154,32 +158,32 @@ export default function Dashboard() {
 
   const { kpis, collectionTrend, wasteByZone, complaints: complaintStats } = report.data
   const year = Number(String(report.data.period || '').slice(0, 4)) || today.getFullYear()
-  const efficiencyData = [{ name: 'eff', value: kpis.collectionEfficiency, fill: 'var(--brand)' }]
+  const efficiencyData = [{ name: 'eff', value: kpis.collectionEfficiency, fill: 'url(#gEff)' }]
   // Every zone row arrives with `estimated: true`; if that ever stops being the
   // case the marker disappears on its own rather than lying by habit.
   const zoneEstimated = wasteByZone.some((row) => row.estimated)
 
   return (
-    <div className="fade-in">
+    <div className="fade-in dash-vivid">
       {header}
 
       <div className="stat-grid">
-        <StatCard icon={<IconCheck size={18} />} tone="ok" label={t('dashboard.kpi.efficiency')}
+        <StatCard vivid icon={<IconCheck size={18} />} tone="brand" label={t('dashboard.kpi.efficiency')}
           value={percent(kpis.collectionEfficiency)}
           sub={t('dashboard.kpi.efficiencySub', {
             target: percent(90), done: n(kpis.servedStops), total: n(kpis.scheduledStops),
           })}
           progress={kpis.collectionEfficiency} />
         {/* Money is not shown to the City Viewer. */}
-        {seesMoney && <StatCard icon={<IconBill size={18} />} tone="warn" label={t('dashboard.kpi.chargeRate')}
+        {seesMoney && <StatCard vivid icon={<IconBill size={18} />} tone="warn" label={t('dashboard.kpi.chargeRate')}
           value={percent(kpis.chargeRate)}
           sub={t('dashboard.kpi.chargeRateOf', { received: taka(kpis.received), billed: taka(kpis.billed) })}
           progress={kpis.chargeRate} />}
-        <StatCard icon={<IconHome size={18} />} tone="brand" label={t('dashboard.kpi.coverage')}
+        <StatCard vivid icon={<IconHome size={18} />} tone="violet" label={t('dashboard.kpi.coverage')}
           value={percent(kpis.coverage)}
           sub={t('dashboard.kpi.coverageOf', { covered: n(kpis.coveredHoldings), total: n(kpis.activeHoldings) })}
           progress={kpis.coverage} />
-        <StatCard icon={<IconTruck size={18} />} tone="info" label={t('dashboard.kpi.fleet')}
+        <StatCard vivid icon={<IconTruck size={18} />} tone="info" label={t('dashboard.kpi.fleet')}
           value={percent(kpis.fleetAvailability)}
           sub={t('dashboard.kpi.fleetSub', { active: n(fleet.active), total: n(fleet.total) })}
           progress={kpis.fleetAvailability} />
@@ -192,8 +196,13 @@ export default function Dashboard() {
             <AreaChart data={collectionTrend} margin={{ left: -18, right: 8, top: 6 }}>
               <defs>
                 <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="var(--brand)" stopOpacity={0} />
+                  <stop offset="0%" stopColor="var(--viz-1)" stopOpacity={0.45} />
+                  <stop offset="60%" stopColor="var(--viz-6)" stopOpacity={0.15} />
+                  <stop offset="100%" stopColor="var(--viz-2)" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="g1line" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="var(--viz-1)" />
+                  <stop offset="100%" stopColor="var(--viz-2)" />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -201,8 +210,8 @@ export default function Dashboard() {
               <YAxis tickFormatter={(v) => n(v)} tick={{ fontSize: 12, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={CHART_TOOLTIP}
                 labelFormatter={dayTick} formatter={(value, name) => [n(value), name]} />
-              <Area type="monotone" dataKey="collected" name={t('dashboard.trend.collected')} stroke="var(--brand)" strokeWidth={2.5} fill="url(#g1)" />
-              <Area type="monotone" dataKey="scheduled" name={t('dashboard.trend.scheduled')} stroke="var(--text-3)" strokeWidth={1.5} strokeDasharray="4 4" fill="none" />
+              <Area type="monotone" dataKey="collected" name={t('dashboard.trend.collected')} stroke="url(#g1line)" strokeWidth={3} fill="url(#g1)" />
+              <Area type="monotone" dataKey="scheduled" name={t('dashboard.trend.scheduled')} stroke="var(--viz-3)" strokeWidth={1.5} strokeDasharray="4 4" fill="none" />
             </AreaChart>
           </ResponsiveContainer>
         </Section>
@@ -211,6 +220,12 @@ export default function Dashboard() {
           <div style={{ position: 'relative' }}>
             <ResponsiveContainer width="100%" height={210}>
               <RadialBarChart innerRadius="70%" outerRadius="100%" data={efficiencyData} startAngle={90} endAngle={-270}>
+                <defs>
+                  <linearGradient id="gEff" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="var(--viz-1)" />
+                    <stop offset="100%" stopColor="var(--viz-3)" />
+                  </linearGradient>
+                </defs>
                 <RadialBar dataKey="value" cornerRadius={12} background={{ fill: 'var(--surface-2)' }} />
               </RadialBarChart>
             </ResponsiveContainer>
@@ -346,7 +361,7 @@ export default function Dashboard() {
                 <Tooltip contentStyle={CHART_TOOLTIP}
                   cursor={{ fill: 'var(--surface-2)' }} formatter={(value, name) => [n(value), name]} />
                 <Bar dataKey="tonnes" name={t('dashboard.waste.tonnes')} radius={[6, 6, 0, 0]}>
-                  {wasteByZone.map((_, i) => <Cell key={i} fill={i % 2 ? 'var(--brand-600)' : 'var(--brand)'} />)}
+                  {wasteByZone.map((_, i) => <Cell key={i} fill={ZONE_COLORS[i % ZONE_COLORS.length]} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

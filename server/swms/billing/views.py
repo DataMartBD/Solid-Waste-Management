@@ -6,7 +6,8 @@ each other:
 * Only an agency admin issues charges (`Bill`, `BillingRun` are ADMIN_WRITERS) —
   a supervisor cannot invent a bill for a holding.
 * Collectors record payments, because they are the people who take the money at
-  the door, so `Payment` adds `Role.COLLECTOR` to the operational writers.
+  the door, so `Payment` adds `Role.COLLECTOR` and `Role.BILL_COLLECTOR` to the
+  operational writers.
 * Deposits are not ward-scoped at all. A collector's cash hand-in belongs to the
   collector and the month, not to a ward, so scoping it by ward would hide
   hand-ins from the very supervisor reconciling them.
@@ -54,7 +55,7 @@ from .services import (
 
 #: Who may put money on record. Deliberately wider than who may bill for it: the
 #: collector at the door is the person the cash is handed to.
-PAYMENT_WRITERS = OPERATIONAL_WRITERS | {Role.COLLECTOR}
+PAYMENT_WRITERS = OPERATIONAL_WRITERS | {Role.COLLECTOR, Role.BILL_COLLECTOR}
 
 
 

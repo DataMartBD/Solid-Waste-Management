@@ -454,7 +454,7 @@ class UserViewSet(WardScopedQuerysetMixin, viewsets.ModelViewSet):
         if not me.is_superuser and me.role == Role.SUPERVISOR.value:
             # A supervisor manages the collectors of their own area, and sees
             # nobody else's phone number, NID or next of kin.
-            mine = Q(role=Role.COLLECTOR.value)
+            mine = Q(role__in=[Role.COLLECTOR.value, Role.BILL_COLLECTOR.value])
             wards = me.visible_ward_ids()
             if wards is not None:
                 mine &= Q(scope_wards__in=wards)

@@ -39,14 +39,15 @@ const ROLE_TONES = {
   agency_admin: 'brand',
   supervisor: 'ok',
   collector: 'info',
+  bill_collector: 'warn',
   kcc_viewer: 'muted',
 }
 
-const ROLES = ['collector', 'supervisor', 'agency_admin', 'super_admin', 'kcc_viewer']
+const ROLES = ['collector', 'bill_collector', 'supervisor', 'agency_admin', 'super_admin', 'kcc_viewer']
 // All an agency admin may add or manage; the server holds them to it too.
-const AGENCY_ADMIN_MANAGES = ['collector', 'supervisor']
-// A supervisor: collectors of their own area only.
-const SUPERVISOR_MANAGES = ['collector']
+const AGENCY_ADMIN_MANAGES = ['collector', 'bill_collector', 'supervisor']
+// A supervisor: waste and bill collectors of their own area only.
+const SUPERVISOR_MANAGES = ['collector', 'bill_collector']
 const SCOPES = ['ward', 'zone', 'agency', 'city']
 
 

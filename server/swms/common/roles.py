@@ -1,12 +1,16 @@
 """Roles.
 
 Stored as slugs, exposed to the SPA as the display labels it already switches on
-(`'Collector'`, `'Supervisor'`, `'Agency Admin'`, `'City Viewer'`).
+(`'Waste Collector'`, `'Bill Collector'`, `'Supervisor'`, `'Agency Admin'`,
+`'City Viewer'`).
 
 The mock app gated routes only on "is logged in"; the sidebar showed every page
-to everyone. Here the five roles get real, distinct capabilities:
+to everyone. Here the six roles get real, distinct capabilities:
 
-    collector     — sees their own round; records visits, payments, complaint notes
+    collector     — the Waste Collector: sees their own round; records visits,
+                    payments, complaint notes
+    bill_collector — collects household bills: reads holdings and bills in their
+                    wards and records payments, nothing else
     supervisor    — full operational control over their zone's wards
     agency_admin  — everything **for one contractor**: their own staff, fleet,
                     holdings, bills and users, and nothing belonging to another
@@ -26,7 +30,10 @@ from django.db import models
 
 
 class Role(models.TextChoices):
-    COLLECTOR = "collector", "Collector"
+    #: Shown as "Waste Collector". The slug stays `collector` so existing
+    #: accounts and every stored reference keep working.
+    COLLECTOR = "collector", "Waste Collector"
+    BILL_COLLECTOR = "bill_collector", "Bill Collector"
     SUPERVISOR = "supervisor", "Supervisor"
     AGENCY_ADMIN = "agency_admin", "Agency Admin"
     SUPER_ADMIN = "super_admin", "Super Admin"
@@ -56,6 +63,7 @@ READ_ONLY = {Role.KCC_VIEWER}
 #: Landing route after login — mirrors ROLE_HOME in the React AuthContext.
 ROLE_HOME = {
     Role.COLLECTOR: "/app/collection",
+    Role.BILL_COLLECTOR: "/app/billing",
     Role.SUPERVISOR: "/app/dashboard",
     Role.AGENCY_ADMIN: "/app/dashboard",
     Role.SUPER_ADMIN: "/app/dashboard",

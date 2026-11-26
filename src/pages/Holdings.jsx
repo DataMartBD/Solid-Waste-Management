@@ -81,7 +81,9 @@ export function captureFix() {
 
 export default function Holdings() {
   const { t, n, taka, localName } = useLang()
-  const { canWrite, user, isAdmin } = useAuth()
+  const { canWrite: roleWrites, user, isAdmin, isBillCollector } = useAuth()
+  // A Bill Collector reads the register to find who owes; they do not edit it.
+  const canWrite = roleWrites && !isBillCollector
   const [importing, setImporting] = useState(false)
   // QR stickers to print: one holding, or every holding in the list.
   const [printing, setPrinting] = useState(null)

@@ -90,7 +90,8 @@ describe('normalizePhone', () => {
 
 describe('ROLE_HOME', () => {
   it('sends a collector to their round and a viewer to the city dashboard', () => {
-    expect(ROLE_HOME.Collector).toBe('/app/collection')
+    expect(ROLE_HOME['Waste Collector']).toBe('/app/collection')
+    expect(ROLE_HOME['Bill Collector']).toBe('/app/billing')
     expect(ROLE_HOME['City Viewer']).toBe('/app/city-dashboard')
   })
 

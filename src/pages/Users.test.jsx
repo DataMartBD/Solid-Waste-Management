@@ -199,7 +199,7 @@ describe('Users', () => {
       render(<Users />)
       fireEvent.click(await screen.findByText('users.add'))
       const roles = [...screen.getByLabelText('users.col.role').querySelectorAll('option')].map((o) => o.value)
-      expect(roles).toEqual(['collector'])
+      expect(roles).toEqual(['collector', 'bill_collector'])
       const scopes = [...screen.getByLabelText('users.field.scopeKind').querySelectorAll('option')].map((o) => o.value)
       expect(scopes).toEqual(['ward', 'zone'])
       expect(screen.getByLabelText('Ward 14')).toBeInTheDocument()
@@ -340,7 +340,7 @@ describe('Users', () => {
     fireEvent.click(await screen.findByText('users.add'))
     const roles = [...screen.getByLabelText('users.col.role').querySelectorAll('option')].map((o) => o.value)
     // An agency admin adds field staff only: collectors and supervisors.
-    expect(roles).toEqual(['collector', 'supervisor'])
+    expect(roles).toEqual(['collector', 'bill_collector', 'supervisor'])
   })
 
   it('lets an agency admin edit only collectors and supervisors', async () => {

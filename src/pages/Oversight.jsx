@@ -97,7 +97,7 @@ export default function Oversight() {
   const cityName = picked ? (lang === 'bn' && picked.nameBn) || picked.name : ''
 
   return (
-    <div className="fade-in">
+    <div className="fade-in dash-vivid">
       <PageHeader
         title={cityName ? t('oversight.titleCity', { city: cityName }) : t('oversight.title')}
         subtitle={t('oversight.subtitle')}
@@ -156,25 +156,25 @@ export function Summary({ report }) {
   return (
     <>
       <div className="stat-grid" style={{ marginBottom: 20 }}>
-        <StatCard icon={<IconHome size={18} />} label={t('oversight.card.served')} value={n(d.served)}
+        <StatCard vivid icon={<IconHome size={18} />} tone="brand" label={t('oversight.card.served')} value={n(d.served)}
           sub={<>{t('oversight.card.servedSub', { registered: n(d.registered), pct: percent(d.servedPct) })} <TrendBadge trend={d.trend} pct={d.changePct} /></>}
           progress={d.servedPct} />
-        <StatCard icon={<IconChart size={18} />} tone="info" label={t('oversight.card.target')}
+        <StatCard vivid icon={<IconChart size={18} />} tone="info" label={t('oversight.card.target')}
           value={d.target ? percent(d.targetPct) : '—'}
           sub={d.target ? t('oversight.card.targetSub', { served: n(d.targetServed), target: n(d.target) }) : t('oversight.card.noTarget')}
           progress={d.target ? d.targetPct : 0} />
         {pick && (
-          <StatCard icon={<IconCheck size={18} />} tone="ok" label={t('oversight.card.pickup')}
+          <StatCard vivid icon={<IconCheck size={18} />} tone="cyan" label={t('oversight.card.pickup')}
             value={n(pick.confirmed + pick.auto)}
             sub={t('oversight.card.pickupSub', { due: n(pick.due), pending: n(pick.pending) })}
             progress={pick.due ? ((pick.confirmed + pick.auto) / pick.due) * 100 : 0} />
         )}
-        <StatCard icon={<IconAlert size={18} />} tone={d.complaintsOverdue ? 'danger' : 'warn'} label={t('oversight.card.complaints')}
+        <StatCard vivid icon={<IconAlert size={18} />} tone={d.complaintsOverdue ? 'danger' : 'warn'} label={t('oversight.card.complaints')}
           value={n(d.complaintsOpen)} sub={t('oversight.card.complaintsSub', { overdue: n(d.complaintsOverdue), sla: percent(d.slaPct) })} />
-        <StatCard icon={<IconUsers size={18} />} tone="ok" label={t('oversight.card.collectors')}
+        <StatCard vivid icon={<IconUsers size={18} />} tone="violet" label={t('oversight.card.collectors')}
           value={n(d.collectorsCheckedIn)} sub={t('oversight.card.collectorsSub', { total: n(d.collectorsActive) })}
           progress={d.collectorsActive ? (d.collectorsCheckedIn / d.collectorsActive) * 100 : 0} />
-        <StatCard icon={<IconTruck size={18} />} tone="info" label={t('oversight.card.vans')}
+        <StatCard vivid icon={<IconTruck size={18} />} tone="pink" label={t('oversight.card.vans')}
           value={n(d.vansActive)} sub={t('oversight.card.vansSub', { total: n(d.vansTotal) })}
           progress={d.vansTotal ? (d.vansActive / d.vansTotal) * 100 : 0} />
       </div>

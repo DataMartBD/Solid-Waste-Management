@@ -40,7 +40,29 @@ export function PageHeader({ title, subtitle, actions, sticky }) {
   )
 }
 
-export function StatCard({ icon, label, value, sub, tone = 'brand', progress }) {
+// Every module's KPI card is the colourful one: a gradient per tone, white text.
+// `vivid={false}` gives the plain white card back where one is wanted.
+const VIVID = ['brand', 'ok', 'info', 'warn', 'danger', 'violet', 'cyan', 'pink', 'muted']
+
+export function StatCard({ icon, label, value, sub, tone = 'brand', progress, vivid = true }) {
+  if (vivid) {
+    const name = VIVID.includes(tone) ? tone : 'brand'
+    return (
+      <div className={`card card-pad fade-in stat-vivid stat-vivid-${name}`}>
+        <div className="row between">
+          <span className="stat-vivid-label">{label}</span>
+          {icon && <span className="stat-vivid-icon">{icon}</span>}
+        </div>
+        <div className="stat-vivid-value">{value}</div>
+        {sub && <div className="stat-vivid-sub">{sub}</div>}
+        {progress != null && (
+          <div className="stat-vivid-track">
+            <div style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
+          </div>
+        )}
+      </div>
+    )
+  }
   const tones = {
     brand: 'var(--brand)', ok: 'var(--ok)', warn: 'var(--warn)',
     danger: 'var(--danger)', info: 'var(--info)',

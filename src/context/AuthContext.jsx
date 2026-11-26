@@ -12,7 +12,8 @@ export const MAX_PIN_ATTEMPTS = 5
 // Landing route per role. The server also returns this as `user.home`; this map
 // stays as the fallback so the router never has nowhere to go.
 export const ROLE_HOME = {
-  Collector: '/app/collection',
+  'Waste Collector': '/app/collection',
+  'Bill Collector': '/app/billing',
   Supervisor: '/app/dashboard',
   'Agency Admin': '/app/dashboard',
   'City Viewer': '/app/city-dashboard',
@@ -291,6 +292,7 @@ export function AuthProvider({ children }) {
     isSuperAdmin: user?.roleKey === 'super_admin',
     isSupervisor: user?.roleKey === 'supervisor',
     isCollector: user?.roleKey === 'collector',
+    isBillCollector: user?.roleKey === 'bill_collector',
     canWrite: Boolean(user) && !user.readOnly,
   }), [
     user, ready, signInWithPassword, changePassword,

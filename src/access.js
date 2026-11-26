@@ -9,9 +9,12 @@
 // This map is the single source of truth, read by both the router (App.jsx) and
 // the sidebar (Layout.jsx). Keys are `roleKey` values from the API.
 
-export const ROLES = ['collector', 'supervisor', 'agency_admin', 'super_admin', 'kcc_viewer']
+export const ROLES = ['collector', 'bill_collector', 'supervisor', 'agency_admin', 'super_admin', 'kcc_viewer']
 
 const ALL = ROLES
+// The Bill Collector collects household bills and nothing else: Billing, the
+// holding list and a building's families (to see who owes), and their profile.
+const BILL = 'bill_collector'
 const OFFICE = ['supervisor', 'agency_admin', 'super_admin']
 // Both administrators. They reach the same *pages*; what separates them is what
 // the server sends back — an agency admin's lists are narrowed to their own
@@ -35,11 +38,11 @@ export const ROUTE_ACCESS = {
   // The City Viewer's own screen, and the super admin's — no one else's. (The
   // old /app/city and /app/oversight addresses are plain redirects to it.)
   '/app/city-dashboard': ['kcc_viewer', 'super_admin'],
-  '/app/live': ALL,
+  '/app/live': ROLES.filter((r) => r !== BILL),
   // The property register sits alongside Households and answers to the same
   // roles. It was reachable by every signed-in user until this entry existed —
   // a path absent from this map is open, which is easy to miss when adding one.
-  '/app/holdings': ['collector', ...OFFICE],
+  '/app/holdings': ['collector', BILL, ...OFFICE],
   // Registering or editing a building. Collectors find unregistered buildings
   // in the field, so they may add and correct them — the server confines them
   // to their own wards. `:id` is matched as a parameter — see `canAccess`.
@@ -47,7 +50,7 @@ export const ROUTE_ACCESS = {
   '/app/holdings/:id/edit': ['collector', ...OFFICE],
   // A building's families. Collectors read it on the doorstep, so it matches
   // the register it hangs off rather than the narrower editor.
-  '/app/holdings/:id/households': ['collector', ...OFFICE],
+  '/app/holdings/:id/households': ['collector', BILL, ...OFFICE],
   // A collector's own round. Read-only roles have nothing to do here.
   '/app/collection': ['collector', ...OFFICE],
   '/app/routes': ['collector', ...OFFICE],
@@ -59,7 +62,7 @@ export const ROUTE_ACCESS = {
   // Recording a survey is the collector's own job, so it matches the list.
   '/app/surveys/new': ['collector', ...OFFICE],
   '/app/complaints': ['collector', ...OFFICE],
-  '/app/billing': OFFICE,
+  '/app/billing': [BILL, ...OFFICE],
   '/app/fleet': OFFICE,
   '/app/collectors': OFFICE,
   // Contracts, licences and remittances — what KCC holds a contractor to. The

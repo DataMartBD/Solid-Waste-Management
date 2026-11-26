@@ -415,9 +415,9 @@ class UserAdminSerializer(serializers.ModelSerializer):
             attrs["scope_wards"] = []
 
     #: All an agency admin may create or manage: their own field staff.
-    AGENCY_ADMIN_MANAGES = {Role.COLLECTOR.value, Role.SUPERVISOR.value}
-    #: A supervisor: collectors only.
-    SUPERVISOR_MANAGES = {Role.COLLECTOR.value}
+    AGENCY_ADMIN_MANAGES = {Role.COLLECTOR.value, Role.BILL_COLLECTOR.value, Role.SUPERVISOR.value}
+    #: A supervisor: waste and bill collectors only.
+    SUPERVISOR_MANAGES = {Role.COLLECTOR.value, Role.BILL_COLLECTOR.value}
 
     def _check_agency_admin_reach(self, attrs, me):
         """An agency admin manages collectors and supervisors; a supervisor,
@@ -430,10 +430,10 @@ class UserAdminSerializer(serializers.ModelSerializer):
             return
         if me.role == Role.AGENCY_ADMIN.value:
             manages = self.AGENCY_ADMIN_MANAGES
-            message = {"role": "An agency admin can only add or change collectors and supervisors."}
+            message = {"role": "An agency admin can only add or change waste collectors, bill collectors and supervisors."}
         elif me.role == Role.SUPERVISOR.value:
             manages = self.SUPERVISOR_MANAGES
-            message = {"role": "A supervisor can only add or change collectors."}
+            message = {"role": "A supervisor can only add or change waste collectors and bill collectors."}
         else:
             return
         inst = self.instance

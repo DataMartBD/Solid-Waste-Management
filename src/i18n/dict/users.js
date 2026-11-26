@@ -24,7 +24,8 @@ export default {
     'users.col.lastLogin': 'Last signed in',
     'users.col.status': 'Status',
 
-    'users.role.collector': 'Collector',
+    'users.role.collector': 'Waste Collector',
+    'users.role.bill_collector': 'Bill Collector',
     'users.role.supervisor': 'Supervisor',
     'users.role.agency_admin': 'Agency Admin',
     'users.role.super_admin': 'Super Admin',
@@ -121,7 +122,8 @@ export default {
     'users.col.lastLogin': 'সর্বশেষ প্রবেশ',
     'users.col.status': 'অবস্থা',
 
-    'users.role.collector': 'সংগ্রহকারী',
+    'users.role.collector': 'ওয়েস্ট কালেক্টর',
+    'users.role.bill_collector': 'বিল কালেক্টর',
     'users.role.supervisor': 'সুপারভাইজার',
     'users.role.agency_admin': 'সংস্থা প্রশাসক',
     'users.role.super_admin': 'সুপার প্রশাসক',

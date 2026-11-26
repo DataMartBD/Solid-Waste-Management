@@ -630,3 +630,100 @@ table.data tbody tr.rowlink { cursor: pointer; }
 .bottom-pair > .field { height: 100%; }
 .bottom-pair-box { flex: 1; min-height: 46px; margin: 0; }
 .form-note.bottom-pair-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ---- Dashboards: vivid KPI cards and the chart palette ------------------ */
+/* Gradient stops are dark enough for white text (about 4.5:1 or better). */
+:root {
+  --viz-1: #10b981; --viz-2: #3b82f6; --viz-3: #8b5cf6; --viz-4: #f59e0b;
+  --viz-5: #f43f5e; --viz-6: #06b6d4; --viz-7: #ec4899; --viz-8: #84cc16;
+}
+.card.stat-vivid { position: relative; overflow: hidden; border: none; color: #fff;
+  box-shadow: 0 10px 24px -12px var(--vivid-glow, rgba(0,0,0,.35)); transition: transform .18s, box-shadow .18s; }
+.card.stat-vivid:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -12px var(--vivid-glow, rgba(0,0,0,.4)); }
+.stat-vivid::after { content: ''; position: absolute; right: -40px; top: -40px; width: 140px; height: 140px;
+  border-radius: 50%; background: rgba(255,255,255,.12); pointer-events: none; }
+.stat-vivid-label { font-size: 13px; font-weight: 600; color: rgba(255,255,255,.94); }
+.stat-vivid-icon { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+  border-radius: 10px; background: rgba(255,255,255,.2); color: #fff; position: relative; z-index: 1; }
+.stat-vivid-value { font-size: 28px; font-weight: 800; margin-top: 8px; letter-spacing: -0.02em; color: #fff; }
+.stat-vivid-sub { font-size: 12px; margin-top: 4px; color: rgba(255,255,255,.9); position: relative; z-index: 1; }
+.stat-vivid-track { height: 6px; background: rgba(255,255,255,.25); border-radius: 99px; margin-top: 12px; overflow: hidden; }
+.stat-vivid-track > div { height: 100%; background: #fff; border-radius: 99px; transition: width .6s; }
+.card.stat-vivid-brand { background: linear-gradient(135deg, #047857, #0f766e); --vivid-glow: rgba(4,120,87,.55); }
+.card.stat-vivid-ok { background: linear-gradient(135deg, #15803d, #047857); --vivid-glow: rgba(21,128,61,.55); }
+.card.stat-vivid-info { background: linear-gradient(135deg, #2563eb, #4f46e5); --vivid-glow: rgba(37,99,235,.55); }
+.card.stat-vivid-warn { background: linear-gradient(135deg, #b45309, #c2410c); --vivid-glow: rgba(194,65,12,.5); }
+.card.stat-vivid-danger { background: linear-gradient(135deg, #e11d48, #be123c); --vivid-glow: rgba(225,29,72,.5); }
+.card.stat-vivid-violet { background: linear-gradient(135deg, #7c3aed, #a21caf); --vivid-glow: rgba(124,58,237,.55); }
+.card.stat-vivid-cyan { background: linear-gradient(135deg, #0e7490, #1d4ed8); --vivid-glow: rgba(14,116,144,.55); }
+.card.stat-vivid-pink { background: linear-gradient(135deg, #db2777, #9333ea); --vivid-glow: rgba(219,39,119,.5); }
+.stat-vivid .badge { background: rgba(255,255,255,.22); color: #fff; }
+@media (prefers-reduced-motion: reduce) { .stat-vivid, .stat-vivid:hover { transition: none; transform: none; } }
+
+/* ---- Dashboards: colourful page (scoped to .dash-vivid) ------------------ */
+/* Header banner: the PageHeader is the page's first row. */
+.dash-vivid > .row.between:first-child {
+  background: linear-gradient(120deg, #047857 0%, #0e7490 35%, #4f46e5 70%, #7c3aed 100%);
+  color: #fff; padding: 20px 24px; border-radius: var(--radius);
+  box-shadow: 0 14px 30px -16px rgba(79,70,229,.6); position: relative; overflow: hidden;
+}
+.dash-vivid > .row.between:first-child::after {
+  content: ''; position: absolute; right: -60px; top: -80px; width: 260px; height: 260px;
+  border-radius: 50%; background: rgba(255,255,255,.10); pointer-events: none;
+}
+.dash-vivid > .row.between:first-child h1 { color: #fff; }
+.dash-vivid > .row.between:first-child .muted { color: rgba(255,255,255,.9); }
+.dash-vivid > .row.between:first-child > * { position: relative; z-index: 1; }
+
+/* Every page: each panel gets its own accent, cycling through the palette. */
+.content .card:not(.stat-vivid) { --acc: #10b981; --acc-bg: rgba(16,185,129,.10); border-top: 4px solid var(--acc); }
+.content .card:not(.stat-vivid):nth-child(6n+2) { --acc: #3b82f6; --acc-bg: rgba(59,130,246,.10); }
+.content .card:not(.stat-vivid):nth-child(6n+3) { --acc: #8b5cf6; --acc-bg: rgba(139,92,246,.10); }
+.content .card:not(.stat-vivid):nth-child(6n+4) { --acc: #f59e0b; --acc-bg: rgba(245,158,11,.12); }
+.content .card:not(.stat-vivid):nth-child(6n+5) { --acc: #f43f5e; --acc-bg: rgba(244,63,94,.10); }
+.content .card:not(.stat-vivid):nth-child(6n+6) { --acc: #06b6d4; --acc-bg: rgba(6,182,212,.10); }
+.content .two-col > .card:not(.stat-vivid):nth-child(2) { --acc: #8b5cf6; --acc-bg: rgba(139,92,246,.10); }
+.content .card:not(.stat-vivid) > .row.between:first-child {
+  background: linear-gradient(90deg, var(--acc-bg), transparent 75%);
+}
+.content .card:not(.stat-vivid) > .row.between:first-child h3 { display: flex; align-items: center; gap: 8px; }
+.content .card:not(.stat-vivid) > .row.between:first-child h3::before {
+  content: ''; width: 10px; height: 10px; border-radius: 3px; background: var(--acc); flex: none;
+  box-shadow: 0 0 0 3px var(--acc-bg);
+}
+.content .card:not(.stat-vivid) table.data th { background: var(--acc-bg); }
+.content .card:not(.stat-vivid) table.data tbody tr:hover { background: var(--acc-bg); }
+
+/* Tabs and switches: the active one is a gradient pill. */
+.content .seg button.on {
+  background: linear-gradient(135deg, #059669, #4f46e5); color: #fff; box-shadow: 0 4px 12px -4px rgba(79,70,229,.6);
+}
+
+/* Soft colour wash behind every page. */
+.main {
+  background:
+    radial-gradient(900px 500px at 0% 0%, rgba(16,185,129,.14), transparent 60%),
+    radial-gradient(800px 500px at 100% 10%, rgba(99,102,241,.13), transparent 60%),
+    radial-gradient(700px 600px at 30% 100%, rgba(236,72,153,.09), transparent 60%),
+    radial-gradient(700px 500px at 100% 90%, rgba(6,182,212,.11), transparent 60%),
+    linear-gradient(180deg, #f3fbf8 0%, #f5f4ff 55%, #fdf4f9 100%);
+  background-attachment: fixed;
+}
+[data-theme='dark'] .main {
+  background:
+    radial-gradient(900px 500px at 0% 0%, rgba(16,185,129,.12), transparent 60%),
+    radial-gradient(800px 500px at 100% 10%, rgba(99,102,241,.14), transparent 60%),
+    radial-gradient(700px 600px at 30% 100%, rgba(236,72,153,.08), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+}
+.card.stat-vivid-muted { background: linear-gradient(135deg, #475569, #334155); --vivid-glow: rgba(51,65,85,.5); }
+/* Same tone twice in a row reads as one block: shift every second one to a
+   sister gradient, keeping its meaning (green stays green, red stays red). */
+.stat-grid > .card.stat-vivid-brand:nth-child(even) { background: linear-gradient(135deg, #0f766e, #0e7490); }
+.stat-grid > .card.stat-vivid-ok:nth-child(even)    { background: linear-gradient(135deg, #047857, #0f766e); }
+.stat-grid > .card.stat-vivid-info:nth-child(even)  { background: linear-gradient(135deg, #4f46e5, #7c3aed); }
+.stat-grid > .card.stat-vivid-warn:nth-child(even)  { background: linear-gradient(135deg, #c2410c, #b91c1c); }
+.stat-grid > .card.stat-vivid-danger:nth-child(even){ background: linear-gradient(135deg, #be123c, #9d174d); }
+/* The sticky page header sits over the colour wash: frosted, like the top bar. */
+.main .page-head-sticky { background: color-mix(in srgb, var(--surface) 80%, transparent); backdrop-filter: blur(8px); }

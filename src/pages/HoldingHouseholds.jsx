@@ -48,7 +48,9 @@ export default function HoldingHouseholds() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { t, n, taka, optLabel } = useLang()
-  const { canWrite } = useAuth()
+  const { canWrite: roleWrites, isBillCollector } = useAuth()
+  // A Bill Collector reads the families and their dues; they do not edit them.
+  const canWrite = roleWrites && !isBillCollector
   const data = useData()
   const {
     collectors, create, update, remove, act, api, ready,

@@ -562,3 +562,38 @@ class CityViewerTests(UserAdminFixture):
         self.assertEqual(made.scope_kind, ScopeKind.CITY)
         self.assertEqual(made.city_id, "KCC")
         self.assertIsNone(made.agency_id)
+
+
+class BillCollectorRoleTests(UserAdminFixture):
+    """The Bill Collector: collects bills, and is managed like a Waste Collector."""
+
+    def test_labels(self):
+        self.assertEqual(Role.COLLECTOR.label, "Waste Collector")
+        self.assertEqual(Role.BILL_COLLECTOR.label, "Bill Collector")
+
+    def test_an_agency_admin_may_add_one(self):
+        admin = User.objects.create_user(
+            phone="01700000009", name="Agency Admin", role=Role.AGENCY_ADMIN.value,
+            password="x", scope_kind=ScopeKind.AGENCY, agency=self.agency,
+        )
+        self.client.force_authenticate(admin)
+        response = self.create(role=Role.BILL_COLLECTOR.value, scopeKind=ScopeKind.WARD,
+                               scopeWards=[self.ward.pk], agency=self.agency.pk)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["roleLabel"], "Bill Collector")
+
+    def test_lands_on_billing_and_may_record_payments_only(self):
+        from swms.billing.views import PAYMENT_WRITERS
+        from swms.common.roles import ROLE_HOME, OPERATIONAL_WRITERS
+
+        self.assertEqual(ROLE_HOME[Role.BILL_COLLECTOR], "/app/billing")
+        self.assertIn(Role.BILL_COLLECTOR, PAYMENT_WRITERS)
+        self.assertNotIn(Role.BILL_COLLECTOR, OPERATIONAL_WRITERS)
+
+    def test_may_not_edit_holdings(self):
+        user = User.objects.create_user(
+            phone="01700000010", name="Bill Collector", role=Role.BILL_COLLECTOR.value,
+            password="x", scope_kind=ScopeKind.WARD,
+        )
+        self.client.force_authenticate(user)
+        self.assertEqual(self.client.post(reverse("holding-list"), {}, format="json").status_code, 403)
